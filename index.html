@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手機遙控賽車</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0F1114; color: #F2F3F5;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif; }
+  .app { display: flex; height: 100vh; }
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; background: #1A1D21; min-width: 0; }
+  canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .side { width: 320px; flex-shrink: 0; padding: 24px; display: flex; flex-direction: column; gap: 18px;
+    border-left: 1px solid #262A30; overflow-y: auto; }
+  .join { display: flex; gap: 16px; align-items: center; }
+  .qr { width: 120px; height: 120px; background: #fff; border-radius: 10px; padding: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; color: #111; font-size: 12px; text-align: center; }
+  .qr img, .qr svg { width: 100%; height: 100%; }
+  .muted { color: #9AA0A8; font-size: 13px; }
+  .url { font-size: 12px; color: #F5C518; word-break: break-all; }
+  h2 { margin: 0; font-size: 18px; }
+  .line { height: 1px; background: #262A30; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .players { display: flex; flex-direction: column; gap: 10px; }
+  .p { display: flex; align-items: center; gap: 12px; padding: 12px; background: #1A1D21; border-radius: 12px; }
+  .p .rank { width: 22px; font-size: 20px; font-weight: 800; color: #C9CDD3; }
+  .p .rank.first { color: #F5C518; }
+  .p .bar { width: 12px; height: 32px; border-radius: 4px; }
+  .p .info { flex: 1; min-width: 0; }
+  .p .name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p .lap { font-size: 13px; color: #9AA0A8; }
+  .empty { padding: 12px; border: 1px dashed #2E3238; border-radius: 12px; color: #6B717A; font-size: 14px; }
+  button.main { height: 52px; border: none; border-radius: 12px; background: #F5C518; color: #111214;
+    font-size: 17px; font-weight: 900; font-family: inherit; cursor: pointer; }
+  button.main:disabled { background: #2E3238; color: #6B717A; cursor: not-allowed; }
+  .spacer { flex: 1; }
+  .help { font-size: 12px; color: #9AA0A8; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage"><canvas id="game" width="960" height="720"></canvas></div>
+  <div class="side">
+    <div class="join">
+      <div class="qr" id="qr">產生中…</div>
+      <div>
+        <h2>手機掃碼加入</h2>
+        <div class="muted" style="margin-top:6px">房間代碼</div>
+        <div id="room" style="font-size:26px;font-weight:800;letter-spacing:3px;color:#F5C518">----</div>
+      </div>
+    </div>
+    <div class="url" id="url"></div>
+    <div class="muted" id="net">準備中…</div>
+    <div class="line"></div>
+    <div class="row"><strong>玩家</strong><span class="muted" id="count">0 / 4</span></div>
+    <div class="players" id="players"></div>
+    <div class="spacer"></div>
+    <div class="help">按鍵：空白鍵 = 開始 / 再來一場<br>沒有手機也能測試：在電腦另開分頁打開上面的網址，用方向鍵開車。</div>
+    <button class="main" id="startBtn" disabled>開始比賽</button>
+  </div>
+</div>
+
+<script>
+// ===== 基本設定 =====
+const LAPS = 5;
+const TRACK = { cx: 480, cy: 360, bx: 360, by: 240, r: 150, w: 128 };
+const CAR_INFO = {
+  red:    { name: '閃電', type: '速度型', color: '#E5484D', maxSpeed: 260, accel: 230, turn: 2.6, tough: 0 },
+  blue:   { name: '藍鯨', type: '平衡型', color: '#3E8BFF', maxSpeed: 240, accel: 250, turn: 3.0, tough: 0.2 },
+  yellow: { name: '黃蜂', type: '操控型', color: '#F5C518', maxSpeed: 225, accel: 260, turn: 3.6, tough: 0 },
+  green:  { name: '綠蛙', type: '越野型', color: '#30C46B', maxSpeed: 232, accel: 245, turn: 2.9, tough: 0.7 },
+};
+const GRID = [ [95, 410], [145, 440], [95, 480], [145, 510] ];
+
+const obstacles = [
+  { kind: 'cone', x: 300, y: 150 }, { kind: 'cone', x: 660, y: 92 }, { kind: 'cone', x: 150, y: 250 },
+  { kind: 'cone', x: 840, y: 200 }, { kind: 'cone', x: 700, y: 625 },
+  { kind: 'oil', x: 855, y: 440 }, { kind: 'oil', x: 330, y: 605 },
+  { kind: 'barrel', x: 470, y: 585 }, { kind: 'barrel', x: 510, y: 625 }, { kind: 'barrel', x: 560, y: 160 },
+];
+obstacles.forEach(o => { o.hidden = 0; });
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const cars = new Map(); // id -> car
+let phase = 'lobby';
+let countdown = 0;
+let raceTime = 0;
+let finishOrder = [];
+
+// ===== 賽道計算 =====
+function trackDist(x, y) {
+  const px = Math.abs(x - TRACK.cx), py = Math.abs(y - TRACK.cy);
+  const qx = px - TRACK.bx + TRACK.r, qy = py - TRACK.by + TRACK.r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - TRACK.r;
+}
+function angleNorm(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+function trackAngle(x, y) { return Math.atan2(y - TRACK.cy, x - TRACK.cx); }
+
+// ===== 車輛 =====
+function placeOnGrid(car) {
+  const g = GRID[(car.slot - 1) % 4];
+  car.x = g[0]; car.y = g[1];
+  car.a = -Math.PI / 2;
+  car.speed = 0; car.spin = 0;
+  car.prevTheta = trackAngle(car.x, car.y);
+  car.progress = angleNorm(car.prevTheta - Math.PI);
+  car.finished = false; car.finishTime = 0;
+}
+function addCar(p) {
+  const car = Object.assign({ input: { up: false, down: false, left: false, right: false } }, p);
+  placeOnGrid(car);
+  cars.set(p.id, car);
+  refreshSide();
+}
+
+function updateCar(c, dt) {
+  const info = CAR_INFO[c.car];
+  const inp = (phase === 'racing' && !c.finished) ? c.input : { up: false, down: false, left: false, right: false };
+  const d = trackDist(c.x, c.y);
+  const offTrack = Math.abs(d) > TRACK.w / 2;
+  const maxSpeed = info.maxSpeed * (offTrack ? 0.55 : 1);
+
+  if (inp.up) c.speed += info.accel * dt;
+  else if (inp.down) c.speed -= (c.speed > 0 ? info.accel * 2 : info.accel * 0.7) * dt;
+  else c.speed *= Math.max(0, 1 - 1.6 * dt);
+  c.speed = Math.max(-maxSpeed * 0.4, Math.min(c.speed, c.speed > maxSpeed ? c.speed - 400 * dt : maxSpeed));
+
+  const steer = (inp.left ? -1 : 0) + (inp.right ? 1 : 0);
+  const grip = Math.max(-1, Math.min(1, c.speed / 120));
+  c.a += steer * info.turn * grip * dt;
+  c.a += c.spin * dt;
+  c.spin *= Math.max(0, 1 - 2.5 * dt);
+
+  c.x += Math.cos(c.a) * c.speed * dt;
+  c.y += Math.sin(c.a) * c.speed * dt;
+
+  // 賽道邊界牆
+  const limit = TRACK.w / 2 + 16;
+  const nd = trackDist(c.x, c.y);
+  if (Math.abs(nd) > limit) {
+    const gx = (trackDist(c.x + 1, c.y) - trackDist(c.x - 1, c.y)) / 2;
+    const gy = (trackDist(c.x, c.y + 1) - trackDist(c.x, c.y - 1)) / 2;
+    const len = Math.hypot(gx, gy) || 1;
+    const push = (Math.abs(nd) - limit) * Math.sign(nd);
+    c.x -= gx / len * push; c.y -= gy / len * push;
+    c.speed *= 0.6;
+  }
+
+  // 障礙物
+  for (const o of obstacles) {
+    if (o.hidden > 0) continue;
+    const dist = Math.hypot(c.x - o.x, c.y - o.y);
+    if (o.kind === 'cone' && dist < 26) {
+      c.speed *= 0.35 + 0.5 * info.tough;
+      o.hidden = 4; // 撞飛後 4 秒再出現
+    } else if (o.kind === 'oil' && dist < 34) {
+      if (Math.abs(c.spin) < 1 && Math.abs(c.speed) > 80) c.spin = (Math.random() < 0.5 ? -1 : 1) * 5 * (1 - info.tough);
+    } else if (o.kind === 'barrel' && dist < 33) {
+      const nx = (c.x - o.x) / (dist || 1), ny = (c.y - o.y) / (dist || 1);
+      c.x = o.x + nx * 33; c.y = o.y + ny * 33;
+      c.speed *= -0.3;
+    }
+  }
+
+  // 圈數計算
+  const theta = trackAngle(c.x, c.y);
+  c.progress += angleNorm(theta - c.prevTheta);
+  c.prevTheta = theta;
+  if (!c.finished && phase === 'racing' && c.progress >= LAPS * Math.PI * 2) {
+    c.finished = true; c.finishTime = raceTime;
+    finishOrder.push(c.id);
+  }
+}
+
+function collideCars() {
+  const list = [...cars.values()];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i], b = list[j];
+    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+    if (dist > 0 && dist < 30) {
+      const push = (30 - dist) / 2, nx = dx / dist, ny = dy / dist;
+      a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+      a.speed *= 0.97; b.speed *= 0.97;
+    }
+  }
+}
+
+function standings() {
+  return [...cars.values()].sort((a, b) => {
+    if (a.finished && b.finished) return a.finishTime - b.finishTime;
+    if (a.finished) return -1;
+    if (b.finished) return 1;
+    return b.progress - a.progress;
+  });
+}
+function lapOf(c) { return Math.max(1, Math.min(LAPS, Math.floor(c.progress / (Math.PI * 2)) + 1)); }
+
+// ===== 遊戲流程 =====
+function startRace() {
+  if (cars.size === 0 || (phase !== 'lobby' && phase !== 'finished')) return;
+  for (const c of cars.values()) placeOnGrid(c);
+  obstacles.forEach(o => { o.hidden = 0; });
+  finishOrder = []; raceTime = 0; countdown = 3.99;
+  phase = 'countdown';
+  sendStatus(); refreshSide();
+}
+function backToLobby() {
+  phase = 'lobby';
+  for (const c of cars.values()) placeOnGrid(c);
+  sendStatus(); refreshSide();
+}
+
+function update(dt) {
+  if (phase === 'countdown') {
+    countdown -= dt;
+    if (countdown <= 0) { phase = 'racing'; sendStatus(); refreshSide(); }
+  }
+  if (phase === 'racing') raceTime += dt;
+  for (const o of obstacles) if (o.hidden > 0) o.hidden -= dt;
+  for (const c of cars.values()) updateCar(c, dt);
+  collideCars();
+  if (phase === 'racing' && cars.size > 0 && [...cars.values()].every(c => c.finished)) {
+    phase = 'finished'; sendStatus(); refreshSide();
+  }
+}
+
+// ===== 繪圖 =====
+function roundRectPath(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawTrack() {
+  ctx.fillStyle = '#1A1D21'; ctx.fillRect(0, 0, 960, 720);
+  // 賽道中心線：左上 (120,120) 到右下 (840,600)
+  roundRectPath(120, 120, 720, 480, 150);
+  ctx.lineWidth = TRACK.w + 18; ctx.strokeStyle = '#F2F3F5'; ctx.setLineDash([]); ctx.stroke();
+  ctx.strokeStyle = '#E5484D'; ctx.setLineDash([16, 16]); ctx.stroke();
+  ctx.lineWidth = TRACK.w; ctx.strokeStyle = '#33373E'; ctx.setLineDash([]); ctx.stroke();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(201,205,211,0.6)'; ctx.setLineDash([20, 16]); ctx.stroke();
+  ctx.setLineDash([]);
+  // 起終點線
+  for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) {
+    ctx.fillStyle = (i + j) % 2 ? '#111' : '#F2F3F5';
+    ctx.fillRect(56 + i * 16, 352 + j * 6, 16, 6);
+  }
+}
+function drawObstacles() {
+  for (const o of obstacles) {
+    if (o.hidden > 0) continue;
+    ctx.save(); ctx.translate(o.x, o.y);
+    if (o.kind === 'cone') {
+      ctx.fillStyle = '#FF8A1F';
+      ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(12, 12); ctx.lineTo(-12, 12); ctx.closePath(); ctx.fill();
+      ctx.fillRect(-14, 10, 28, 5);
+      ctx.fillStyle = '#F2F3F5'; ctx.fillRect(-6, -2, 12, 4);
+    } else if (o.kind === 'oil') {
+      ctx.fillStyle = 'rgba(11,12,14,0.85)';
+      ctx.beginPath(); ctx.ellipse(0, 0, 34, 22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(59,63,107,0.7)';
+      ctx.beginPath(); ctx.ellipse(-7, -6, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#2E7D4F'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#1E5A37'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+function drawCar(c) {
+  const info = CAR_INFO[c.car];
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a + Math.PI / 2);
+  ctx.fillStyle = '#0B0C0E';
+  [[-17, -18], [12, -18], [-17, 9], [12, 9]].forEach(([x, y]) => ctx.fillRect(x, y, 5, 11));
+  ctx.fillStyle = info.color; roundRectPath(-14, -24, 28, 48, 9); ctx.fill();
+  ctx.fillStyle = '#1A1D21'; roundRectPath(-10, -12, 20, 10, 3); ctx.fill();
+  ctx.restore();
+  // 名牌
+  ctx.fillStyle = info.color; roundRectPath(c.x - 18, c.y - 48, 36, 20, 10); ctx.fill();
+  ctx.fillStyle = c.car === 'red' ? '#FFFFFF' : '#0B0C0E';
+  ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('P' + c.slot, c.x, c.y - 38);
+}
+function fmtTime(t) {
+  const m = Math.floor(t / 60), s = t % 60;
+  return String(m).padStart(2, '0') + ':' + s.toFixed(2).padStart(5, '0');
+}
+function drawHUD() {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const cx = TRACK.cx, cy = TRACK.cy;
+  if (phase === 'lobby') {
+    ctx.fillStyle = '#F2F3F5'; ctx.font = '900 44px system-ui, sans-serif';
+    ctx.fillText(cars.size ? '準備好就按「開始比賽」' : '用手機掃描右邊的 QR code', cx, cy - 20);
+    ctx.fillStyle = '#9AA0A8'; ctx.font = '20px system-ui, sans-serif';
+    ctx.fillText('最多 4 人 · 共 ' + LAPS + ' 圈', cx, cy + 30);
+  } else if (phase === 'countdown') {
+    const n = Math.ceil(countdown);
+    ctx.fillStyle = '#F5C518'; ctx.font = '900 160px system-ui, sans-serif';
+    ctx.fillText(n > 0 ? String(n) : 'GO!', cx, cy);
+  } else if (phase === 'racing') {
+    const lead = standings()[0];
+    ctx.fillStyle = '#9AA0A8'; ctx.font = '500 18px system-ui, sans-serif';
+    ctx.fillText('領先者 第', cx, cy - 70);
+    ctx.fillStyle = '#F2F3F5'; ctx.font = '700 96px system-ui, sans-serif';
+    ctx.fillText(lead ? lapOf(lead) + ' / ' + LAPS : '-', cx, cy);
+    ctx.fillStyle = '#9AA0A8'; ctx.font = '500 18px system-ui, sans-serif';
+    ctx.fillText('圈', cx, cy + 62);
+    ctx.fillStyle = '#F5C518'; ctx.font = '500 28px system-ui, sans-serif';
+    ctx.fillText(fmtTime(raceTime), cx, cy + 100);
+  } else if (phase === 'finished') {
+    ctx.fillStyle = 'rgba(15,17,20,0.85)'; roundRectPath(cx - 230, cy - 150, 460, 300, 20); ctx.fill();
+    ctx.fillStyle = '#F5C518'; ctx.font = '900 40px system-ui, sans-serif';
+    ctx.fillText('比賽結束！', cx, cy - 105);
+    standings().forEach((c, i) => {
+      ctx.fillStyle = CAR_INFO[c.car].color; ctx.font = '700 24px system-ui, sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText((i + 1) + '. P' + c.slot + ' ' + c.name, cx - 180, cy - 45 + i * 40);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#C9CDD3';
+      ctx.fillText(c.finished ? fmtTime(c.finishTime) : '-', cx + 180, cy - 45 + i * 40);
+      ctx.textAlign = 'center';
+    });
+    ctx.fillStyle = '#9AA0A8'; ctx.font = '16px system-ui, sans-serif';
+    ctx.fillText('按「再來一場」重新開始', cx, cy + 125);
+  }
+}
+function draw() {
+  drawTrack(); drawObstacles();
+  for (const c of cars.values()) drawCar(c);
+  drawHUD();
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ===== 側邊欄 =====
+const playersEl = document.getElementById('players');
+const startBtn = document.getElementById('startBtn');
+function refreshSide() {
+  const list = phase === 'lobby' ? [...cars.values()].sort((a, b) => a.slot - b.slot) : standings();
+  let html = '';
+  list.forEach((c, i) => {
+    const info = CAR_INFO[c.car];
+    const rank = phase === 'lobby' ? 'P' + c.slot : String(i + 1);
+    const right = phase === 'lobby' ? '已加入' : (c.finished ? '完賽' : lapOf(c) + '/' + LAPS);
+    html += '<div class="p"><div class="rank' + (phase !== 'lobby' && i === 0 ? ' first' : '') + '" style="' + (phase === 'lobby' ? 'font-size:15px;width:26px' : '') + '">' + rank + '</div>' +
+      '<div class="bar" style="background:' + info.color + '"></div>' +
+      '<div class="info"><div class="name"></div><div class="lap">' + info.name + ' · ' + info.type + '</div></div>' +
+      '<div class="lap">' + right + '</div></div>';
+  });
+  for (let i = list.length; i < 4; i++) html += '<div class="empty">等待玩家加入…</div>';
+  playersEl.innerHTML = html;
+  // 名字用 textContent 填入，避免特殊字元出問題
+  [...playersEl.querySelectorAll('.name')].forEach((el, i) => { el.textContent = list[i].name; });
+  document.getElementById('count').textContent = cars.size + ' / 4';
+  startBtn.textContent = phase === 'finished' ? '再來一場' : '開始比賽';
+  startBtn.disabled = !(cars.size > 0 && (phase === 'lobby' || phase === 'finished'));
+}
+startBtn.addEventListener('click', () => { phase === 'finished' ? backToLobby() : startRace(); });
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); phase === 'finished' ? backToLobby() : startRace(); }
+});
+setInterval(() => { if (phase === 'racing') refreshSide(); }, 300);
+
+// ===== 連線（PeerJS，手機直接連到這個網頁）=====
+const conns = new Set(); // 每一支手機的連線
+let peer = null, roomCode = '', nextId = 1;
+const netEl = document.getElementById('net');
+function setNet(text, ok) {
+  netEl.textContent = text;
+  netEl.style.color = ok === true ? '#30C46B' : ok === false ? '#FF7A7F' : '#9AA0A8';
+}
+function makeCode() {
+  const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)];
+  return c;
+}
+function startPeer() {
+  if (typeof Peer === 'undefined') { setNet('無法載入連線元件，請檢查網路後重新整理', false); return; }
+  roomCode = makeCode();
+  document.getElementById('room').textContent = roomCode;
+  setNet('正在連線配對伺服器…');
+  peer = new Peer('mobilerace-' + roomCode.toLowerCase());
+  peer.on('open', () => { setNet('● 已就緒，可以掃碼加入', true); showQR(); });
+  peer.on('connection', onConn);
+  peer.on('disconnected', () => {
+    setNet('與配對伺服器斷線，重新連線中…（已加入的玩家不受影響）');
+    setTimeout(() => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500);
+  });
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id') { peer.destroy(); startPeer(); return; }
+    if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) {
+      setNet('連不上配對伺服器（' + err.type + '），可能被網路擋住', false);
+    } else {
+      console.warn('PeerJS', err.type, err);
+    }
+  });
+}
+function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) {} }
+function carsMsg() {
+  return { type: 'cars', taken: [...cars.values()].map(c => c.car), full: cars.size >= 4, phase };
+}
+function onConn(conn) {
+  const entry = { conn, playerId: null, lastSeen: Date.now() };
+  conns.add(entry);
+  conn.on('open', () => send(conn, carsMsg()));
+  conn.on('data', (msg) => handleMsg(entry, msg));
+  conn.on('close', () => dropConn(entry));
+  conn.on('error', () => dropConn(entry));
+}
+function handleMsg(entry, msg) {
+  if (!msg || typeof msg !== 'object') return;
+  entry.lastSeen = Date.now();
+  if (msg.type === 'hello') {
+    send(entry.conn, carsMsg());
+  } else if (msg.type === 'join') {
+    if (entry.playerId) return;
+    const car = String(msg.car || '');
+    const name = String(msg.name || '').trim().slice(0, 8) || '玩家';
+    let error = null;
+    if (!CAR_INFO[car]) error = '請先選一台車';
+    else if (phase === 'countdown' || phase === 'racing') error = '比賽進行中，請等這場結束再加入';
+    else if (cars.size >= 4) error = '已經滿 4 人了';
+    else if ([...cars.values()].some(c => c.car === car)) error = '這台車已經被選走了';
+    if (error) { send(entry.conn, { type: 'error', error }); send(entry.conn, carsMsg()); return; }
+    const used = new Set([...cars.values()].map(c => c.slot));
+    let slot = 1;
+    while (used.has(slot)) slot++;
+    const id = String(nextId++);
+    entry.playerId = id;
+    addCar({ id, slot, name, car });
+    send(entry.conn, { type: 'joined', slot });
+  } else if (msg.type === 'input') {
+    const c = cars.get(entry.playerId);
+    if (c) c.input = { up: !!msg.up, down: !!msg.down, left: !!msg.left, right: !!msg.right };
+  }
+}
+function dropConn(entry) {
+  if (!conns.has(entry)) return;
+  conns.delete(entry);
+  try { entry.conn.close(); } catch (e) {}
+  if (entry.playerId) { cars.delete(entry.playerId); refreshSide(); }
+}
+// 手機每秒會送一次心跳，6 秒沒收到就當作離開
+setInterval(() => {
+  const now = Date.now();
+  for (const e of [...conns]) if (now - e.lastSeen > 6000) dropConn(e);
+}, 1000);
+
+function sendStatus() {
+  const ranked = standings();
+  const stats = {};
+  ranked.forEach((c, i) => {
+    stats[c.id] = { rank: i + 1, total: ranked.length, lap: lapOf(c), laps: LAPS, finished: c.finished,
+      time: c.finished ? fmtTime(c.finishTime) : null };
+  });
+  const cm = carsMsg();
+  for (const e of conns) {
+    if (e.playerId) send(e.conn, Object.assign({ type: 'status', phase }, stats[e.playerId] || {}));
+    else send(e.conn, cm);
+  }
+}
+setInterval(sendStatus, 300);
+
+function showQR() {
+  const qrEl = document.getElementById('qr');
+  const urlEl = document.getElementById('url');
+  if (location.protocol === 'file:') {
+    qrEl.textContent = '請把檔案放到 GitHub Pages 再打開';
+    return;
+  }
+  const url = new URL('phone.html', location.href);
+  url.search = '?room=' + roomCode;
+  url.hash = '';
+  urlEl.textContent = url.href;
+  if (typeof qrcode === 'function') {
+    const qr = qrcode(0, 'M'); qr.addData(url.href); qr.make();
+    qrEl.innerHTML = qr.createSvgTag(4, 0);
+  } else {
+    qrEl.textContent = 'QR code 載入失敗，請在手機輸入下方網址';
+  }
+}
+startPeer();
+refreshSide();
+</script>
+</body>
+</html>
