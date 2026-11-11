@@ -21,12 +21,17 @@ let screen = 'start';
 // ================= 3D 基本設定 =================
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;   // 陰影只在場景有變動時重算
+// 鳥瞰畫面只在有變動時重畫，省下的效能留給手機操作與 3D 導覽
+let dirty = 4;
+function invalidate(n = 3, shadows = true) { dirty = Math.max(dirty, n); if (shadows) renderer.shadowMap.needsUpdate = true; }
+setInterval(() => invalidate(1, false), 2000);
 
 const scene = new THREE.Scene();
 const BG_OVER = new THREE.Color('#DFE3E8'), BG_TOUR = new THREE.Color('#CFE3F2');
@@ -72,6 +77,7 @@ function floorMesh(x1, y1, x2, y2, mat, scale) {
 }
 const wallMeshes = [], mainFloors = [];
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
+  invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
   for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm;
 }
@@ -142,6 +148,7 @@ function sigOf(it, people, used) {
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
+  invalidate();
   for (const it of state.items) if (it.key.startsWith('person:')) keepOffBeds(it, state.items);   // 人偶不能和床重疊
   const seen = new Set(), people = resolvePeople(state.items), used = new Set([...people.values()].map((p) => p.on).filter(Boolean));
   for (const it of state.items) {
@@ -163,7 +170,7 @@ function queueWarm() {
     warm.push(() => MT.wallPaint(st.wall), () => (st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC)));
     for (const d of PLAN.defaults) warm.push(() => { const spec = getItem(d.key, sk), sig = d.key + '@' + sk; if (spec && !protos.has(sig)) proto(sig, () => buildItem(spec, st, { decor: true }), spec.elev + spec.h > CUT); });
   }
-  const step = () => { const f = warm.shift(); if (!f) return; try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, state.mode === 'tour' ? 400 : 60); };
+  const step = () => { if (state.mode === 'tour') return setTimeout(step, 1000); const f = warm.shift(); if (!f) return; try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, 80); };
   setTimeout(step, 800);
 }
 
@@ -186,10 +193,11 @@ function fitDist(wm, dm) { // 讓 wm × dm（公尺）的區域塞進畫面
   return Math.max(dv, dh) * 1.12 + 1.5;
 }
 function setGoal() {
-  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; return; }
+  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; goal.az = 0.3; return; }
   goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0.14;   // 佈置時固定全戶鳥瞰
 }
 function applyMode() {
+  invalidate(6);
   const t = state.mode === 'tour';
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
   bulbs.children.forEach((p) => { p.intensity = t ? BULB : 0; });
@@ -230,7 +238,7 @@ function collide(p) {
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
-    renderer.setSize(w, h, false); if (composer) composer.setSize(canvas.width, canvas.height); camera.aspect = w / h; applyOffset(); setGoal();
+    renderer.setSize(w, h, false); if (composer) composer.setSize(canvas.width, canvas.height); camera.aspect = w / h; applyOffset(); setGoal(); invalidate(4);
   }
 }
 // 後製：接觸陰影（AO）。電腦跑不動時會自動關閉，再不行就降低解析度
@@ -243,12 +251,14 @@ function setupComposer() {
   aoPass = new GTAOPass(scene, camera, w, h); aoPass.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.2, thickness: 1.2, scale: 1.2, samples: 12 }); aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
   composer.addPass(aoPass); composer.addPass(new OutputPass());
 }
-function tuneQuality(dt) {
-  if (dt > 0.045) slow++; else if (dt < 0.03) fast++;
-  if (Q0 !== null || slow + fast < 90) return;
-  if (slow > 55 && quality > 0) { quality--; if (quality === 0) { renderer.setPixelRatio(1); sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } console.info('畫質自動調整為', ['低', '中', '高'][quality]); }
+function tuneQuality(dt) {   // 導覽時如果跑不順，就降低解析度與陰影精細度（只降一次）
+  if (lowRes) return;
+  if (dt > 0.04) slow++; else fast++;
+  if (slow + fast < 80) return;
+  if (slow > 45) { lowRes = true; renderer.setPixelRatio(1); sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.needsUpdate = true; resize(); }
   slow = fast = 0;
 }
+let lowRes = false;
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -263,16 +273,20 @@ function frame(now) {
     collide(np); tour.x = np.x; tour.z = np.z;
     camera.position.set(tour.x, 1.5, tour.z);
     camera.lookAt(tour.x + dx * Math.cos(tour.pitch), 1.5 + Math.sin(tour.pitch), tour.z + dz * Math.cos(tour.pitch));
+    if (Q0 === null) tuneQuality(dt);
+    renderer.render(scene, camera);
   } else {
-    if (screen !== 'play') goal.az = Math.sin(now / 9000) * 0.45;
-    const k = 1 - Math.exp(-dt * 3.2);
-    for (const key of ['tx', 'tz', 'dist', 'az', 'el']) view[key] += (goal[key] - view[key]) * k;
-    const ce = Math.cos(view.el);
-    camera.position.set(view.tx + Math.sin(view.az) * ce * view.dist, Math.sin(view.el) * view.dist, view.tz + Math.cos(view.az) * ce * view.dist);
-    camera.lookAt(view.tx, 0.4, view.tz);
+    const k = 1 - Math.exp(-dt * 3.2); let moving = false;
+    for (const key of ['tx', 'tz', 'dist', 'az', 'el']) { const d = goal[key] - view[key]; if (Math.abs(d) > 1e-3) { view[key] += d * k; moving = true; } else view[key] = goal[key]; }
+    if (moving) invalidate(2, false);
+    if (dirty > 0) {
+      dirty--;
+      const ce = Math.cos(view.el);
+      camera.position.set(view.tx + Math.sin(view.az) * ce * view.dist, Math.sin(view.el) * view.dist, view.tz + Math.cos(view.az) * ce * view.dist);
+      camera.lookAt(view.tx, 0.4, view.tz);
+      if (quality === 2 && screen === 'play' && !moving) { if (!composer) setupComposer(); composer.render(); } else renderer.render(scene, camera);
+    }
   }
-  if (screen === 'play') tuneQuality(dt);
-  if (quality === 2) { if (!composer) setupComposer(); composer.render(); } else renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 
@@ -282,7 +296,7 @@ function show(name) {
   $('start').classList.toggle('hidden', name !== 'start');
   $('select').classList.toggle('hidden', name !== 'select');
   $('hud').classList.toggle('hidden', name !== 'play');
-  document.body.dataset.screen = name;
+  document.body.dataset.screen = name; invalidate(6);
   applyOffset(); setGoal(); updateHud();
 }
 $('startBtn').addEventListener('click', () => show('select'));
@@ -338,6 +352,7 @@ function onMsg(entry, m) {
   if (m.t === 'ping' || screen !== 'play') return;
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
+  if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
       state.mode = 'tour'; state.tourBy = entry.id;

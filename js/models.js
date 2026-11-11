@@ -159,7 +159,7 @@ B.ochair = (g, it) => {
   box(g, w * 0.82, 8, w * 0.8, fab, 0, 46, 2, 3.5);
   const bh = h - 56; const b = box(g, w * 0.74, bh, 6, fab, 0, 56 + bh / 2, -21, 3); b.rotation.x = -0.1;
   box(g, 5, 14, 5, dk, 0, 52, -21);
-  for (const sx of [-1, 1]) { box(g, 3, 18, 3, dk, sx * 25, 57, 0); box(g, 5, 2.5, 26, dk, sx * 25, 67, 2, 1); }
+  if (w >= 56) for (const sx of [-1, 1]) { box(g, 3, 18, 3, dk, sx * w * 0.42, 57, 0); box(g, 5, 2.5, 26, dk, sx * w * 0.42, 67, 2, 1); }
 };
 
 B.bed = (g, it, P) => {
@@ -352,7 +352,7 @@ function cushion(p, w, h, d, m, x, y, z, { r = 5, bulge = 0.2, pipe = true, sd =
 }
 function pillow(p, w, h, t, m, x, y, z, { seam = true, sd = 1 } = {}) {
   const g = new THREE.Group(); g.position.set(x, y, z); p.add(g);
-  const geo = new THREE.SphereGeometry(1, 40, 26), pos = geo.attributes.position, sg = (v) => Math.sign(v) * Math.abs(v) ** 0.4;
+  const geo = new THREE.SphereGeometry(1, 30, 20), pos = geo.attributes.position, sg = (v) => Math.sign(v) * Math.abs(v) ** 0.4;
   for (let i = 0; i < pos.count; i++) { const sx = sg(pos.getX(i)), sy = sg(pos.getY(i)), Z = pos.getZ(i), edge = Math.max(Math.abs(sx), Math.abs(sy)), cr = (MT.fbm(sx * 2.2 + sd, sy * 2.2 + sd * 3, 3) - 0.5) * 0.22;
     pos.setXYZ(i, sx * w / 2 * (1 - 0.05 * (1 - Math.abs(sy))), sy * h / 2 * (1 - 0.05 * (1 - Math.abs(sx))), Z * t / 2 * (0.5 + 0.5 * (1 - edge ** 3) + cr * (1 - edge))); }
   geo.computeVertexNormals(); mesh(g, geo, m);
@@ -360,7 +360,7 @@ function pillow(p, w, h, t, m, x, y, z, { seam = true, sd = 1 } = {}) {
   return g;
 }
 const sideCache = new Map(), twoSided = (m) => { if (!sideCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; sideCache.set(m, c); } return sideCache.get(m); };
-function cloth(p, w, d, m, x, y, z, { amp = 1.4, droop = 6, edge = 14, sd = 3, ends = true, seg = 72 } = {}) {
+function cloth(p, w, d, m, x, y, z, { amp = 1.4, droop = 6, edge = 14, sd = 3, ends = true, seg = 52 } = {}) {
   const geo = new THREE.PlaneGeometry(w, d, seg, seg); geo.rotateX(-Math.PI / 2); const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) { const X = pos.getX(i), Z = pos.getZ(i), ex = Math.max(0, Math.abs(X) - (w / 2 - edge)) / edge, ez = ends ? Math.max(0, Math.abs(Z) - (d / 2 - edge)) / edge : Math.max(0, Z - (d / 2 - edge)) / edge;
     const wr = (MT.fbm(X * 0.035 + sd, Z * 0.022 + sd, 4) - 0.5) * 2.4 + (MT.fbm(X * 0.11 - sd, Z * 0.09, 3) - 0.5) * 0.9 + 0.5 * Math.sin(X * 0.09 + MT.fbm(X * 0.02, Z * 0.03, 2) * 6);
@@ -398,7 +398,7 @@ B.sofa = (g, it, P, o) => {
     pillow(s, 46, 46, 17, MT.fabric(P.accent, 5), -inner / 2 + 25, 64, -dm / 2 + 41, { sd: 2 }).rotation.set(-0.3, 0.28, 0.1);
     pillow(s, 42, 42, 15, MT.fabric('#EAE3D5', 2, 'boucle'), -inner / 2 + 54, 61, -dm / 2 + 45, { sd: 5 }).rotation.set(-0.34, -0.12, -0.13);
     if (w >= 190) pillow(s, 54, 30, 14, MT.fabric(shade(P.fabric, 0.62), 5), inner / 2 - 32, 58, -dm / 2 + 43, { sd: 8 }).rotation.set(-0.32, -0.22, 0.05);
-    if (w >= 190 && !isL) cloth(s, arm + 22, 76, MT.fabric('#E9E2D4', 5, 'knit'), w / 2 - arm / 2 - 1, 14 + h - 38 + 5.2, 4, { amp: 0.35, droop: 22, edge: 12, sd: 11, seg: 48 });
+    if (w >= 190 && !isL) cloth(s, arm + 22, 76, MT.fabric('#E9E2D4', 5, 'knit'), w / 2 - arm / 2 - 1, 14 + h - 38 + 5.2, 4, { amp: 0.35, droop: 22, edge: 12, sd: 11, seg: 36 });
   }
 };
 
@@ -412,7 +412,7 @@ B.bed = (g, it, P, o) => {
   const hd = soft ? 13 : 7, md = d - hd - 3, mz = -d / 2 + hd + md / 2 + 1, mw = w - 6;
   rbox(g, mw, 25, md, linen, 0, 40.5, mz, 9, 6); loop(g, rrPts(mw - 3, md - 3, 8, 49.5).map((p) => p.setZ(p.z + mz)), 0.4, linen);
   cloth(g, mw + 5, md * 0.7, duv, 0, 55.2, mz + md * 0.15, { amp: 1.5, droop: 20, edge: 13, sd: 4, ends: false });
-  cloth(g, mw + 3, 32, linen, 0, 56.6, mz - md * 0.2, { amp: 0.8, droop: 18, edge: 11, sd: 7, seg: 48 });
+  cloth(g, mw + 3, 32, linen, 0, 56.6, mz - md * 0.2, { amp: 0.8, droop: 18, edge: 11, sd: 7, seg: 36 });
   cloth(g, mw + 6, 50, accent, 0, 57.6, mz + md / 2 - 34, { amp: 1.2, droop: 21, edge: 14, sd: 5 });
   const np = w >= 140 ? 2 : 1, top = mz - md / 2;
   for (let i = 0; i < np; i++) {

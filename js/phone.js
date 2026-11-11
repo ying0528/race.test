@@ -8,6 +8,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const S = { tab: 'style', net: 'wait', netText: '正在連線…', st: null, room: null, sel: null, drag: null, resetArm: false, group: GROUPS[0], cat: null, sheet: null };
 const room = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 let peer = null, conn = null, lastKey = '';
+const pending = new Map();
 function send(m) { try { if (conn && conn.open) conn.send(m); } catch (e) { /* 連線已關閉 */ } }
 
 // ================= 連線 =================
@@ -36,9 +37,12 @@ function onData(m) {
   const keep = S.drag && S.st ? S.st.items.find((i) => i.id === S.drag.id) : null;
   S.st = m;
   if (keep) { const i = m.items.findIndex((q) => q.id === keep.id); if (i >= 0) m.items[i] = keep; }
+  for (const [id, pd] of pending) {   // 剛新增、大螢幕還沒回報的家具先留著，避免閃一下消失
+    if (m.items.some((q) => q.id === id) || Date.now() - pd.t > 4000) pending.delete(id); else m.items.push(pd.it);
+  }
   if (S.sel && !m.items.some((i) => i.id === S.sel)) S.sel = null;
   if (m.mode === 'tour') { S.drag = null; closeSheet(); }
-  update();
+  update(); warmThumbs();
 }
 
 // ================= 畫面 =================
@@ -89,7 +93,9 @@ function renderMain() {
     if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>';
     else if (!mine) el.innerHTML = '<h2>3D 導覽中</h2><div class="muted">另一支手機正在操作導覽，請看大螢幕。</div>';
     else {
-      el.innerHTML = '<div><h2>3D 導覽中</h2><div class="muted">左邊走路，右邊轉頭。看大螢幕。</div></div><div id="pads"><div class="padbox"><div class="pad" data-pad="move"><i></i></div>前後左右</div><div class="padbox"><div class="pad look" data-pad="look"><i></i></div>轉頭</div></div><button class="second" data-act="tour" data-on="">結束導覽</button>';
+      el.innerHTML = '<div class="rowb" style="align-items:center"><h2>3D 導覽中</h2><button class="second" data-act="tour" data-on="" style="flex:0 0 104px">結束導覽</button></div>' +
+        '<div class="zone look" id="lookZone"><b>轉頭</b><span>在這一區任何地方滑動</span></div>' +
+        '<div class="zone move" id="moveZone"><b>走動</b><span>按住任何地方，往想走的方向拖</span><div class="stick hidden" id="stick"><i></i></div></div>';
       bindPads();
     }
   }
@@ -198,15 +204,33 @@ async function fillThumbs() {
       try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); }
       await new Promise((r) => setTimeout(r, 0));
     }
-    const u = thumbCache.get(k); if (u && img.isConnected) img.src = u;
+    const u = thumbCache.get(k); if (u && img.isConnected) { img.src = u; img.classList.add('ok'); }
   }
+}
+// 連上後就在背景先算好這個風格的 3D 縮圖，打開型錄時幾乎不用等
+let warmList = [], warmTimer = null, warmStyle = null;
+function warmThumbs() {
+  if (!S.st || !S.st.ready || warmStyle === S.st.style) return;
+  warmStyle = S.st.style;
+  const cats = [...CATS].sort((a, b) => (b.g === S.group) - (a.g === S.group));
+  warmList = [...Object.keys(PEOPLE).map((k) => 'person:' + k), ...cats.flatMap((c) => c.items.map((_, i) => c.id + ':' + i))].map((k) => k + '@' + warmStyle);
+  clearTimeout(warmTimer); warmTimer = setTimeout(warmStep, 600);
+}
+async function warmStep() {
+  if (!warmList.length) return;
+  if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js'); } catch (e) { return; }
+  const k = warmList.shift();
+  if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
+  warmTimer = setTimeout(warmStep, 30);
 }
 function closeSheet() { S.sheet = null; $('sheet').classList.add('hidden'); }
 function openSheet(kind) { S.sheet = kind; $('sheet').classList.remove('hidden'); renderSheet(); }
 function row(s, sk, extra = '') {
-  const k = s.key + '@' + sk;
-  return `<button class="it" data-key="${s.key}" ${extra}><div class="pv"><img data-th="${k}" src="${thumbCache.get(k) || BLANK}" alt=""></div>` +
-    `<div class="tx"><div class="nm">${esc(s.name)}</div><div class="dm">${s.t === 'person' ? `肩寬 ${s.w} cm・身高 ${s.h} cm` : `寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm`}</div></div><div class="add">加入</div></button>`;
+  const k = s.key + '@' + sk, m = Math.max(s.w, s.d) * 0.62 + 6, have = thumbCache.get(k);
+  const icon = s.t === 'person' ? '' : `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${ART.itemArt(s)}</svg>`;   // 3D 圖還沒好之前先顯示俯視圖
+  return `<button class="it" data-key="${s.key}" ${extra}><div class="pv">${icon}<img data-th="${k}" src="${have || BLANK}" class="${have ? 'ok' : ''}" alt=""></div>` +
+    `<div class="tx"><div class="nm">${esc(s.name)}</div><div class="dm">${s.t === 'person' ? `身高 ${s.h} cm` : `寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm`}</div></div><div class="add">加入</div></button>`;
 }
 function renderSheet() {
   const sk = S.st.style, r = curRoom();
@@ -235,25 +259,33 @@ $('list').addEventListener('click', (e) => {
   const big = r.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m));
   const it = { id: 'u' + Math.random().toString(36).slice(2, 10), key: b.dataset.key, x: Math.round((big[0] + big[2]) / 10) * 5, y: Math.round((big[1] + big[3]) / 10) * 5, r: 0 };
   if (!person) it.st = S.st.style; else keepOffBeds(it, S.st.items);
-  S.st.items.push(it); S.sel = it.id; send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st });
+  S.st.items.push(it); S.sel = it.id; pending.set(it.id, { it, t: Date.now() }); send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st });
   closeSheet(); update();
 });
 
 // ================= 導覽搖桿 =================
-const J = { f: 0, s: 0, tn: 0, p: 0 }; let jDirty = false;
+const J = { f: 0, s: 0, tn: 0, p: 0 }, LOOK = { dx: 0, dy: 0 }; let jDirty = false;
 function bindPads() {
-  document.querySelectorAll('.pad').forEach((pad) => {
-    const knob = pad.firstElementChild, kind = pad.dataset.pad; let pid = null;
-    const set = (x, y) => { knob.style.transform = `translate(${x * 60}%, ${y * 60}%)`; if (kind === 'move') { J.f = -y; J.s = x; } else { J.tn = x; J.p = -y * 0.6; } jDirty = true; };
-    const move = (e) => { const b = pad.getBoundingClientRect(); let x = (e.clientX - b.left - b.width / 2) / (b.width / 2), y = (e.clientY - b.top - b.height / 2) / (b.height / 2); const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } set(x, y); };
-    pad.addEventListener('pointerdown', (e) => { e.preventDefault(); pid = e.pointerId; pad.setPointerCapture(pid); move(e); });
-    pad.addEventListener('pointermove', (e) => { if (e.pointerId === pid) move(e); });
-    const up = (e) => { if (e.pointerId === pid) { pid = null; set(0, 0); } };
-    pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
-  });
+  // 上半部：整塊都是轉頭觸控板，手指滑多少就轉多少，不必對準按鈕
+  const look = $('lookZone'); let lp = null, lx = 0, ly = 0;
+  look.addEventListener('pointerdown', (e) => { e.preventDefault(); lp = e.pointerId; lx = e.clientX; ly = e.clientY; look.setPointerCapture(lp); look.classList.add('on'); });
+  look.addEventListener('pointermove', (e) => { if (e.pointerId !== lp) return; const b = look.getBoundingClientRect(); LOOK.dx += (e.clientX - lx) / b.width * 3.0; LOOK.dy -= (e.clientY - ly) / b.height * 1.1; lx = e.clientX; ly = e.clientY; });
+  const lup = (e) => { if (e.pointerId === lp) { lp = null; look.classList.remove('on'); } };
+  look.addEventListener('pointerup', lup); look.addEventListener('pointercancel', lup);
+  // 下半部：按在哪裡，搖桿就出現在哪裡
+  const move = $('moveZone'), stick = $('stick'), knob = stick.firstElementChild, R = 56; let mp = null, ox = 0, oy = 0;
+  const set = (x, y) => { knob.style.transform = `translate(${x * R}px, ${y * R}px)`; J.f = -y; J.s = x; jDirty = true; };
+  move.addEventListener('pointerdown', (e) => { e.preventDefault(); mp = e.pointerId; move.setPointerCapture(mp); const b = move.getBoundingClientRect(); ox = e.clientX; oy = e.clientY; stick.style.left = (ox - b.left) + 'px'; stick.style.top = (oy - b.top) + 'px'; stick.classList.remove('hidden'); set(0, 0); });
+  move.addEventListener('pointermove', (e) => { if (e.pointerId !== mp) return; let x = (e.clientX - ox) / R, y = (e.clientY - oy) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } set(x, y); });
+  const mup = (e) => { if (e.pointerId === mp) { mp = null; stick.classList.add('hidden'); set(0, 0); } };
+  move.addEventListener('pointerup', mup); move.addEventListener('pointercancel', mup);
 }
 const myTour = () => S.st && S.st.mode === 'tour' && S.st.tourBy === S.st.you;
-setInterval(() => { if (myTour() && (jDirty || J.f || J.s || J.tn || J.p)) { jDirty = false; send({ t: 'joy', f: J.f, s: J.s, tn: J.tn, p: J.p }); } }, 60);
+setInterval(() => {
+  if (!myTour()) return;
+  if (jDirty || J.f || J.s || J.tn || J.p) { jDirty = false; send({ t: 'joy', f: J.f, s: J.s, tn: J.tn, p: J.p }); }
+  if (LOOK.dx || LOOK.dy) { send({ t: 'look', dx: LOOK.dx, dy: LOOK.dy }); LOOK.dx = LOOK.dy = 0; }
+}, 50);
 // 在電腦上測試：WASD 走路、Q／E 或 ←／→ 轉頭
 const KEYS = {};
 const keyUpd = () => { J.f = (KEYS.KeyW || KEYS.ArrowUp ? 1 : 0) - (KEYS.KeyS || KEYS.ArrowDown ? 1 : 0); J.s = (KEYS.KeyD ? 1 : 0) - (KEYS.KeyA ? 1 : 0); J.tn = (KEYS.KeyE || KEYS.ArrowRight ? 1 : 0) - (KEYS.KeyQ || KEYS.ArrowLeft ? 1 : 0); jDirty = true; };
@@ -261,4 +293,8 @@ addEventListener('keydown', (e) => { if (myTour()) { KEYS[e.code] = true; keyUpd
 addEventListener('keyup', (e) => { if (KEYS[e.code]) { KEYS[e.code] = false; keyUpd(); } });
 
 window.S_sel = () => S.sel;   // 給測試用
+// 防止手機不小心放大畫面（雙指縮放、連點兩下）
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 update(); connect();
