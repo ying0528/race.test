@@ -1,13 +1,15 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112b';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112b';
-import * as ART from './planart.js?v=20261112b';
+import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112c';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112c';
+import * as ART from './planart.js?v=20261112c';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const S = { tab: 'style', net: 'wait', netText: '正在連線…', st: null, room: null, sel: null, drag: null, resetArm: false, group: GROUPS[0], cat: null, sheet: null };
 const room = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-let peer = null, conn = null, lastKey = '';
+let peer = null, conn = null, fast = null, jn = 0, lastKey = '';
+// 搖桿與轉頭走不排隊的通道（連不上就退回一般通道）
+function sendFast(m) { try { if (fast && fast.open) return fast.send(m); } catch (e) { /* 改走一般通道 */ } send(m); }
 const pending = new Map();
 function send(m) { try { if (conn && conn.open) conn.send(m); } catch (e) { /* 連線已關閉 */ } }
 
@@ -20,7 +22,7 @@ function connect() {
   peer.on('open', () => {
     setNet('wait', '正在連到大螢幕…');
     conn = peer.connect('myhome-a1-' + room.toLowerCase(), { reliable: true });
-    conn.on('open', () => { setNet('ok', '已連上大螢幕 ' + room); send({ t: 'hello' }); });
+    conn.on('open', () => { setNet('ok', '已連上大螢幕 ' + room); send({ t: 'hello' }); try { fast = peer.connect('myhome-a1-' + room.toLowerCase(), { reliable: false, label: 'fast' }); } catch (e) { fast = null; } });
     conn.on('data', onData);
     conn.on('close', () => setNet('bad', '連線中斷，請重新整理'));
     conn.on('error', () => setNet('bad', '連線出錯，請重新整理'));
@@ -213,7 +215,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112b'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112c'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -237,7 +239,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112b'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112c'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
@@ -287,23 +289,26 @@ function bindPads() {
   // 上半部：整塊都是轉頭觸控板，手指滑多少就轉多少，不必對準按鈕
   const look = $('lookZone'); let lp = null, lx = 0, ly = 0;
   look.addEventListener('pointerdown', (e) => { e.preventDefault(); lp = e.pointerId; lx = e.clientX; ly = e.clientY; look.setPointerCapture(lp); look.classList.add('on'); });
-  look.addEventListener('pointermove', (e) => { if (e.pointerId !== lp) return; const b = look.getBoundingClientRect(); LOOK.dx += (e.clientX - lx) / b.width * 3.0; LOOK.dy -= (e.clientY - ly) / b.height * 1.1; lx = e.clientX; ly = e.clientY; });
+  look.addEventListener('pointermove', (e) => { if (e.pointerId !== lp) return; const b = look.getBoundingClientRect(); LOOK.dx += (e.clientX - lx) / b.width * 3.0; LOOK.dy -= (e.clientY - ly) / b.height * 1.1; lx = e.clientX; ly = e.clientY; flushInput(); });
   const lup = (e) => { if (e.pointerId === lp) { lp = null; look.classList.remove('on'); } };
   look.addEventListener('pointerup', lup); look.addEventListener('pointercancel', lup);
   // 下半部：按在哪裡，搖桿就出現在哪裡
   const move = $('moveZone'), stick = $('stick'), knob = stick.firstElementChild, R = 56; let mp = null, ox = 0, oy = 0;
-  const set = (x, y) => { knob.style.transform = `translate(${x * R}px, ${y * R}px)`; J.f = -y; J.s = x; jDirty = true; };
+  const set = (x, y) => { knob.style.transform = `translate(${x * R}px, ${y * R}px)`; J.f = -y; J.s = x; jDirty = true; flushInput(); };
   move.addEventListener('pointerdown', (e) => { e.preventDefault(); mp = e.pointerId; move.setPointerCapture(mp); const b = move.getBoundingClientRect(); ox = e.clientX; oy = e.clientY; stick.style.left = (ox - b.left) + 'px'; stick.style.top = (oy - b.top) + 'px'; stick.classList.remove('hidden'); set(0, 0); });
   move.addEventListener('pointermove', (e) => { if (e.pointerId !== mp) return; let x = (e.clientX - ox) / R, y = (e.clientY - oy) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } set(x, y); });
-  const mup = (e) => { if (e.pointerId === mp) { mp = null; stick.classList.add('hidden'); set(0, 0); } };
+  const mup = (e) => { if (e.pointerId === mp) { mp = null; stick.classList.add('hidden'); set(0, 0); lastJoy = 0; jDirty = true; flushInput(); send({ t: 'joy', n: ++jn, f: 0, s: 0, tn: 0, p: 0 }); } };   // 放開時再用可靠通道送一次「停」
   move.addEventListener('pointerup', mup); move.addEventListener('pointercancel', mup);
 }
 const myTour = () => S.st && S.st.mode === 'tour' && S.st.tourBy === S.st.you;
-setInterval(() => {
+let lastJoy = 0;
+function flushInput() {   // 手指一動就送（最快每 25 毫秒一次），不等固定的時鐘
   if (!myTour()) return;
-  if (jDirty || J.f || J.s || J.tn || J.p) { jDirty = false; send({ t: 'joy', f: J.f, s: J.s, tn: J.tn, p: J.p }); }
-  if (LOOK.dx || LOOK.dy) { send({ t: 'look', dx: LOOK.dx, dy: LOOK.dy }); LOOK.dx = LOOK.dy = 0; }
-}, 50);
+  const now = performance.now(); if (now - lastJoy < 25) return; lastJoy = now;
+  if (jDirty) { jDirty = false; sendFast({ t: 'joy', n: ++jn, f: J.f, s: J.s, tn: J.tn, p: J.p }); }
+  if (LOOK.dx || LOOK.dy) { sendFast({ t: 'look', dx: LOOK.dx, dy: LOOK.dy }); LOOK.dx = LOOK.dy = 0; }
+}
+setInterval(() => { if (myTour() && (J.f || J.s || J.tn || J.p)) jDirty = true; flushInput(); }, 120);   // 按住不動時定期補送，避免封包遺失後停不下來或走不動
 // 在電腦上測試：WASD 走路、Q／E 或 ←／→ 轉頭
 const KEYS = {};
 const keyUpd = () => { J.f = (KEYS.KeyW || KEYS.ArrowUp ? 1 : 0) - (KEYS.KeyS || KEYS.ArrowDown ? 1 : 0); J.s = (KEYS.KeyD ? 1 : 0) - (KEYS.KeyA ? 1 : 0); J.tn = (KEYS.KeyE || KEYS.ArrowRight ? 1 : 0) - (KEYS.KeyQ || KEYS.ArrowLeft ? 1 : 0); jDirty = true; };

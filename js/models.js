@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112b';
-import * as MT from './mats.js?v=20261112b';
+import { WOODS } from './catalog.js?v=20261112c';
+import * as MT from './mats.js?v=20261112c';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }

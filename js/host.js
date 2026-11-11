@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112b';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112b';
-import { buildItem, buildPerson, M } from './models.js?v=20261112b';
-import * as MT from './mats.js?v=20261112b';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112c';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112c';
+import { buildItem, buildPerson, M } from './models.js?v=20261112c';
+import * as MT from './mats.js?v=20261112c';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -21,7 +21,8 @@ let screen = 'start';
 // ================= 3D 基本設定 =================
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+const BASE_PR = Math.min(window.devicePixelRatio || 1, 1.5);
+renderer.setPixelRatio(BASE_PR);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
@@ -29,7 +30,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.shadowMap.autoUpdate = false;   // 陰影只在場景有變動時重算
 // 鳥瞰畫面只在有變動時重畫，省下的效能留給手機操作與 3D 導覽
-let dirty = 4;
+let dirty = 4, lowRes = false;
 function invalidate(n = 3, shadows = true) { dirty = Math.max(dirty, n); if (shadows) renderer.shadowMap.needsUpdate = true; }
 setInterval(() => invalidate(1, false), 2000);
 
@@ -52,16 +53,14 @@ sun.target.position.set(CX, 0, CZ);
 
 // 室內燈（只在 3D 導覽時開）
 const bulbs = new THREE.Group(); scene.add(bulbs);
-const BULB = 2.6, MAX_BULBS = 24;
+const BULB = 3.4, MAX_BULBS = 6;
 // 燈的數量固定（燈池）：燈的數量一變，所有材質都要重新編譯，換戶型就會卡很久。
 // 燈一直存在、只調亮度，切換導覽時也不必重新編譯著色器。
-for (let i = 0; i < MAX_BULBS; i++) { const p = new THREE.PointLight(0xffe2c2, 0, 7, 1.8); p.userData.on = false; p.position.set(0, -50, 0); bulbs.add(p); }
-function buildBulbs() {   // 每個房間一到兩盞；換戶型時只搬位置
-  const pos = [];
-  for (const r of PLAN.rooms) {
-    const [x1, y1, x2, y2] = r.r, big = (x2 - x1) * (y2 - y1) > 60000;
-    for (const [u, v] of big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]]) pos.push([(x1 + (x2 - x1) * u) * cm, (y1 + (y2 - y1) * v) * cm]);
-  }
+// 只放 6 盞：每多一盞燈，每個像素都要多算一次，24 盞會讓 3D 導覽明顯變卡；其餘靠環境光補。
+for (let i = 0; i < MAX_BULBS; i++) { const p = new THREE.PointLight(0xffe2c2, 0, 8, 1.6); p.userData.on = false; p.position.set(0, -50, 0); bulbs.add(p); }
+function buildBulbs() {   // 面積最大的 6 個房間各一盞；換戶型時只搬位置
+  const pos = [...PLAN.rooms].sort((a, b) => (b.r[2] - b.r[0]) * (b.r[3] - b.r[1]) - (a.r[2] - a.r[0]) * (a.r[3] - a.r[1])).slice(0, MAX_BULBS)
+    .map((r) => { const big = r.rs.reduce((m, q) => ((q[2] - q[0]) * (q[3] - q[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? q : m)); return [(big[0] + big[2]) / 2 * cm, (big[1] + big[3]) / 2 * cm]; });
   bulbs.children.forEach((p, i) => { const q = pos[i]; p.userData.on = !!q; p.intensity = 0; if (q) p.position.set(q[0], 2.55, q[1]); else p.position.set(0, -50, 0); });
 }
 
@@ -229,9 +228,10 @@ function applyMode() {
   caps.visible = !t;
   renderer.clippingPlanes = t ? [] : [CLIP];
   scene.background.copy(t ? BG_TOUR : BG_OVER);
-  hemi.intensity = t ? 0.22 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.22 : 0.4;
+  hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
   camera.fov = t ? 72 : 34; applyOffset();
+  const pr = t || lowRes ? 1 : BASE_PR; if (renderer.getPixelRatio() !== pr) { renderer.setPixelRatio(pr); resize(); }   // 導覽時用 1 倍解析度換流暢
   setGoal(); updateHud();
 }
 
@@ -287,10 +287,9 @@ function tuneQuality(dt) {   // 導覽時如果跑不順，就降低解析度與
   if (lowRes) return;
   if (dt > 0.04) slow++; else fast++;
   if (slow + fast < 80) return;
-  if (slow > 45) { lowRes = true; renderer.setPixelRatio(1); sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.needsUpdate = true; resize(); }
+  if (slow > 45) { lowRes = true; sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.needsUpdate = true; resize(); }
   slow = fast = 0;
 }
-let lowRes = false;
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -348,6 +347,7 @@ $('units').addEventListener('click', (e) => {
   useUnit(b.dataset.unit); show('play'); broadcast();
 });
 $('backBtn').addEventListener('click', () => show('start'));
+$('reselectBtn').addEventListener('click', () => { if (state.mode === 'tour') endTour(); show('select'); broadcast(); });
 
 function updateHud() {
   const st = STYLES[state.style];
@@ -377,6 +377,10 @@ function startPeer() {
   peer = new Peer('myhome-a1-' + roomCode.toLowerCase());
   peer.on('open', () => { setNet('已就緒，可以掃碼加入', true); showQR(); });
   peer.on('connection', (conn) => {
+    if (conn.label === 'fast') {   // 第二條不排隊的通道：只傳搖桿與轉頭，封包晚到就丟，不會越積越慢
+      conn.on('data', (m) => { const e = [...conns].find((q) => q.conn.peer === conn.peer); if (e && m && (m.t === 'joy' || m.t === 'look')) { e.seen = Date.now(); onMsg(e, m); } });
+      return;
+    }
     const entry = { conn, seen: Date.now(), id: nextConn++ }; conns.add(entry);
     conn.on('open', () => { send(conn, snapshot(entry)); broadcast(); });
     conn.on('data', (m) => { entry.seen = Date.now(); onMsg(entry, m); });
@@ -398,7 +402,7 @@ function onMsg(entry, m) {
   if (m.t === 'hello') return send(entry.conn, snapshot(entry));
   if (m.t === 'ping' || screen !== 'play') return;
   const find = (id) => state.items.find((i) => i.id === id);
-  if (m.t === 'joy') { if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
+  if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
   if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
