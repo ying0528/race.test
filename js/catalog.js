@@ -184,7 +184,7 @@ function seatOf(s) {
   if (s.t === 'sofa') {
     if (s.v === 'stool') return { h: s.h, single: true, center: true };
     const dm = s.v === 'L' || s.v === 'Lr' ? 95 : s.d, zo = -(s.d - dm) / 2, arm = Math.max(12, Math.min(20, s.w * 0.09));
-    return { h: 46, single: s.w < 140, xr: Math.max(0, s.w / 2 - arm - 26), back: zo - dm / 2 + 22 };
+    return { h: 46, single: s.w < 140, xr: Math.max(0, s.w / 2 - arm - 26), back: zo - dm / 2 + 22, front: zo + dm / 2 };
   }
   if (s.v === 'stoolseat') return { h: s.h, single: true, center: true };
   return null;
@@ -212,7 +212,7 @@ export function resolvePeople(items) {
     acc.forEach((q, i) => {
       const n = acc.length, H = q.p.s.h, lx = n === 1 ? 0 : n === 2 ? (i ? 1 : -1) * b.s.w / 4 : (i - 1) * b.s.w * 0.33;
       const [x, y] = world(b, lx, -b.s.d / 2 + 20 + H / 2);
-      out.set(q.p.it.id, { mode: 'lie', x, y, r: b.it.r, elev: 52, len: H });
+      out.set(q.p.it.id, { mode: 'lie', x, y, r: b.it.r, elev: 54, len: H, on: b.it.id });
     });
   }
   const taken = new Set();
@@ -223,9 +223,9 @@ export function resolvePeople(items) {
       const si = seatOf(f.s); if (!si || (si.single && taken.has(f.it.id))) continue;
       const lx = inside(f, p); if (lx === null) continue;
       taken.add(f.it.id);
-      const sx = si.single ? 0 : Math.max(-si.xr, Math.min(si.xr, lx)), lz = si.center ? -0.125 * p.s.h : si.back + 0.1 * p.s.h;
+      const sx = si.single ? 0 : Math.max(-si.xr, Math.min(si.xr, lx)), lz = si.center ? -0.125 * p.s.h : Math.max(si.back + 0.1 * p.s.h, si.front === undefined ? -1e9 : si.front - 0.235 * p.s.h + 4);   // 膝蓋要超出坐墊前緣
       const [x, y] = world(f, sx, lz);
-      res = { mode: 'sit', x, y, r: f.it.r, elev: 0, seat: si.h }; break;
+      res = { mode: 'sit', x, y, r: f.it.r, elev: 0, seat: si.h, on: f.it.id }; break;
     }
     out.set(p.it.id, res || { mode: 'stand', x: p.it.x, y: p.it.y, r: p.it.r, elev: 0 });
   }

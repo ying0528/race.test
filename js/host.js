@@ -3,7 +3,13 @@ import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 import { PLAN, roomAt } from './plan.js';
 import { getItem, STYLES, resolvePeople } from './catalog.js';
-import { buildItem, buildPerson, makeTex, M } from './models.js';
+import { buildItem, buildPerson, M } from './models.js';
+import * as MT from './mats.js';
+import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
+MT.setTexSize(512);
 
 const $ = (id) => document.getElementById(id);
 const cm = 0.01;
@@ -67,18 +73,14 @@ function floorMesh(x1, y1, x2, y2, mat, scale) {
 function buildShell() {
   shell.clear();
   const st = STYLES[state.style];
-  wallMat = new THREE.MeshStandardMaterial({ color: st.wall, roughness: 0.92 });
+  wallMat = MT.wallPaint(st.wall);
   const capMat = new THREE.MeshStandardMaterial({ color: '#3B3F46', roughness: 0.8 });
   const baseMat = new THREE.MeshStandardMaterial({ color: '#E3DED6', roughness: 0.6 });
   const slabMat = new THREE.MeshStandardMaterial({ color: '#C4C8CD', roughness: 0.9 });
-  floorMats = {
-    main: st.floor === 'marble'
-      ? [new THREE.MeshStandardMaterial({ map: makeTex('floormarble', st.floorC), roughness: 0.16 }), 1.6]
-      : [new THREE.MeshStandardMaterial({ map: makeTex('floorwood', st.floorC), roughness: 0.5 }), 2.4],
-    bath: [new THREE.MeshStandardMaterial({ map: makeTex('tile', '#D9D7D2'), roughness: 0.3 }), 0.3],
-    kit: [new THREE.MeshStandardMaterial({ map: makeTex('tile', '#D2CEC7'), roughness: 0.35 }), 0.6],
-    foyer: [new THREE.MeshStandardMaterial({ map: makeTex('floormarble', '#E9E5DE'), roughness: 0.16 }), 1.6],
-    balc: [new THREE.MeshStandardMaterial({ map: makeTex('tile', '#B4B1AB'), roughness: 0.7 }), 0.3],
+  floorMats = {   // [材質, 一張貼圖鋪多少公尺]
+    main: st.floor === 'marble' ? [MT.tiles(st.floorC, 2, true), 1.6] : [MT.floorWood(st.floorC), 1.6],
+    bath: [MT.tiles('#D9D7D2', 2, false), 0.6], kit: [MT.tiles('#D2CEC7', 2, true), 1.2],
+    foyer: [MT.tiles('#E9E5DE', 2, true), 1.6], balc: [MT.tiles('#B4B1AB', 2, false, 0.7), 0.6],
   };
   for (const [x1, y1, x2, y2, k] of PLAN.floors) shell.add(floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]));
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(shell, x1, y1, x2, y2, -30, -0.5, slabMat, false);
@@ -123,16 +125,16 @@ const furn = new THREE.Group(); scene.add(furn);
 const objs = new Map();
 function freeObj(o) { furn.remove(o); o.traverse((n) => { if (n.geometry) n.geometry.dispose(); }); }
 function syncItems() {
-  const seen = new Set(), people = resolvePeople(state.items);
+  const seen = new Set(), people = resolvePeople(state.items), used = new Set([...people.values()].map((p) => p.on).filter(Boolean));
   for (const it of state.items) {
     const sk = it.st || state.style, spec = getItem(it.key, sk); if (!spec) continue;
     seen.add(it.id);
     const pose = spec.t === 'person' ? people.get(it.id) : null;
-    const sig = pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk;
+    const decor = !used.has(it.id), sig = pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-');
     let e = objs.get(it.id);
     if (!e || e.sig !== sig) {
       if (e) freeObj(e.o);
-      e = { sig, o: pose ? buildPerson(spec, pose) : buildItem(spec, STYLES[sk]) }; furn.add(e.o); objs.set(it.id, e);
+      e = { sig, o: pose ? buildPerson(spec, pose) : buildItem(spec, STYLES[sk], { decor }) }; furn.add(e.o); objs.set(it.id, e);
     }
     if (pose) { e.o.position.set(pose.x * cm, pose.elev * cm, pose.y * cm); e.o.rotation.y = -pose.r * Math.PI / 180; }
     else { e.o.position.set(it.x * cm, spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; }
@@ -146,8 +148,14 @@ const goal = { tx: CX, tz: CZ, dist: 22, az: 0.14, el: 1.05 };      // 目標值
 const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: -Math.PI / 2, pitch: -0.06 };
 const joy = new Map();   // 每支手機的搖桿
 
+const PANEL = 216;   // 右側面板寬度（px）：鳥瞰時把畫面往左移，面板才不會擋到玄關
+function applyOffset() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (state.mode === 'tour' || screen !== 'play') camera.clearViewOffset(); else camera.setViewOffset(w, h, PANEL / 2, 0, w, h);
+  camera.updateProjectionMatrix();
+}
 function fitDist(wm, dm) { // 讓 wm × dm（公尺）的區域塞進畫面
-  const a = camera.aspect, v = THREE.MathUtils.degToRad(camera.fov) / 2, h = Math.atan(Math.tan(v) * a);
+  const a = camera.aspect * (screen === 'play' ? Math.max(0.5, 1 - PANEL / Math.max(600, canvas.clientWidth)) : 1), v = THREE.MathUtils.degToRad(camera.fov) / 2, h = Math.atan(Math.tan(v) * a);
   const dv = (dm * Math.sin(goal.el) + 1.9 * Math.cos(goal.el)) / 2 / Math.tan(v);
   const dh = wm / 2 / Math.tan(h);
   return Math.max(dv, dh) * 1.12 + 1.5;
@@ -163,7 +171,7 @@ function applyMode() {
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.22 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.22 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
-  camera.fov = t ? 72 : 34; camera.updateProjectionMatrix();
+  camera.fov = t ? 72 : 34; applyOffset();
   setGoal(); updateHud();
 }
 
@@ -196,8 +204,24 @@ function collide(p) {
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); setGoal();
+    renderer.setSize(w, h, false); if (composer) composer.setSize(canvas.width, canvas.height); camera.aspect = w / h; applyOffset(); setGoal();
   }
+}
+// 後製：接觸陰影（AO）。電腦跑不動時會自動關閉，再不行就降低解析度
+const Q0 = new URLSearchParams(location.search).get('q');   // 網址加 ?q=0／1／2 可以手動指定畫質
+let composer = null, aoPass = null, quality = Q0 === null ? 2 : Math.max(0, Math.min(2, +Q0 || 0)), slow = 0, fast = 0;
+function setupComposer() {
+  const w = canvas.width, h = canvas.height;
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }));
+  composer.addPass(new RenderPass(scene, camera));
+  aoPass = new GTAOPass(scene, camera, w, h); aoPass.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.2, thickness: 1.2, scale: 1.2, samples: 12 }); aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+  composer.addPass(aoPass); composer.addPass(new OutputPass());
+}
+function tuneQuality(dt) {
+  if (dt > 0.045) slow++; else if (dt < 0.03) fast++;
+  if (Q0 !== null || slow + fast < 90) return;
+  if (slow > 55 && quality > 0) { quality--; if (quality === 0) { renderer.setPixelRatio(1); sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } } console.info('畫質自動調整為', ['低', '中', '高'][quality]); }
+  slow = fast = 0;
 }
 let last = performance.now();
 function frame(now) {
@@ -221,7 +245,8 @@ function frame(now) {
     camera.position.set(view.tx + Math.sin(view.az) * ce * view.dist, Math.sin(view.el) * view.dist, view.tz + Math.cos(view.az) * ce * view.dist);
     camera.lookAt(view.tx, 0.4, view.tz);
   }
-  renderer.render(scene, camera);
+  if (screen === 'play') tuneQuality(dt);
+  if (quality === 2) { if (!composer) setupComposer(); composer.render(); } else renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 
@@ -232,7 +257,7 @@ function show(name) {
   $('select').classList.toggle('hidden', name !== 'select');
   $('hud').classList.toggle('hidden', name !== 'play');
   document.body.dataset.screen = name;
-  setGoal(); updateHud();
+  applyOffset(); setGoal(); updateHud();
 }
 $('startBtn').addEventListener('click', () => show('select'));
 $('unitA1').addEventListener('click', () => { show('play'); broadcast(); });
@@ -241,10 +266,9 @@ $('backBtn').addEventListener('click', () => show('start'));
 function updateHud() {
   const st = STYLES[state.style];
   $('modeChip').textContent = state.mode === 'tour' ? '3D 導覽中' : '全戶鳥瞰';
-  $('styleName').textContent = st.n; $('styleDesc').textContent = st.d;
+  $('styleName').textContent = st.n;
   $('swatches').innerHTML = st.sw.map((c) => `<i style="background:${c}"></i>`).join('');
   $('count').textContent = conns.size;
-  $('itemCount').textContent = state.items.length;
   document.body.dataset.mode = state.mode;
 }
 
@@ -261,7 +285,7 @@ function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = 
 
 function startPeer() {
   if (typeof Peer === 'undefined') { setNet('無法載入連線元件，請檢查網路後重新整理', false); return; }
-  roomCode = makeCode(); $('room').textContent = roomCode;
+  roomCode = makeCode();
   setNet('正在連線配對伺服器…');
   peer = new Peer('myhome-a1-' + roomCode.toLowerCase());
   peer.on('open', () => { setNet('已就緒，可以掃碼加入', true); showQR(); });
@@ -319,9 +343,8 @@ function showQR() {
   const el = $('qr');
   if (location.protocol === 'file:') { el.textContent = '請從網站網址開啟'; return; }
   const url = new URL('phone.html', location.href); url.search = '?room=' + roomCode; url.hash = '';
-  $('url').textContent = url.href;
   if (typeof qrcode === 'function') { const q = qrcode(0, 'M'); q.addData(url.href); q.make(); el.innerHTML = q.createSvgTag(4, 0); }
-  else el.textContent = 'QR code 載入失敗，請在手機輸入下方網址';
+  else el.textContent = url.href;
 }
 
 // ================= 啟動 =================

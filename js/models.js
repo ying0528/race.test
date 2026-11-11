@@ -2,90 +2,27 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
 import { WOODS } from './catalog.js';
+import * as MT from './mats.js';
 
-// ---------- 程序化貼圖 ----------
-const texCache = new Map();
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
-function shade(hex, f) {
-  const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString();
-}
-export function makeTex(kind, color, rep = 1) {
-  const key = kind + color;
-  if (texCache.has(key)) return texCache.get(key);
-  const S = kind === 'floorwood' ? 1024 : 512;
-  const cv = document.createElement('canvas'); cv.width = cv.height = S;
-  const g = cv.getContext('2d'); const R = rnd(kind.length * 977 + parseInt(color.slice(1), 16) % 9973 + 7);
-  g.fillStyle = color; g.fillRect(0, 0, S, S);
-  if (kind === 'wood') {
-    for (let i = 0; i < 260; i++) {
-      const y = R() * S, a = 0.03 + R() * 0.07;
-      g.strokeStyle = R() < 0.6 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`;
-      g.lineWidth = 0.5 + R() * 2; g.beginPath(); g.moveTo(0, y);
-      for (let x = 0; x <= S; x += 64) g.lineTo(x, y + Math.sin(x / 90 + i) * 2.5);
-      g.stroke();
-    }
-  } else if (kind === 'floorwood') {
-    const pw = S / 16, pl = S / 2;            // 一張貼圖 = 2.4m：木板 15cm × 120cm
-    for (let r = 0; r < 16; r++) {
-      const off = R() * pl;
-      for (let k = -1; k < 3; k++) {
-        const x = k * pl + off, f = 0.9 + R() * 0.2;
-        g.fillStyle = shade(color, f); g.fillRect(x, r * pw, pl, pw);
-        for (let i = 0; i < 9; i++) {
-          g.strokeStyle = `rgba(0,0,0,${0.02 + R() * 0.05})`; g.lineWidth = 0.6 + R();
-          const yy = r * pw + R() * pw; g.beginPath(); g.moveTo(x, yy); g.lineTo(x + pl, yy + (R() - 0.5) * 3); g.stroke();
-        }
-        g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(x, r * pw, 1.2, pw);
-      }
-      g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, r * pw, S, 1.2);
-    }
-  } else if (kind === 'fabric') {
-    const im = g.getImageData(0, 0, S, S), d = im.data;
-    for (let i = 0; i < d.length; i += 4) { const n = (R() - 0.5) * 22; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
-    g.putImageData(im, 0, 0);
-    g.strokeStyle = 'rgba(255,255,255,0.035)'; g.lineWidth = 1;
-    for (let i = 0; i < S; i += 4) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, S); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(S, i); g.stroke(); }
-  } else if (kind === 'marble' || kind === 'floormarble') {
-    for (let i = 0; i < 14; i++) {
-      g.strokeStyle = `rgba(90,90,100,${0.05 + R() * 0.12})`; g.lineWidth = 0.6 + R() * 2.2;
-      let x = R() * S, y = R() * S; g.beginPath(); g.moveTo(x, y);
-      for (let k = 0; k < 7; k++) { x += (R() - 0.3) * 150; y += (R() - 0.5) * 130; g.lineTo(x, y); }
-      g.stroke();
-    }
-    if (kind === 'floormarble') { g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 2; g.strokeRect(0, 0, S / 2, S / 2); g.strokeRect(S / 2, 0, S / 2, S / 2); g.strokeRect(0, S / 2, S / 2, S / 2); g.strokeRect(S / 2, S / 2, S / 2, S / 2); }
-  } else if (kind === 'tile') {
-    g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 6; g.strokeRect(0, 0, S, S);
-    const im = g.getImageData(0, 0, S, S), d = im.data;
-    for (let i = 0; i < d.length; i += 4) { const n = (R() - 0.5) * 8; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
-    g.putImageData(im, 0, 0);
-  }
-  const t = new THREE.CanvasTexture(cv);
-  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.repeat.set(rep, rep);
-  texCache.set(key, t); return t;
-}
-
-// ---------- 材質 ----------
-const matCache = new Map();
+function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
+// ---------- 材質（實作在 mats.js） ----------
+const PAINTED = new Set(['#F1EEE8', '#2E2F31', '#8D8D8A']);
 export function M(kind, color = '#FFFFFF') {
-  const key = kind + color;
-  if (matCache.has(key)) return matCache.get(key);
-  let m;
-  const S = (o) => new THREE.MeshStandardMaterial(o);
   switch (kind) {
-    case 'wood': m = S({ map: makeTex('wood', color), roughness: 0.55 }); break;
-    case 'fabric': m = S({ map: makeTex('fabric', color), roughness: 0.96 }); break;
-    case 'leather': m = S({ color, roughness: 0.42 }); break;
-    case 'marble': m = S({ map: makeTex('marble', color), roughness: 0.18 }); break;
-    case 'metal': m = S({ color, metalness: 1, roughness: 0.32 }); break;
-    case 'mirror': m = S({ color: '#E8EEF2', metalness: 1, roughness: 0.03 }); break;
-    case 'ceramic': m = S({ color, roughness: 0.12 }); break;
-    case 'gloss': m = S({ color, roughness: 0.18 }); break;
-    case 'glass': m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.04, transparent: true, opacity: 0.22, depthWrite: false }); break;
-    case 'emit': m = S({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.8 }); break;
-    case 'leaf': m = S({ color, roughness: 0.6 }); break;
-    default: m = S({ color, roughness: 0.62 });
+    case 'wood': return PAINTED.has(color.toUpperCase()) ? MT.flat(color, 0.42) : MT.wood(color);   // 白、黑、灰是烤漆，不顯示木紋
+    case 'fabric': return MT.fabric(color, 4);
+    case 'leather': return MT.leather(color);
+    case 'marble': return MT.marble(color);
+    case 'metal': return MT.metal(color, 0.32);
+    case 'mirror': return MT.mirror();
+    case 'ceramic': return MT.ceramic(color);
+    case 'gloss': return MT.gloss(color);
+    case 'glass': return MT.glass(color);
+    case 'emit': return MT.emit(color);
+    case 'leaf': return MT.flat(color, 0.6);
+    default: return MT.flat(color, 0.62);
   }
-  matCache.set(key, m); return m;
 }
 const finish = (f) => (f === 'marble' ? M('marble', '#EFEBE5') : f && f[0] === '#' ? M('paint', f) : M('wood', WOODS[f] || WOODS.oak));
 const CHROME = () => M('metal', '#D5D8DC'), STEEL = () => M('metal', '#AEB3B8'), DARK = () => M('paint', '#2B2C2E'), BRASS = () => M('metal', '#B8955A');
@@ -389,38 +326,232 @@ B.washer = (g, it) => {
   else { port(h * 0.48); box(g, w - 6, 7, 0.6, dk, 0, h - 7, d / 2 + 0.2); }
 };
 
-// 建立一件家具。style = STYLES[風格]；spec 的顏色已經由 getItem(key, 風格) 換成該風格的款式
-export function buildItem(it, style) {
-  const g = new THREE.Group();
+
+// =====================================================================================
+// 精緻版：鼓起的墊子、滾邊、抱枕、有皺褶的棉被與毯子、收細外斜的椅腳、格柵門片
+// =====================================================================================
+const mesh = (p, geo, m, x = 0, y = 0, z = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.castShadow = me.receiveShadow = true; p.add(me); return me; };
+const rbox = (p, w, h, d, m, x, y, z, r = 1.5, s = 4) => mesh(p, new RoundedBoxGeometry(w, h, d, s, Math.max(0.05, Math.min(r, w / 2 - 0.01, h / 2 - 0.01, d / 2 - 0.01))), m, x, y, z);
+function smooth(geo) {     // 位置相同的頂點共用法線，變形後表面仍然平滑
+  const g = geo.index ? geo.toNonIndexed() : geo; g.computeVertexNormals();
+  const p = g.attributes.position, n = g.attributes.normal, acc = new Map(), key = (i) => Math.round(p.getX(i) * 40) + '_' + Math.round(p.getY(i) * 40) + '_' + Math.round(p.getZ(i) * 40);
+  for (let i = 0; i < p.count; i++) { const k = key(i), a = acc.get(k) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(k, a); }
+  for (let i = 0; i < p.count; i++) { const a = acc.get(key(i)), l = Math.hypot(a[0], a[1], a[2]) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
+  return g;
+}
+const loop = (p, pts, rad, m) => mesh(p, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'centripetal'), pts.length * 2, rad, 5, true), m);
+function rrPts(w, d, r, y) { const pts = []; r = Math.min(r, w / 2 - 0.1, d / 2 - 0.1); for (const [sx, sz, a0] of [[1, 1, 0], [-1, 1, 1], [-1, -1, 2], [1, -1, 3]]) for (let k = 0; k <= 5; k++) { const a = (a0 + k / 5) * Math.PI / 2; pts.push(new THREE.Vector3(sx * (w / 2 - r) + Math.cos(a) * r, y, sz * (d / 2 - r) + Math.sin(a) * r)); } return pts; }
+function cushion(p, w, h, d, m, x, y, z, { r = 5, bulge = 0.2, pipe = true, sd = 1 } = {}) {
+  const g = new THREE.Group(); g.position.set(x, y, z); p.add(g); r = Math.min(r, h / 2 - 0.01, w / 2 - 0.01, d / 2 - 0.01);
+  const geo = new RoundedBoxGeometry(w, h, d, 8, r), pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) { const X = pos.getX(i), Y = pos.getY(i), Z = pos.getZ(i), u = X / (w / 2), v = Z / (d / 2), dome = (1 - u * u) * (1 - v * v), wr = (MT.fbm(X * 0.09 + sd, Z * 0.09 + sd * 2, 3) - 0.5) * 0.9;
+    pos.setXYZ(i, X, Y + (Y > 0 ? bulge * h * dome + wr * dome : 0), Z); }
+  mesh(g, smooth(geo), m);
+  if (pipe) loop(g, rrPts(w - r * 0.5, d - r * 0.5, r * 0.8, h / 2 - r * 0.32), 0.42, m);
+  return g;
+}
+function pillow(p, w, h, t, m, x, y, z, { seam = true, sd = 1 } = {}) {
+  const g = new THREE.Group(); g.position.set(x, y, z); p.add(g);
+  const geo = new THREE.SphereGeometry(1, 40, 26), pos = geo.attributes.position, sg = (v) => Math.sign(v) * Math.abs(v) ** 0.4;
+  for (let i = 0; i < pos.count; i++) { const sx = sg(pos.getX(i)), sy = sg(pos.getY(i)), Z = pos.getZ(i), edge = Math.max(Math.abs(sx), Math.abs(sy)), cr = (MT.fbm(sx * 2.2 + sd, sy * 2.2 + sd * 3, 3) - 0.5) * 0.22;
+    pos.setXYZ(i, sx * w / 2 * (1 - 0.05 * (1 - Math.abs(sy))), sy * h / 2 * (1 - 0.05 * (1 - Math.abs(sx))), Z * t / 2 * (0.5 + 0.5 * (1 - edge ** 3) + cr * (1 - edge))); }
+  geo.computeVertexNormals(); mesh(g, geo, m);
+  if (seam) { const pts = []; for (let k = 0; k < 48; k++) { const a = k / 48 * Math.PI * 2, cx = sg(Math.cos(a)), cy = sg(Math.sin(a)); pts.push(new THREE.Vector3(cx * w / 2 * (1 - 0.05 * (1 - Math.abs(cy))), cy * h / 2 * (1 - 0.05 * (1 - Math.abs(cx))), 0)); } loop(g, pts, 0.38, m); }
+  return g;
+}
+const sideCache = new Map(), twoSided = (m) => { if (!sideCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; sideCache.set(m, c); } return sideCache.get(m); };
+function cloth(p, w, d, m, x, y, z, { amp = 1.4, droop = 6, edge = 14, sd = 3, ends = true, seg = 72 } = {}) {
+  const geo = new THREE.PlaneGeometry(w, d, seg, seg); geo.rotateX(-Math.PI / 2); const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) { const X = pos.getX(i), Z = pos.getZ(i), ex = Math.max(0, Math.abs(X) - (w / 2 - edge)) / edge, ez = ends ? Math.max(0, Math.abs(Z) - (d / 2 - edge)) / edge : Math.max(0, Z - (d / 2 - edge)) / edge;
+    const wr = (MT.fbm(X * 0.035 + sd, Z * 0.022 + sd, 4) - 0.5) * 2.4 + (MT.fbm(X * 0.11 - sd, Z * 0.09, 3) - 0.5) * 0.9 + 0.5 * Math.sin(X * 0.09 + MT.fbm(X * 0.02, Z * 0.03, 2) * 6);
+    const fall = Math.min(1.15, Math.max(ex * ex, ez * ez) + 0.35 * Math.min(ex * ex, ez * ez));
+    pos.setXYZ(i, X + (ex > 0 ? -Math.sign(X) * ex * ex * edge * 0.75 : 0), amp * wr * (1 - 0.5 * Math.min(1, fall)) - droop * fall, Z + (ends && ez > 0 ? -Math.sign(Z) * ez * ez * edge * 0.75 : 0)); }
+  geo.computeVertexNormals(); return mesh(p, geo, twoSided(m), x, y, z);
+}
+function tleg(p, len, rt, rb, m, x, z, splay = 0.12, cap = null) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.z = -Math.sign(x) * splay; g.rotation.x = Math.sign(z) * splay; p.add(g);
+  mesh(g, new THREE.CylinderGeometry(rt, rb, len, 16), m, 0, len / 2, 0);
+  if (cap) mesh(g, new THREE.CylinderGeometry(rb * 1.06, rb * 0.95, len * 0.16, 16), cap, 0, len * 0.08, 0);
+  return g;
+}
+const lathe = (p, prof, m, x, y, z, seg = 32) => mesh(p, new THREE.LatheGeometry(prof.map(([r, yy]) => new THREE.Vector2(r, yy)), seg), m, x, y, z);
+const woodOf = (f) => (f === 'marble' ? MT.marble('#EFEBE5') : M('wood', WOODS[f] || WOODS.oak));
+const BRASSY = () => MT.metal('#B8955A', 0.3);
+const OLD = { table: B.table, chair: B.chair, bed: B.bed, cab: B.cab };
+
+B.sofa = (g, it, P, o) => {
+  const { w, d, h, v } = it, lea = v === 'leather', f = lea ? MT.leather(P.fabric) : MT.fabric(P.fabric, 5), fc = lea ? f : MT.fabric(P.fabric, 3), wm = woodOf(P.wood);
+  if (v === 'stool') { for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 12, 2.4, 1.4, wm, sx * (w / 2 - 7), sz * (d / 2 - 7), 0.1, BRASSY()); cushion(g, w, h - 11, d, fc, 0, 11 + (h - 11) / 2, 0, { r: 6, bulge: 0.12 }); return; }
+  const isL = v === 'L' || v === 'Lr', dm = isL ? 95 : d, arm = Math.max(12, Math.min(20, w * 0.09)), s = new THREE.Group(); s.position.z = -(d - dm) / 2; g.add(s);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(s, 14, 2.8, 1.5, wm, sx * (w / 2 - 11), sz * (dm / 2 - 10), 0.12, BRASSY());
+  rbox(s, w - 3, 14, dm - 3, f, 0, 20.5, 0, 3.5, 5);
+  rbox(s, w - 2, h - 32, 16, f, 0, 14 + (h - 32) / 2 + 4, -dm / 2 + 9, 7.5, 6);
+  for (const sx of [-1, 1]) rbox(s, arm, h - 38, dm - 1, f, sx * (w / 2 - arm / 2), 14 + (h - 38) / 2 + 3.5, 0, Math.min(9, arm / 2 - 0.5), 6);
+  const inner = w - 2 * arm, n = Math.max(1, Math.round(inner / 72)), cw = inner / n;
+  for (let i = 0; i < n; i++) {
+    const x = -inner / 2 + cw * (i + 0.5);
+    cushion(s, cw - 0.6, 15, dm - 23, fc, x, 35, 10.5, { r: 5.5, sd: i * 5 + 1 });
+    const b = cushion(s, cw - 2.5, 18, h - 47, fc, x, 40.5 + (h - 47) / 2, -dm / 2 + 26, { r: 7.5, bulge: 0.3, sd: i * 3 + 9 }); b.rotation.x = Math.PI / 2 - 0.22;
+  }
+  if (isL) { const cwid = 92, sx = v === 'L' ? 1 : -1, x = sx * (w / 2 - arm - cwid / 2), z = dm / 2 + (d - dm) / 2; rbox(s, cwid, 14, d - dm + 2, f, x, 20.5, z, 3.5, 5); cushion(s, cwid - 1, 15, d - dm, fc, x, 35, z + 0.5, { r: 5.5, sd: 21 }); for (const zz of [-1, 1]) tleg(s, 14, 2.8, 1.5, wm, x + sx * (cwid / 2 - 10), z + zz * ((d - dm) / 2 - 9) + 0.01, 0.1, BRASSY()); }
+  if (o.decor && w >= 140) {
+    pillow(s, 46, 46, 17, MT.fabric(P.accent, 5), -inner / 2 + 25, 64, -dm / 2 + 41, { sd: 2 }).rotation.set(-0.3, 0.28, 0.1);
+    pillow(s, 42, 42, 15, MT.fabric('#EAE3D5', 2, 'boucle'), -inner / 2 + 54, 61, -dm / 2 + 45, { sd: 5 }).rotation.set(-0.34, -0.12, -0.13);
+    if (w >= 190) pillow(s, 54, 30, 14, MT.fabric(shade(P.fabric, 0.62), 5), inner / 2 - 32, 58, -dm / 2 + 43, { sd: 8 }).rotation.set(-0.32, -0.22, 0.05);
+    if (w >= 190 && !isL) cloth(s, arm + 22, 76, MT.fabric('#E9E2D4', 5, 'knit'), w / 2 - arm / 2 - 1, 14 + h - 38 + 5.2, 4, { amp: 0.35, droop: 22, edge: 12, sd: 11, seg: 48 });
+  }
+};
+
+B.bed = (g, it, P, o) => {
+  const { w, d, h, v } = it; if (v === 'bunk') return OLD.bed(g, it, P);
+  const soft = v === 'soft', wm = woodOf(P.wood), linen = MT.fabric('#F4F1EA', 5), duv = MT.fabric(soft ? '#EBE6DB' : shade(it.color || '#E3DED4', 1.08), 5), hb = MT.fabric(it.color || '#B9B2A4', 2), accent = MT.fabric(P.accent, 6, 'knit');
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 13, 3.2, 2.2, wm, sx * (w / 2 - 8), sz * (d / 2 - 9), 0.05, BRASSY());
+  rbox(g, w, 15, d, soft ? hb : wm, 0, 20.5, 0, 3, 5);
+  if (soft) { rbox(g, w, h - 8, 5, hb, 0, 8 + (h - 8) / 2, -d / 2 + 2.5, 2.2); const n = Math.max(3, Math.round(w / 23)), pw = (w - 2) / n; for (let i = 0; i < n; i++) cushion(g, pw - 0.3, 8, h - 38, hb, -(w - 2) / 2 + pw * (i + 0.5), 36 + (h - 38) / 2, -d / 2 + 8, { r: 3.8, bulge: 0.28, pipe: false, sd: i * 2 }).rotation.x = Math.PI / 2; }
+  else rbox(g, w, h - 6, 6, wm, 0, 6 + (h - 6) / 2, -d / 2 + 3, 2.4);
+  const hd = soft ? 13 : 7, md = d - hd - 3, mz = -d / 2 + hd + md / 2 + 1, mw = w - 6;
+  rbox(g, mw, 25, md, linen, 0, 40.5, mz, 9, 6); loop(g, rrPts(mw - 3, md - 3, 8, 49.5).map((p) => p.setZ(p.z + mz)), 0.4, linen);
+  cloth(g, mw + 5, md * 0.7, duv, 0, 55.2, mz + md * 0.15, { amp: 1.5, droop: 20, edge: 13, sd: 4, ends: false });
+  cloth(g, mw + 3, 32, linen, 0, 56.6, mz - md * 0.2, { amp: 0.8, droop: 18, edge: 11, sd: 7, seg: 48 });
+  cloth(g, mw + 6, 50, accent, 0, 57.6, mz + md / 2 - 34, { amp: 1.2, droop: 21, edge: 14, sd: 5 });
+  const np = w >= 140 ? 2 : 1, top = mz - md / 2;
+  for (let i = 0; i < np; i++) {
+    const sx = np === 2 ? (i ? 1 : -1) : 0, px = sx * (mw / 4 - 0.5), pw = np === 2 ? mw / 2 - 12 : mw - 20;
+    pillow(g, pw, 44, 18, linen, px, 60, top + 27, { seam: false, sd: i + 3 }).rotation.x = -Math.PI / 2 + 0.36;
+    if (o.decor && w >= 110) pillow(g, 46, 46, 16, MT.fabric(i ? '#D8CCB8' : P.accent, i ? 2 : 5, i ? 'boucle' : 'linen'), np === 2 ? sx * (mw / 4 - 7) : -8, 69, top + 48, { sd: i * 4 + 6 }).rotation.set(-0.52, sx * 0.14, sx * 0.07);
+  }
+  if (o.decor && w >= 140) pillow(g, 58, 27, 14, MT.fabric(shade(it.color || '#8E9AA6', 0.7), 5), 3, 62.5, top + 67, { sd: 13 }).rotation.x = -0.62;
+};
+
+function vase(g, x, y, z, s = 1, color = '#D9D2C4', stems = 0) {
+  lathe(g, [[0.1, 0], [5.4 * s, 0], [7.6 * s, 5.5 * s], [7 * s, 13 * s], [3 * s, 20 * s], [2.4 * s, 25 * s], [3.4 * s, 27.5 * s]], MT.ceramic(color), x, y, z);
+  for (let i = 0; i < stems; i++) { const a = i * 0.72 + 0.3, t = 0.18 + (i % 3) * 0.08, L = (34 + (i % 4) * 5) * s, st = mesh(g, new THREE.CylinderGeometry(0.18, 0.28, L, 5), MT.flat('#6B5A3E'), x + Math.cos(a) * L * t * 0.5, y + 26 * s + L * 0.48, z + Math.sin(a) * L * t * 0.5); st.rotation.set(Math.sin(a) * t, 0, -Math.cos(a) * t);
+    for (let j = 0; j < 5; j++) { const yy = 0.35 + j * 0.14, lf = mesh(g, new THREE.SphereGeometry(2.4 * s, 8, 6), MT.flat(['#55803F', '#456E38', '#6C9655'][(i + j) % 3], 0.55), x + Math.cos(a) * L * t * yy * 1.05 + Math.cos(a + j * 2.4) * 2.6, y + 26 * s + L * yy, z + Math.sin(a) * L * t * yy * 1.05 + Math.sin(a + j * 2.4) * 2.6); lf.scale.set(1, 0.18, 0.5); lf.rotation.set(0.4 * Math.sin(j), a + j * 2.4, 0.5); } }
+}
+function books(g, x, y, z, n = 3, ry = 0) { for (let i = 0; i < n; i++) rbox(g, 26 - i * 2, 2.6, 19 - i, MT.flat(['#E9E2D6', '#5E6B7A', '#C9B8A0', '#7C8471'][i % 4], 0.85), x, y + 1.3 + i * 2.6, z, 0.5).rotation.y = ry + i * 0.13; }
+
+B.table = (g, it, P, o) => {
+  const { w, d, v } = it; if (v === 'stoolseat' || v === 'fmirror') return OLD.table(g, it, P);
+  const h = v === 'mirror' ? 75 : it.h, f = it.color, marble = f === 'marble', painted = f === 'white' || f === 'black' || f === 'gray', top = marble ? MT.marble('#EFEBE5') : painted ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 6, gloss: 0.45 }), lg = marble ? BRASSY() : f === 'black' ? MT.metal('#1E1E20', 0.45) : woodOf(f), low = h < 62;
+  if (v === 'round') {
+    mesh(g, new THREE.CylinderGeometry(w / 2, w / 2 - 1.2, 3, 56), top, 0, h - 1.5, 0).scale.z = d / w;
+    if (!low) { lathe(g, [[0.1, 0], [w * 0.27, 0], [w * 0.25, 2.5], [5, 6], [4, h * 0.5], [6.5, h - 5], [w * 0.16, h - 3]], lg, 0, 0, 0).scale.z = d / w; }
+    else for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5, L = tleg(g, h - 3, 2, 1.2, lg, Math.cos(a) * w * 0.3, Math.sin(a) * d * 0.3, 0, null); L.rotation.set(Math.sin(a) * 0.14, 0, -Math.cos(a) * 0.14); }
+  } else {
+    rbox(g, w, 2.8, d, top, 0, h - 1.4, 0, 1.2, 3);
+    if (!low) rbox(g, w - 30, 6, d - 30, lg, 0, h - 5.8, 0, 1);
+    const ix = low ? 8 : 15, iz = low ? 8 : 14, rt = low ? 2.2 : 3.3, rb = low ? 1.3 : 1.7;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, h - 2.8, rt, rb, lg, sx * Math.max(4, w / 2 - ix), sz * Math.max(4, d / 2 - iz), w > 60 ? 0.1 : 0.05, null);
+    if (low && w > 60) rbox(g, w - 22, 1.8, d - 22, top, 0, 13, 0, 0.8);
+    if (it.cat === 'desk') { rbox(g, w * 0.3, 11, d - 14, lg, w / 2 - w * 0.15 - 12, h - 8.3, 0, 0.8); rbox(g, 10, 1, 1.6, BRASSY(), w / 2 - w * 0.15 - 12, h - 8.3, d / 2 - 6.4, 0.3); }
+    if (it.cat === 'dresser' && w >= 70) for (const sx of [-1, 1]) { rbox(g, w * 0.28, 9, d - 10, lg, sx * w * 0.27, h - 7.3, 0, 0.8); rbox(g, 8, 1, 1.6, BRASSY(), sx * w * 0.27, h - 7.3, d / 2 - 4.4, 0.3); }
+    if (v === 'mirror') { const mh = it.h - h, mm = mesh(g, new THREE.CylinderGeometry(w * 0.3, w * 0.3, 2.2, 48), BRASSY(), 0, h + mh / 2, -d / 2 + 1.6); mm.rotation.x = Math.PI / 2; mm.scale.z = 1; mm.scale.y = 1; mm.scale.x = 1; mm.scale.set(1, 1, mh / (w * 0.6)); const mf = mesh(g, new THREE.CylinderGeometry(w * 0.3 - 1.4, w * 0.3 - 1.4, 0.5, 48), MT.mirror(), 0, h + mh / 2, -d / 2 + 2.9); mf.rotation.x = Math.PI / 2; mf.scale.set(1, 1, (mh - 2.8) / (w * 0.6 - 2.8)); }
+  }
+  if (!o.decor) return;
+  if (it.cat === 'dtable') {
+    if (v !== 'round') mesh(g, new THREE.BoxGeometry(Math.min(38, w * 0.3), 0.25, d - 4), MT.fabric('#A9A294', 1), 0, h + 0.13, 0);
+    vase(g, 0, h + 0.25, 0, 1, '#D9D2C4', 8);
+    if (w >= 110) for (const [x, z] of [[-w / 4, -d / 4 - 3], [w / 4, d / 4 + 3]]) { lathe(g, [[0, 0.5], [7.5, 0.5], [12.5, 2.2], [13, 2.6], [7.5, 1.1], [0, 1.1]], MT.ceramic('#EEEAE2'), x, h, z); lathe(g, [[0, 0.5], [4.5, 0.5], [7, 3.6], [7.3, 3.8], [4.5, 1], [0, 1]], MT.ceramic('#3F5A54'), x, h + 0.7, z); }
+  } else if (it.cat === 'coffee' && w >= 80) { books(g, -w * 0.16, h, d * 0.05, 2, 0.3); vase(g, w * 0.2, h, -d * 0.1, 0.5, '#3F5A54'); }
+  else if (it.cat === 'side' || it.cat === 'nstand') vase(g, 0, h, 0, 0.42, '#EEEAE2');
+};
+
+B.chair = (g, it, P, o) => {
+  const { w, d, h, v } = it; if (v === 'bench') return OLD.chair(g, it, P);
+  const hexc = it.color && it.color[0] === '#', wm = hexc ? woodOf(P.wood) : woodOf(it.color), f = MT.fabric(hexc ? it.color : '#D9D3C6', 2, 'boucle'), sh = v === 'bar' ? 71 : 44.5;
+  for (const sx of [-1, 1]) { tleg(g, sh, 2, 1.15, wm, sx * (w / 2 - 4.5), d / 2 - 5.5, 0.07, null); const b = mesh(g, new THREE.CylinderGeometry(1.35, 1.15, h + 2, 14), wm, sx * (w / 2 - 4.5), h / 2 - 0.5, -d / 2 + 6); b.rotation.x = -0.1; b.rotation.z = -sx * 0.03; }
+  rbox(g, w - 5, 3.2, d - 8, wm, 0, sh - 0.5, 0, 1.4); rbox(g, w - 12, 2.4, 2.4, wm, 0, sh * 0.62, d / 2 - 6.5, 1); for (const sx of [-1, 1]) rbox(g, 2.2, 2.4, d - 14, wm, sx * (w / 2 - 5), sh * 0.55, 0, 1);
+  if (v === 'bar') rbox(g, w - 10, 1.6, 1.6, MT.metal('#AEB3B8'), 0, 26, d / 2 - 5.6, 0.6);
+  if (v !== 'bar' || true) cushion(g, w - 4, v === 'pad' ? 6 : 3.2, d - 8, v === 'pad' || v === 'bar' ? f : wm, 0, sh + (v === 'pad' ? 3.9 : 2.4), 0.6, { r: v === 'pad' ? 2.7 : 1.4, bulge: v === 'pad' ? 0.35 : 0.1, pipe: v === 'pad' });
+  const bh = Math.min(22, (h - sh) * 0.5), bend = (geo) => { const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); pos.setZ(i, pos.getZ(i) + 0.013 * x * x); } return smooth(geo); };
+  mesh(g, bend(new RoundedBoxGeometry(w - 5, bh, 2.8, 4, 1.2)), wm, 0, h - bh / 2 - 1, -d / 2 + 0.6).rotation.x = -0.1;
+  if (v === 'pad') mesh(g, bend(new RoundedBoxGeometry(w - 9, bh - 5, 3.4, 4, 1.6)), f, 0, h - bh / 2 - 1, -d / 2 + 2.3).rotation.x = -0.1;
+};
+
+B.rug = (g, it) => {
+  const { w, d, v } = it, m = MT.rugPile(it.color || '#D8D2C6');
+  if (v === 'round') { const r = mesh(g, new THREE.CylinderGeometry(w / 2, w / 2, 1.2, 64), m, 0, 0.6, 0); r.castShadow = false; return; }
+  rbox(g, w, 1.2, d, m, 0, 0.6, 0, 0.5, 2).castShadow = false;
+};
+
+B.tv = (g, it) => { const { w, h } = it; rbox(g, w, h, 2.2, MT.flat('#0C0D0F', 0.3), 0, h / 2, 0, 0.7); mesh(g, new THREE.PlaneGeometry(w - 1.6, h - 1.6), MT.gloss('#05070A'), 0, h / 2, 1.15); };
+
+B.cab = (g, it, P, o) => {
+  if (it.cat !== 'tvcab' || it.v === 'float') { OLD.cab(g, it, P); if (o.decor && it.cat === 'chest' && it.h < 110) { vase(g, -it.w * 0.22, it.h, 0, 0.55, '#3F5A54'); books(g, it.w * 0.2, it.h, 0, 2, -0.1); } return; }
+  const { w, d, h } = it, f = it.color, wm = woodOf(f === 'marble' ? 'walnut' : f), top = f === 'marble' ? MT.marble('#EFEBE5') : f === 'white' || f === 'black' || f === 'gray' ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 5, gloss: 0.5 }), dk = MT.metal('#1E1E20', 0.45), L = 13, T = 2;
+  for (const sx of [-1, 1]) { rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, d / 2 - 6, 0.5); rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, -d / 2 + 6, 0.5); rbox(g, 2.4, 2, d - 10, dk, sx * (w / 2 - 14), 1, 0, 0.5); }
+  const bh = h - L - 2.5, by = L + bh / 2, open = Math.min(52, w * 0.3), dw = w - open - 3, x0 = -w / 2 + 1.5, nx = w / 2 - open / 2 - 1.2;
+  rbox(g, w, T, d - 1, wm, 0, L + T / 2, -0.5, 0.5); rbox(g, w, bh, T, wm, 0, by, -d / 2 + T / 2, 0.5); for (const x of [-w / 2 + T / 2, w / 2 - T / 2, w / 2 - open - 1.5]) rbox(g, T, bh, d - 1, wm, x, by, -0.5, 0.5);
+  rbox(g, w + 1.6, 2.5, d + 1, top, 0, h - 1.25, 0, 1.1);
+  rbox(g, dw, bh - 4, 1, MT.flat(shade(WOODS[f] || WOODS.oak, 0.4), 0.7), x0 + dw / 2, by, d / 2 - 1.6, 0.3);
+  for (let x = 0.95; x < dw; x += 2.3) { if (Math.abs(x - dw / 2) < 1) continue; mesh(g, new THREE.CylinderGeometry(0.9, 0.9, bh - 4, 8), wm, x0 + x, by, d / 2 - 0.75); }
+  for (const s of [-1, 1]) rbox(g, 0.9, 9, 1.6, BRASSY(), x0 + dw / 2 + s * 2.6, by + 4, d / 2 + 0.6, 0.3);
+  rbox(g, open - 3, 1.4, d - 5, wm, nx, by + 0.5, 0, 0.4);
+  if (!o.decor) return;
+  let bx = nx - open / 2 + 3; for (const [bw, hh, c] of [[3.2, 13, '#B5654A'], [2.6, 14, '#EDE6D8'], [4, 12.5, '#2F3E5C'], [3, 14, '#7C8471'], [2.4, 12, '#C8A464']]) { if (bx + bw > nx + open / 2 - 12 || hh > bh / 2 - 3) continue; rbox(g, bw, hh, 18, MT.flat(c, 0.8), bx + bw / 2, by + 1.2 + hh / 2, d / 2 - 12, 0.4); bx += bw + 0.25; }
+  vase(g, -w / 2 + 22, h, 2, 1.05, '#3F5A54'); vase(g, -w / 2 + 40, h, -4, 0.58, '#EEEAE2'); books(g, w / 2 - 30, h, 1, 3, -0.1);
+};
+
+// 建立一件家具。style = STYLES[風格]；opts.decor = 是否附上抱枕、毯子、花瓶等擺飾
+export function buildItem(it, style, opts = {}) {
+  const g = new THREE.Group(), o = Object.assign({ decor: true }, opts);
   const hex = it.color && it.color[0] === '#';
   const P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent };
   const spec = Object.assign({}, it, { styled: false });
-  (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P);
+  (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P, o);
   g.scale.setScalar(0.01);
   return g;
 }
 
-// 模擬人偶。pose = { mode: 'stand' | 'sit' | 'lie', seat }；身高、肩寬都依實際比例
+const mm = new Map(), memoMat = (k, f) => (mm.has(k) ? mm.get(k) : (mm.set(k, f()), mm.get(k)));
+// ---------- 模擬人偶：穿衣服、有五官（簡約可愛臉），會站、坐、躺 ----------
+const HT = {
+  m: { head: 0.130, sh: 0.128, hip: 0.090, waist: 0.080, chest: 0.105, crotch: 0.47, shY: 0.815, limb: 1.0, c: ['#DDB493', '#4F6D8F', '#3A3F4A', '#2A2B2D', '#2E2622'] },
+  f: { head: 0.132, sh: 0.112, hip: 0.098, waist: 0.068, chest: 0.095, crotch: 0.47, shY: 0.812, limb: 0.88, c: ['#E6C2A6', '#C98274', '#E9E2D6', '#8A6A4F', '#4A3328'] },
+  c: { head: 0.185, sh: 0.115, hip: 0.095, waist: 0.088, chest: 0.100, crotch: 0.42, shY: 0.765, limb: 1.05, c: ['#E8C5A8', '#E3B23C', '#5E7FA3', '#F2F2F0', '#3A2A20'] },
+};
 export function buildPerson(spec, pose) {
-  const g = new THREE.Group(), b = new THREE.Group(); g.add(b);
-  const H = spec.h, m = M('paint', spec.color), sit = pose.mode === 'sit';
-  const legR = 0.042 * H, hipX = 0.058 * H, legL = 0.47 * H, torsoH = 0.35 * H, sh = sit ? pose.seat : legL;
-  const cap = (r, len, x, y, z, rx = 0) => { const me = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.1, len), 6, 14), m); me.position.set(x, y, z); me.rotation.x = rx; me.castShadow = me.receiveShadow = true; b.add(me); return me; };
-  box(b, spec.w - 0.12 * H, torsoH, spec.d * 0.8, m, 0, sh + torsoH / 2, 0, 0.04 * H);   // 肩寬（含手臂）= spec.w
-  cyl(b, 0.028 * H, 0.03 * H, 0.06 * H, m, 0, sh + torsoH + 0.02 * H, 0, 12);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.065 * H, 24, 18), m); head.position.set(0, sh + torsoH + 0.115 * H, 0); head.scale.set(0.9, 1, 0.95); head.castShadow = true; b.add(head);
+  const type = spec.v, T = HT[type], H = spec.h, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const skin = MT.flat(T.c[0], 0.6), topM = MT.fabric(T.c[1], 3), bot = MT.fabric(T.c[2], 3), shoe = MT.flat(T.c[3], 0.7), hair = MT.flat(T.c[4], 0.8);
+  const add = (p, geo, m, x = 0, y = 0, z = 0) => mesh(p, geo, m, x, y, z), sph = (p, r, m, x, y, z) => add(p, new THREE.SphereGeometry(r, 18, 12), m, x, y, z);
+  const seg = (p, r1, r2, len, m) => add(p, new THREE.CylinderGeometry(r1, r2, len, 16), m, 0, -len / 2, 0);
+  const L = T.limb, crotch = T.crotch * H, torsoH = T.shY * H - crotch, sit = pose.mode === 'sit', base = sit ? pose.seat + 0.045 * H : crotch;
+  const prof = (pts) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r * H, y * torsoH)), 24);
+  add(body, prof([[0.001, -0.10], [T.hip * 0.75, -0.07], [T.hip, 0.02], [T.hip * 0.98, 0.14], [T.waist * 1.05, 0.30]]), bot, 0, base, 0).scale.z = 0.66;
+  add(body, prof([[T.waist * 1.05, 0.30], [T.waist, 0.42], [T.chest, 0.70], [T.sh * 0.92, 0.90], [T.sh * 0.80, 0.985], [0.034, 1.04], [0.03, 1.06]]), topM, 0, base, 0).scale.z = type === 'f' ? 0.66 : 0.62;
+  const hh = T.head * H, headY = H - hh / 2 + (sit ? base - crotch : 0);
+  add(body, new THREE.CylinderGeometry(0.027 * H, 0.031 * H, 0.06 * H, 14), skin, 0, base + torsoH * 1.06, 0);
+  const hg = new THREE.Group(); hg.position.set(0, headY, 0.004 * H); body.add(hg);
+  const r = hh / 2, ea = 0.78 * r, ec = 0.9 * r, kid = type === 'c', surf = (x, y) => ec * Math.sqrt(Math.max(0, 1 - (x / ea) ** 2 - (y / r) ** 2));
+  const part = (geo, m, x, y, z, sx = 1, sy = 1, sz = 1) => { const me = add(hg, geo, m, x, y, z); me.scale.set(sx, sy, sz); me.castShadow = false; return me; }, S = (rad) => new THREE.SphereGeometry(rad, 16, 10);
+  part(new THREE.SphereGeometry(r, 24, 18), skin, 0, 0, 0, 0.78, 1, 0.9).castShadow = true;
+  const dark = MT.flat('#2A211D', 0.25), lip = MT.flat(type === 'm' ? '#B8766A' : '#C96A66', 0.5), blush = memoMat('blush', () => new THREE.MeshStandardMaterial({ color: '#F0A79B', roughness: 0.8, transparent: true, opacity: 0.55 }));
+  const ey = kid ? -0.10 * r : -0.02 * r, ex = 0.38 * ea, es = kid ? 1.25 : 1, ny = ey - 0.22 * r, my = ny - 0.26 * r;
   for (const sx of [-1, 1]) {
-    cap(0.03 * H, 0.27 * H, sx * (spec.w / 2 - 0.03 * H), sh + torsoH - 0.03 * H - 0.165 * H, 0);
-    if (sit) {
-      cap(legR, 0.25 * H - 2 * legR, sx * hipX, sh + legR, 0.125 * H, Math.PI / 2);
-      const sl = Math.min(0.25 * H, sh + legR - 3); cap(legR * 0.85, sl - 2 * legR * 0.85, sx * hipX, sh + legR - sl / 2, 0.25 * H);
-      box(b, legR * 1.8, 3, 0.12 * H, m, sx * hipX, Math.max(1.5, sh + legR - sl - 1.5), 0.25 * H + 0.03 * H, 1.2);
-    } else {
-      cap(legR, legL - 2 * legR, sx * hipX, legL / 2 + 1, 0);
-      box(b, legR * 1.8, 3, 0.13 * H, m, sx * hipX, 1.5, 0.035 * H, 1.2);
-    }
+    part(S(0.13 * r), skin, sx * ea * 0.97, ey - 0.05 * r, -0.06 * r, 0.4, 1, 0.7);
+    part(S(0.085 * r * es), dark, sx * ex, ey, surf(ex, ey) - 0.01 * r, 1, 1.25, 0.5);
+    const b = part(new THREE.BoxGeometry(0.24 * r, 0.035 * r, 0.035 * r), hair, sx * ex, ey + 0.23 * r * es, surf(ex, ey + 0.2 * r) - 0.005 * r); b.rotation.z = -sx * 0.1; b.rotation.y = sx * 0.3;
+    part(S(0.09 * r), blush, sx * 0.55 * ea, ny - 0.02 * r, surf(0.55 * ea, ny) - 0.06 * r, 1.2, 0.8, 0.3);
   }
-  if (pose.mode === 'lie') { b.rotation.x = -Math.PI / 2; b.position.set(0, 0.07 * H, H / 2); }
+  part(S(0.06 * r), skin, 0, ny, surf(0, ny) + 0.02 * r);
+  const arc = Math.PI * 0.62; part(new THREE.TorusGeometry(0.15 * r, 0.02 * r, 6, 14, arc), lip, 0, my + 0.13 * r, surf(0, my) - 0.01 * r).rotation.z = -Math.PI / 2 - arc / 2;
+  const cap = (th, rx, sc = 1.07) => { const h = part(new THREE.SphereGeometry(r * sc, 24, 14, 0, Math.PI * 2, 0, th), hair, 0, 0.03 * r, -0.03 * r, 0.8, 1, 0.93); h.rotation.x = rx; h.castShadow = true; };
+  if (type === 'm') { cap(Math.PI * 0.5, -0.42); part(S(0.3 * r), hair, 0.12 * r, 0.82 * r, 0.52 * r, 1.9, 0.5, 0.9).rotation.z = -0.15; }
+  else if (type === 'f') { cap(Math.PI * 0.52, -0.5, 1.09); part(S(r), hair, 0, -0.35 * r, -0.5 * r, 0.82, 1.2, 0.5); for (const sx of [-1, 1]) part(S(0.3 * r), hair, sx * 0.66 * r, -0.2 * r, 0.02 * r, 0.4, 2.2, 0.75); part(S(0.4 * r), hair, -0.2 * r, 0.72 * r, 0.5 * r, 1.5, 0.5, 0.8).rotation.z = 0.35; }
+  else { cap(Math.PI * 0.5, -0.36, 1.08); part(S(0.42 * r), hair, 0, 0.62 * r, 0.56 * r, 1.55, 0.55, 0.7); }
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(sx * T.sh * H * 0.84, base + torsoH * 0.93, 0); sh.rotation.z = sx * 0.09; sh.rotation.x = sit ? -0.35 : 0.04; body.add(sh);
+    sph(sh, 0.036 * H * L, topM, 0, 0, 0); const ua = 0.165 * H, fa = 0.145 * H;
+    seg(sh, 0.033 * H * L, 0.027 * H * L, ua, skin); add(sh, new THREE.CylinderGeometry(0.036 * H * L, 0.034 * H * L, ua * (type === 'm' ? 0.62 : 0.4), 16), topM, 0, -ua * (type === 'm' ? 0.31 : 0.2), 0);
+    const el = new THREE.Group(); el.position.y = -ua; el.rotation.x = sit ? -1.0 : -0.12; sh.add(el);
+    sph(el, 0.027 * H * L, skin, 0, 0, 0); seg(el, 0.026 * H * L, 0.019 * H * L, fa, skin); sph(el, 0.03 * H, skin, 0, -fa - 0.025 * H, 0).scale.set(0.45, 1, 0.8);
+    const th = crotch * 0.50, shn = crotch * 0.50 - 0.035 * H, hip = new THREE.Group(); hip.position.set(sx * T.hip * H * 0.55, base, 0); hip.rotation.x = sit ? -Math.PI / 2 : 0; body.add(hip);
+    seg(hip, 0.052 * H * L, 0.038 * H * L, th, bot);
+    const knee = new THREE.Group(); knee.position.y = -th; knee.rotation.x = sit ? Math.PI / 2 : 0; hip.add(knee);
+    sph(knee, 0.038 * H * L, bot, 0, 0, 0); seg(knee, 0.037 * H * L, 0.024 * H * L, shn, type === 'f' ? skin : bot);
+    sph(knee, 0.04 * H, shoe, 0, -shn - 0.012 * H, 0.03 * H).scale.set(0.62, 0.5, 1.55);
+  }
+  if (pose.mode === 'lie') { body.rotation.x = -Math.PI / 2; body.position.set(0, 0.075 * H, H / 2); }
   g.scale.setScalar(0.01);
   return g;
 }

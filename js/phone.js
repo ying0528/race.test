@@ -1,6 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
 import { PLAN, roomAt } from './plan.js';
-import { CATS, GROUPS, PEOPLE, getItem, planColor, STYLES, resolvePeople } from './catalog.js';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople } from './catalog.js';
+import * as ART from './planart.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -52,16 +53,7 @@ function update() {
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
 }
 const ROOM_COLORS = ['#E6B89C', '#9CC5E6', '#B7D9A8', '#E6D49C', '#C9B3E6', '#9CE0D6', '#E6A8C4', '#C8C8C8', '#D9C2A0'];
-function planBase(vb) {
-  let h = `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="#ECE9E4"/>`;
-  for (const [a, b, c, d] of PLAN.floors) h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="#FBFAF7"/>`;
-  return h;
-}
-function planWalls() {
-  let h = '';
-  for (const [a, b, c, d, z1, z2] of PLAN.walls) { if (z1 > 0) continue; h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${z2 >= 200 ? '#3B3F46' : z2 === 110 ? '#A9AEB5' : '#8FC0DA'}"/>`; }
-  const D = PLAN.door; return h + `<rect x="${D[0]}" y="${D[1]}" width="${D[2] - D[0]}" height="${D[3] - D[1]}" fill="#8A6A4F"/>`;
-}
+const planBase = (vb) => ART.defs(S.st.style) + ART.floors(vb), planWalls = () => ART.walls();
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
@@ -78,14 +70,15 @@ function renderMain() {
     if (!r) {
       const vb = [-20, -20, PLAN.W + 40, PLAN.D + 40];
       let h = planBase(vb);
-      PLAN.rooms.forEach((q, i) => { for (const [a, b, c, d] of q.rs) h += `<rect data-act="room" data-room="${q.id}" x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${ROOM_COLORS[i]}" fill-opacity="0.75"/>`; });
+      for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
+      PLAN.rooms.forEach((q, i) => { for (const [a, b, c, d] of q.rs) h += `<rect data-act="room" data-room="${q.id}" x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${ROOM_COLORS[i]}" fill-opacity="0.5"/>`; });
       h += planWalls();
       PLAN.rooms.forEach((q) => { const [a, b, c, d] = q.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m)); const fs = Math.min(46, (c - a - 14) / q.n.length);
-        h += `<text x="${(a + c) / 2}" y="${(b + d) / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="800" fill="#1D2129" pointer-events="none">${q.n}</text>`; });
+        h += `<text x="${(a + c) / 2}" y="${(b + d) / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="800" fill="#1D2129" stroke="#fff" stroke-width="5" paint-order="stroke" pointer-events="none">${q.n}</text>`; });
       el.innerHTML = `<div><h2>點選要佈置的區域</h2><div class="muted">直接點平面圖上的區域</div></div><div class="planBox"><svg class="plan" viewBox="${vb.join(' ')}" xmlns="http://www.w3.org/2000/svg">${h}</svg></div>` +
         `<button class="second" data-act="reset">${S.resetArm ? '再按一次，確定還原' : '全部還原成預設家具'}</button>`;
     } else {
-      el.innerHTML = `<div class="rowb" style="align-items:center;flex:none"><button class="second" data-act="room" data-room="" style="flex:0 0 92px">← 區域</button><div style="min-width:0"><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 一格 50 cm</div></div></div>
+      el.innerHTML = `<div class="rowb" style="align-items:center;flex:none"><button class="second" data-act="room" data-room="" style="flex:0 0 92px">← 區域</button><div style="min-width:0"><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 依實際比例</div></div></div>
         <div class="planBox"><svg id="plan" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div id="sel"></div>
         <div class="rowb"><button class="second" id="rotBtn" data-act="rot">旋轉 90°</button><button class="second" id="delBtn" data-act="del">刪除</button></div>
@@ -127,8 +120,6 @@ function drawPlan() {
   const [x1, y1, x2, y2] = r.r, vb = [x1 - PAD, y1 - PAD, x2 - x1 + 2 * PAD, y2 - y1 + 2 * PAD];
   svg.setAttribute('viewBox', vb.join(' '));
   let h = planBase(vb);
-  for (let gx = Math.ceil(vb[0] / 50) * 50; gx < vb[0] + vb[2]; gx += 50) h += `<line x1="${gx}" y1="${vb[1]}" x2="${gx}" y2="${vb[1] + vb[3]}" stroke="#E7E3DC" stroke-width="1"/>`;
-  for (let gy = Math.ceil(vb[1] / 50) * 50; gy < vb[1] + vb[3]; gy += 50) h += `<line x1="${vb[0]}" y1="${gy}" x2="${vb[0] + vb[2]}" y2="${gy}" stroke="#E7E3DC" stroke-width="1"/>`;
   h += planWalls();
   const poses = resolvePeople(S.st.items);
   const order = (s) => (s.t === 'rug' ? 0 : s.t === 'person' ? 3 : s.elev > 0 ? 2 : 1);
@@ -141,21 +132,15 @@ function drawPlan() {
       const p = poses.get(it.id) || { mode: 'stand', x: it.x, y: it.y, r: it.r };
       if (p.mode === 'lie') {   // 躺在床上：畫成一條與身高等長的線，圓點是頭
         h += `<g ${attr} transform="translate(${p.x} ${p.y}) rotate(${p.r})"><line x1="0" y1="${-p.len / 2}" x2="0" y2="${p.len / 2}" stroke="#fff" stroke-width="${sel ? 22 : 17}" stroke-linecap="round"/>` +
-          `<line x1="0" y1="${-p.len / 2}" x2="0" y2="${p.len / 2}" stroke="${sel ? '#A0673A' : s.color}" stroke-width="12" stroke-linecap="round"/><circle cx="0" cy="${-p.len / 2 + 6}" r="9" fill="${s.color}" stroke="#3B3F46" stroke-width="1.5"/></g>`;
+          `<line x1="0" y1="${-p.len / 2}" x2="0" y2="${p.len / 2}" stroke="${sel ? '#A0673A' : { m: '#4F6D8F', f: '#C98274', c: '#E3B23C' }[s.v]}" stroke-width="12" stroke-linecap="round"/><circle cx="0" cy="${-p.len / 2 + 6}" r="9" fill="#E6C2A6" stroke="#3B3F46" stroke-width="1.5"/></g>`;
       } else {
-        h += `<g ${attr} transform="translate(${p.x} ${p.y}) rotate(${p.r})"><ellipse rx="${s.w / 2}" ry="${s.d / 2}" fill="${s.color}" stroke="${stroke}" stroke-width="${sel ? 4 : 1.5}"/>` +
-          `<circle r="${s.h * 0.062}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/><line x1="0" y1="${s.d / 2}" x2="0" y2="${s.d / 2 + 9}" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/></g>`;
+        h += `<g ${attr} transform="translate(${p.x} ${p.y}) rotate(${p.r})"><ellipse rx="${s.w / 2}" ry="${s.d / 2}" fill="#E6C2A6" stroke="${stroke}" stroke-width="${sel ? 4 : 1.2}"/>` +
+          `<ellipse rx="${s.w * 0.36}" ry="${s.d * 0.42}" fill="${{ m: '#4F6D8F', f: '#C98274', c: '#E3B23C' }[s.v]}"/><circle r="${s.h * 0.058}" fill="${{ m: '#2E2622', f: '#4A3328', c: '#3A2A20' }[s.v]}" stroke="${stroke}" stroke-width="1"/><line x1="0" y1="${s.d / 2}" x2="0" y2="${s.d / 2 + 9}" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/></g>`;
       }
       continue;
     }
-    const round = s.v === 'round' || s.t === 'plant' || s.t === 'lamp';
-    const shape = round ? `<ellipse rx="${s.w / 2}" ry="${s.d / 2}"` : `<rect x="${-s.w / 2}" y="${-s.d / 2}" width="${s.w}" height="${s.d}" rx="3"`;
-    const flip = it.r % 180 !== 0, dw = flip ? s.d : s.w, dh = flip ? s.w : s.d;      // 轉向後實際佔的寬高，字要塞得進去
-    const fs = Math.min(15, dh * 0.6, (dw - 6) / s.catName.length);
-    h += `<g ${attr} transform="translate(${it.x} ${it.y}) rotate(${it.r})">` +
-      `${shape} fill="${planColor(s)}" fill-opacity="${s.elev > 0 ? 0.55 : s.t === 'rug' ? 0.6 : 1}" stroke="${stroke}" stroke-width="${sel ? 4 : 1.2}" ${s.elev > 0 ? 'stroke-dasharray="5 4"' : ''}/>` +
-      (round || s.t === 'rug' ? '' : `<line x1="${-s.w / 2 + 4}" y1="${s.d / 2 - 3}" x2="${s.w / 2 - 4}" y2="${s.d / 2 - 3}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>`) +
-      (fs >= 8 ? `<text transform="rotate(${-it.r})" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.55)" stroke-width="2.4" paint-order="stroke" pointer-events="none">${esc(s.catName)}</text>` : '') + '</g>';
+    const m = sel ? 5 : 0;
+    h += `<g ${attr} transform="translate(${it.x} ${it.y}) rotate(${it.r})">${ART.itemArt(s)}` + (sel ? `<rect x="${-s.w / 2 - m}" y="${-s.d / 2 - m}" width="${s.w + 2 * m}" height="${s.d + 2 * m}" rx="5" fill="rgba(160,103,58,.12)" stroke="#A0673A" stroke-width="3" stroke-dasharray="9 6"/>` : `<rect x="${-s.w / 2}" y="${-s.d / 2}" width="${s.w}" height="${s.d}" fill="transparent"/>`) + '</g>';
   }
   svg.innerHTML = h;
 }
@@ -274,4 +259,5 @@ const keyUpd = () => { J.f = (KEYS.KeyW || KEYS.ArrowUp ? 1 : 0) - (KEYS.KeyS ||
 addEventListener('keydown', (e) => { if (myTour()) { KEYS[e.code] = true; keyUpd(); } });
 addEventListener('keyup', (e) => { if (KEYS[e.code]) { KEYS[e.code] = false; keyUpd(); } });
 
+window.S_sel = () => S.sel;   // 給測試用
 update(); connect();

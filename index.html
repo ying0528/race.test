@@ -36,15 +36,13 @@
   #title { left: 20px; top: 16px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
   #title b { font-size: 20px; } #title span { font-size: 13px; color: #5F6672; }
   #modeChip { padding: 6px 14px; border-radius: 999px; background: #A0673A; color: #fff; font-size: 14px; font-weight: 700; }
-  #panel { right: 20px; top: 16px; width: 240px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  #qr { width: 208px; height: 208px; padding: 8px; background: #fff; border-radius: 10px; border: 1px solid #E4E1DC; display: flex; align-items: center; justify-content: center; font-size: 13px; text-align: center; }
+  #panel { right: 16px; top: 16px; width: 184px; padding: 12px; display: flex; flex-direction: column; gap: 9px; }
+  #qr { width: 160px; height: 160px; word-break: break-all; padding: 8px; background: #fff; border-radius: 10px; border: 1px solid #E4E1DC; display: flex; align-items: center; justify-content: center; font-size: 13px; text-align: center; }
   #qr svg { width: 100%; height: 100%; }
-  #room { font-size: 26px; font-weight: 800; letter-spacing: 4px; color: #A0673A; }
-  #url { font-size: 11px; color: #5F6672; word-break: break-all; }
-  #net { font-size: 12px; color: #5F6672; } #net[data-ok="1"] { color: #1F6B45; } #net[data-ok="0"] { color: #B3261E; }
+  #net { font-size: 12px; color: #5F6672; text-align: center; } #net[data-ok="1"] { color: #1F6B45; } #net[data-ok="0"] { color: #B3261E; }
   .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #5F6672; }
   .row b { color: #1D2129; font-size: 15px; }
-  #swatches { display: flex; gap: 6px; } #swatches i { width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(0, 0, 0, 0.08); }
+  #swatches { display: flex; gap: 6px; } #swatches i { flex: 1; height: 22px; border-radius: 7px; border: 1px solid rgba(0, 0, 0, 0.08); }
   .line { height: 1px; background: #E4E1DC; }
   #tip { left: 20px; bottom: 16px; padding: 8px 14px; font-size: 12px; color: #5F6672; }
   body[data-mode="tour"] #panel { width: auto; padding: 10px 14px; }
@@ -75,17 +73,12 @@
   <div id="title" class="card"><div><b>新板東京 A1</b><br><span>3 房 2 廳 2 衛 · 11F</span></div><div id="modeChip">全戶鳥瞰</div></div>
   <div id="panel" class="card">
     <div id="qr">產生中…</div>
-    <div class="row"><span>房間代碼</span><span id="room">----</span></div>
-    <div id="url"></div>
+    <div style="font-size:14px;font-weight:700;text-align:center">手機掃碼加入</div>
     <div id="net">準備中…</div>
     <div class="line"></div>
     <div class="row keep"><span>已連線手機</span><b><span id="count">0</span> 支</b></div>
-    <div class="row"><span>目前風格</span><b id="styleName"></b></div>
-    <div id="styleDesc" style="font-size:12px;color:#5F6672"></div>
+    <div class="row"><span>風格</span><b id="styleName"></b></div>
     <div id="swatches"></div>
-    <div class="row"><span>家具數量</span><b><span id="itemCount">0</span> 件</b></div>
-    <div class="line"></div>
-    <div style="font-size:12px;color:#5F6672;line-height:1.7">可多支手機一起佈置：<br>① 選風格 ② 擺家具、放人偶 ③ 3D 導覽</div>
   </div>
   <div id="tip" class="card">3D 畫面為示意，家具與裝潢非交屋附贈，實際以合約為準。</div>
 </div>

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 import { STYLES } from './catalog.js';
 import { buildItem, buildPerson } from './models.js';
+import { setTexSize } from './mats.js';
+setTexSize(256);
 
 let R = null, scene, cam;
 function init() {
