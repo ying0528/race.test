@@ -16,12 +16,12 @@ export const CATS = [
     ['皮革單椅', 78, 80, 80, '#7A4E32', 'leather'], ['皮革單椅', 82, 85, 85, '#2E2F31', 'leather'], ['絨布單椅', 72, 74, 78, '#2F3E5C'],
     ['絨布單椅', 72, 74, 78, '#B5654A'], ['寬版單椅', 95, 88, 80, '#B9B4AA'], ['腳凳', 60, 60, 42, '#C8C2B6', 'stool'], ['腳凳', 80, 50, 42, '#8E9AA6', 'stool']] },
   { id: 'coffee', n: '茶几', g: '客廳', t: 'table', items: [
-    ['圓形茶几', 80, 80, 40, 'oak', 'round'], ['圓形茶几', 90, 90, 38, 'walnut', 'round'], ['圓形大理石茶几', 100, 100, 40, 'marble', 'round'],
+    ['圓形茶几', 80, 80, 40, 'oak', 'round'], ['圓形茶几', 90, 90, 38, 'walnut', 'round'], ['圓形茶几', 100, 100, 40, 'marble', 'round'],
     ['方形茶几', 80, 80, 40, 'oak'], ['長方茶几', 100, 50, 42, 'oak'], ['長方茶几', 110, 60, 42, 'walnut'], ['長方茶几', 120, 60, 45, 'white'],
-    ['長方茶几', 130, 70, 42, 'black'], ['大理石茶几', 120, 60, 40, 'marble'], ['橢圓茶几', 120, 70, 40, 'walnut', 'round']] },
+    ['長方茶几', 130, 70, 42, 'black'], ['長方茶几', 120, 60, 40, 'marble'], ['橢圓茶几', 120, 70, 40, 'walnut', 'round']] },
   { id: 'side', n: '邊桌', g: '客廳', t: 'table', items: [
     ['圓形邊桌', 40, 40, 50, 'oak', 'round'], ['圓形邊桌', 45, 45, 55, 'walnut', 'round'], ['圓形邊桌', 50, 50, 55, 'black', 'round'],
-    ['大理石邊桌', 45, 45, 50, 'marble', 'round'], ['方形邊桌', 40, 40, 50, 'oak'], ['方形邊桌', 45, 45, 55, 'white'], ['方形邊桌', 50, 50, 50, 'walnut'],
+    ['圓形邊桌', 45, 45, 50, 'marble', 'round'], ['方形邊桌', 40, 40, 50, 'oak'], ['方形邊桌', 45, 45, 55, 'white'], ['方形邊桌', 50, 50, 50, 'walnut'],
     ['沙發邊几', 50, 30, 60, 'black'], ['沙發邊几', 55, 35, 62, 'oak'], ['角几', 60, 60, 45, 'ash']] },
   { id: 'tvcab', n: '電視櫃', g: '客廳', t: 'cab', items: [
     ['電視櫃', 120, 40, 45, 'oak'], ['電視櫃', 150, 40, 45, 'walnut'], ['電視櫃', 160, 40, 50, 'white'], ['電視櫃', 180, 40, 45, 'oak'],
@@ -51,9 +51,9 @@ export const CATS = [
     ['衣櫃（4 門）', 160, 60, 220, 'walnut'], ['衣櫃（4 門）', 200, 60, 220, 'white'], ['衣櫃（5 門）', 240, 60, 230, 'white'], ['衣櫃（6 門）', 270, 60, 240, 'gray'],
     ['滑門衣櫃', 180, 65, 220, 'oak', 'slide'], ['滑門衣櫃', 210, 65, 230, 'black', 'slide']] },
   { id: 'dresser', n: '梳妝台', g: '臥室', t: 'table', items: [
-    ['梳妝台', 80, 40, 75, 'white', 'mirror'], ['梳妝台', 90, 45, 75, 'oak', 'mirror'], ['梳妝台', 100, 45, 75, 'walnut', 'mirror'], ['梳妝台', 120, 45, 75, 'white', 'mirror'],
-    ['梳妝台', 100, 40, 75, 'ash', 'mirror'], ['梳妝台', 80, 45, 76, 'black', 'mirror'], ['化妝桌（無鏡）', 80, 40, 75, 'oak'], ['化妝桌（無鏡）', 100, 45, 75, 'white'],
-    ['化妝椅', 45, 35, 45, '#C8C2B6', 'stoolseat'], ['全身鏡', 50, 35, 160, 'black', 'fmirror']] },
+    ['梳妝台（含鏡）', 80, 40, 135, 'white', 'mirror'], ['梳妝台（含鏡）', 90, 45, 135, 'oak', 'mirror'], ['梳妝台（含鏡）', 100, 45, 135, 'walnut', 'mirror'], ['梳妝台（含鏡）', 120, 45, 135, 'white', 'mirror'],
+    ['梳妝台（含鏡）', 100, 40, 135, 'ash', 'mirror'], ['梳妝台（含鏡）', 80, 45, 135, 'black', 'mirror'], ['化妝桌（無鏡）', 80, 40, 75, 'oak'], ['化妝桌（無鏡）', 100, 45, 75, 'white'],
+    ['化妝椅', 45, 35, 45, '#C8C2B6', 'stoolseat'], ['全身鏡', 50, 22, 160, 'black', 'fmirror']] },
   { id: 'desk', n: '書桌', g: '書房', t: 'table', items: [
     ['書桌', 80, 50, 75, 'oak'], ['書桌', 100, 60, 75, 'oak'], ['書桌', 120, 60, 75, 'oak'], ['書桌', 120, 70, 75, 'white'], ['書桌', 140, 60, 75, 'walnut'],
     ['書桌', 140, 70, 75, 'ash'], ['書桌', 160, 70, 75, 'walnut'], ['書桌', 160, 80, 75, 'black'], ['升降桌', 120, 68, 75, 'white'], ['升降桌', 150, 75, 75, 'oak']] },
@@ -125,18 +125,44 @@ export const CATS = [
 ];
 
 const BY = Object.fromEntries(CATS.map(c => [c.id, c]));
+export const WOOD_NAMES = { oak: '橡木', walnut: '胡桃木', white: '白色', black: '黑色', ash: '梣木', gray: '灰色', teak: '柚木', marble: '大理石' };
+const FABRIC_T = { sofa: 1, chair: 1, ochair: 1, bed: 1, rug: 1 };
 
-// 'sofa:5' -> { cat, name, w, d, h, color, v, t, elev }
-export function getItem(key) {
-  const [cid, i] = key.split(':');
+// 四種風格：各有自己的木色與布料色，型錄會依風格換成對應款式
+export const STYLES = {
+  nordic: { n: '北歐', d: '淺木地板、灰色布沙發', floor: 'wood', floorC: '#D6B98F', wall: '#F2EFEA', accent: '#8FA58A', sw: ['#D6B98F', '#F2EFEA', '#B8BCBF', '#8FA58A'],
+    woods: ['oak', 'ash', 'white'], fabrics: ['#B8BCBF', '#C9D6DF', '#D9D4CA', '#8FA58A', '#E3DED4'] },
+  modern: { n: '現代', d: '深色木紋、黑灰家具', floor: 'wood', floorC: '#9A8C7D', wall: '#ECEAE6', accent: '#C9A86A', sw: ['#9A8C7D', '#ECEAE6', '#5A5E64', '#C9A86A'],
+    woods: ['black', 'gray', 'walnut'], fabrics: ['#5A5E64', '#3C4047', '#8D8D8A', '#B59A6A', '#2E2F31'] },
+  japandi: { n: '日式', d: '原木色、亞麻質感', floor: 'wood', floorC: '#C4A074', wall: '#F1EBE0', accent: '#7D8B6F', sw: ['#C4A074', '#F1EBE0', '#D8CCB8', '#7D8B6F'],
+    woods: ['teak', 'oak', 'ash'], fabrics: ['#D8CCB8', '#C8B9A0', '#A7906E', '#7D8B6F', '#E6DDCD'] },
+  luxe: { n: '輕奢', d: '石紋地坪、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#EFEBE5', accent: '#C8A464', sw: ['#E9E5DE', '#EFEBE5', '#2F3E5C', '#C8A464'],
+    woods: ['walnut', 'white', 'marble'], fabrics: ['#2F3E5C', '#E7E1D7', '#6B5B73', '#3F5A54', '#8C7A5B'] },
+};
+
+// 模擬人偶（等比例）
+export const PEOPLE = {
+  m: { n: '成人男性', h: 175, w: 50, d: 28, color: '#8FA3B8' },
+  f: { n: '成人女性', h: 160, w: 44, d: 25, color: '#D9A49A' },
+  c: { n: '小孩', h: 100, w: 32, d: 20, color: '#E3C06A' },
+};
+
+// 'sofa:5' -> 規格。styleKey 決定這一款在該風格下的木色／布料色
+export function getItem(key, styleKey) {
+  const [cid, i] = String(key).split(':');
+  if (cid === 'person') { const p = PEOPLE[i]; return p ? { key, cat: 'person', catName: '人偶', t: 'person', name: `${p.n}（${p.h} cm）`, w: p.w, d: p.d, h: p.h, color: p.color, v: i, elev: 0 } : null; }
   const cat = BY[cid]; if (!cat) return null;
   const r = cat.items[+i]; if (!r) return null;
+  const st = STYLES[styleKey] || STYLES.nordic;
+  let color = r[4] || null, name = r[0];
+  if (color && (WOODS[color] || color === 'marble')) { color = st.woods[+i % st.woods.length]; name += '・' + WOOD_NAMES[color]; }
+  else if (color && color[0] === '#' && FABRIC_T[cat.t]) color = st.fabrics[+i % st.fabrics.length];
   let elev = 0;
   if (cat.t === 'tv') elev = Math.max(60, 115 - r[3] / 2);       // 壁掛，中心離地約 115cm
   if (cat.t === 'hood') elev = 160;
   if (cat.t === 'mirror') elev = 105;
   if (r[5] === 'float') elev = 25;
-  return { key, cat: cat.id, catName: cat.n, t: cat.t, name: r[0], w: r[1], d: r[2], h: r[3], color: r[4] || null, v: r[5] || null, elev };
+  return { key, cat: cat.id, catName: cat.n, t: cat.t, name, w: r[1], d: r[2], h: r[3], color, v: r[5] || null, elev };
 }
 
 // 平面圖上的顏色
@@ -148,9 +174,60 @@ export function planColor(it) {
   return { tv: '#2A2B2D', plant: '#6E9A5B', hood: '#B8BCC1', toilet: '#F4F4F2', tub: '#F4F4F2', shower: '#CFE2EA', mirror: '#CFE0E8', washer: '#ECECEA' }[it.t] || '#CCCCCC';
 }
 
-export const STYLES = {
-  nordic: { n: '北歐', d: '淺木地板、灰色布沙發', floor: 'wood', floorC: '#D6B98F', wall: '#F2EFEA', wood: 'oak', fabric: '#B8BCBF', accent: '#8FA58A', sw: ['#D6B98F', '#F2EFEA', '#B8BCBF', '#8FA58A'] },
-  modern: { n: '現代', d: '深色木紋、黑灰家具', floor: 'wood', floorC: '#9A8C7D', wall: '#ECEAE6', wood: 'black', fabric: '#5A5E64', accent: '#C9A86A', sw: ['#9A8C7D', '#ECEAE6', '#5A5E64', '#C9A86A'] },
-  japandi: { n: '日式', d: '原木色、亞麻質感', floor: 'wood', floorC: '#C4A074', wall: '#F1EBE0', wood: 'teak', fabric: '#D8CCB8', accent: '#7D8B6F', sw: ['#C4A074', '#F1EBE0', '#D8CCB8', '#7D8B6F'] },
-  luxe: { n: '輕奢', d: '石紋地坪、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#EFEBE5', wood: 'walnut', fabric: '#2F3E5C', accent: '#C8A464', sw: ['#E9E5DE', '#EFEBE5', '#2F3E5C', '#C8A464'] },
-};
+// ---------- 人偶姿勢：在床上躺、在椅子上坐，其餘站著 ----------
+function seatOf(s) {
+  if (s.t === 'ochair') return { h: 50, single: true, back: -18 };
+  if (s.t === 'chair') {
+    if (s.v === 'bench') return { h: s.h, single: false, xr: s.w / 2 - 22, center: true };
+    return { h: s.v === 'bar' ? 76 : s.v === 'pad' ? 51 : 47, single: true, back: -s.d / 2 + 4 };
+  }
+  if (s.t === 'sofa') {
+    if (s.v === 'stool') return { h: s.h, single: true, center: true };
+    const dm = s.v === 'L' || s.v === 'Lr' ? 95 : s.d, zo = -(s.d - dm) / 2, arm = Math.max(12, Math.min(20, s.w * 0.09));
+    return { h: 46, single: s.w < 140, xr: Math.max(0, s.w / 2 - arm - 26), back: zo - dm / 2 + 22 };
+  }
+  if (s.v === 'stoolseat') return { h: s.h, single: true, center: true };
+  return null;
+}
+// 回傳 Map(id -> { mode: 'stand'|'sit'|'lie', x, y, r, elev, seat?, len? })
+export function resolvePeople(items) {
+  const out = new Map(), furn = [], ppl = [];
+  for (const it of items) { const s = getItem(it.key); if (s) (s.t === 'person' ? ppl : furn).push({ it, s }); }
+  const cs = (f) => { const a = f.it.r * Math.PI / 180; return [Math.cos(a), Math.sin(a)]; };
+  const local = (f, p) => { const [c, s] = cs(f), dx = p.it.x - f.it.x, dy = p.it.y - f.it.y; return [dx * c + dy * s, -dx * s + dy * c]; };
+  const world = (f, lx, ly) => { const [c, s] = cs(f); return [f.it.x + lx * c - ly * s, f.it.y + lx * s + ly * c]; };
+  const inside = (f, p) => { const [lx, ly] = local(f, p); return Math.abs(lx) <= f.s.w / 2 && Math.abs(ly) <= f.s.d / 2 ? lx : null; };
+  for (const b of furn) {
+    if (b.s.t !== 'bed') continue;
+    const cap = b.s.v === 'bunk' || b.s.w < 140 ? 1 : b.s.w < 185 ? 2 : 3;   // 單人 1；雙人 2；加大雙人 2 大人 + 1 小孩
+    const acc = []; let adults = 0;
+    for (const p of ppl) {
+      if (out.has(p.it.id)) continue;
+      const lx = inside(b, p); if (lx === null) continue;
+      const child = p.s.v === 'c';
+      if (acc.length >= cap || (!child && adults >= Math.min(cap, 2))) continue;
+      if (!child) adults++; acc.push({ p, lx }); out.set(p.it.id, null);
+    }
+    acc.sort((a, c) => a.lx - c.lx);
+    acc.forEach((q, i) => {
+      const n = acc.length, H = q.p.s.h, lx = n === 1 ? 0 : n === 2 ? (i ? 1 : -1) * b.s.w / 4 : (i - 1) * b.s.w * 0.33;
+      const [x, y] = world(b, lx, -b.s.d / 2 + 20 + H / 2);
+      out.set(q.p.it.id, { mode: 'lie', x, y, r: b.it.r, elev: 52, len: H });
+    });
+  }
+  const taken = new Set();
+  for (const p of ppl) {
+    if (out.get(p.it.id)) continue;
+    let res = null;
+    for (const f of furn) {
+      const si = seatOf(f.s); if (!si || (si.single && taken.has(f.it.id))) continue;
+      const lx = inside(f, p); if (lx === null) continue;
+      taken.add(f.it.id);
+      const sx = si.single ? 0 : Math.max(-si.xr, Math.min(si.xr, lx)), lz = si.center ? -0.125 * p.s.h : si.back + 0.1 * p.s.h;
+      const [x, y] = world(f, sx, lz);
+      res = { mode: 'sit', x, y, r: f.it.r, elev: 0, seat: si.h }; break;
+    }
+    out.set(p.it.id, res || { mode: 'stand', x: p.it.x, y: p.it.y, r: p.it.r, elev: 0 });
+  }
+  return out;
+}

@@ -1,15 +1,15 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN } from './plan.js';
-import { getItem, STYLES } from './catalog.js';
-import { buildItem, makeTex, M } from './models.js';
+import { PLAN, roomAt } from './plan.js';
+import { getItem, STYLES, resolvePeople } from './catalog.js';
+import { buildItem, buildPerson, makeTex, M } from './models.js';
 
 const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', mode: 'overview', room: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { style: 'nordic', mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -121,20 +121,23 @@ function buildShell() {
 // ================= 家具 =================
 const furn = new THREE.Group(); scene.add(furn);
 const objs = new Map();
-function placeObj(o, it, spec) { o.position.set(it.x * cm, spec.elev * cm, it.y * cm); o.rotation.y = -it.r * Math.PI / 180; }
-function syncItems(rebuildAll = false) {
-  const st = STYLES[state.style], seen = new Set();
+function freeObj(o) { furn.remove(o); o.traverse((n) => { if (n.geometry) n.geometry.dispose(); }); }
+function syncItems() {
+  const seen = new Set(), people = resolvePeople(state.items);
   for (const it of state.items) {
-    const spec = getItem(it.key); if (!spec) continue;
+    const sk = it.st || state.style, spec = getItem(it.key, sk); if (!spec) continue;
     seen.add(it.id);
+    const pose = spec.t === 'person' ? people.get(it.id) : null;
+    const sig = pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk;
     let e = objs.get(it.id);
-    if (!e || e.key !== it.key || (rebuildAll && it.s)) {
-      if (e) furn.remove(e.o);
-      e = { key: it.key, o: buildItem(spec, st, !!it.s) }; furn.add(e.o); objs.set(it.id, e);
+    if (!e || e.sig !== sig) {
+      if (e) freeObj(e.o);
+      e = { sig, o: pose ? buildPerson(spec, pose) : buildItem(spec, STYLES[sk]) }; furn.add(e.o); objs.set(it.id, e);
     }
-    placeObj(e.o, it, spec);
+    if (pose) { e.o.position.set(pose.x * cm, pose.elev * cm, pose.y * cm); e.o.rotation.y = -pose.r * Math.PI / 180; }
+    else { e.o.position.set(it.x * cm, spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; }
   }
-  for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); objs.delete(id); }
+  for (const [id, e] of objs) if (!seen.has(id)) { freeObj(e.o); objs.delete(id); }
 }
 
 // ================= 鏡頭 =================
@@ -151,10 +154,7 @@ function fitDist(wm, dm) { // 讓 wm × dm（公尺）的區域塞進畫面
 }
 function setGoal() {
   if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; return; }
-  goal.el = 1.05;
-  const r = state.room && PLAN.rooms.find((q) => q.id === state.room);
-  if (r) { const [x1, y1, x2, y2] = r.r; goal.tx = (x1 + x2) / 2 * cm; goal.tz = (y1 + y2) / 2 * cm; goal.dist = fitDist((x2 - x1) * cm + 1.6, (y2 - y1) * cm + 1.6); goal.az = 0.1; }
-  else { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0.14; }
+  goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0.14;   // 佈置時固定全戶鳥瞰
 }
 function applyMode() {
   const t = state.mode === 'tour';
@@ -173,7 +173,7 @@ function buildColliders() {
   colliders = PLAN.walls.filter((w) => w[4] < 140 && w[5] > 25).map((w) => [w[0] * cm, w[1] * cm, w[2] * cm, w[3] * cm]);
   const d = PLAN.door; colliders.push([d[0] * cm, d[1] * cm, d[2] * cm, d[3] * cm]);
   for (const it of state.items) {
-    const s = getItem(it.key); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp') continue;
+    const s = getItem(it.key); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp' || s.t === 'person') continue;
     const rot = it.r % 180 !== 0, hw = (rot ? s.d : s.w) / 2 - 8, hd = (rot ? s.w : s.d) / 2 - 8;
     if (hw > 2 && hd > 2) colliders.push([(it.x - hw) * cm, (it.y - hd) * cm, (it.x + hw) * cm, (it.y + hd) * cm]);
   }
@@ -239,8 +239,8 @@ $('unitA1').addEventListener('click', () => { show('play'); broadcast(); });
 $('backBtn').addEventListener('click', () => show('start'));
 
 function updateHud() {
-  const st = STYLES[state.style], r = state.room && PLAN.rooms.find((q) => q.id === state.room);
-  $('modeChip').textContent = state.mode === 'tour' ? '3D 導覽中' : r ? '放大：' + r.n : '全戶鳥瞰';
+  const st = STYLES[state.style];
+  $('modeChip').textContent = state.mode === 'tour' ? '3D 導覽中' : '全戶鳥瞰';
   $('styleName').textContent = st.n; $('styleDesc').textContent = st.d;
   $('swatches').innerHTML = st.sw.map((c) => `<i style="background:${c}"></i>`).join('');
   $('count').textContent = conns.size;
@@ -254,9 +254,10 @@ let peer = null, roomCode = '';
 function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.ok = ok === true ? '1' : ok === false ? '0' : ''; }
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
-function snapshot() { return { t: 'state', style: state.style, mode: state.mode, room: state.room, items: state.items, ready: screen === 'play', players: conns.size }; }
+let nextConn = 1;
+function snapshot(e) { return { t: 'state', style: state.style, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
-function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; const s = snapshot(); for (const e of conns) send(e.conn, s); updateHud(); }, 60); }
+function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
 function startPeer() {
   if (typeof Peer === 'undefined') { setNet('無法載入連線元件，請檢查網路後重新整理', false); return; }
@@ -265,8 +266,8 @@ function startPeer() {
   peer = new Peer('myhome-a1-' + roomCode.toLowerCase());
   peer.on('open', () => { setNet('已就緒，可以掃碼加入', true); showQR(); });
   peer.on('connection', (conn) => {
-    const entry = { conn, seen: Date.now() }; conns.add(entry);
-    conn.on('open', () => { send(conn, snapshot()); updateHud(); });
+    const entry = { conn, seen: Date.now(), id: nextConn++ }; conns.add(entry);
+    conn.on('open', () => { send(conn, snapshot(entry)); broadcast(); });
     conn.on('data', (m) => { entry.seen = Date.now(); onMsg(entry, m); });
     conn.on('close', () => drop(entry)); conn.on('error', () => drop(entry));
   });
@@ -276,28 +277,39 @@ function startPeer() {
     if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) setNet('連不上配對伺服器（' + err.type + '），可能被網路擋住', false);
   });
 }
-function drop(entry) { if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ } updateHud(); }
-setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 7000) drop(e); }, 1000);
+function endTour() { state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
+function drop(entry) { if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ } if (state.tourBy === entry.id) endTour(); broadcast(); }
+setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 15000) drop(e); }, 1000);
 
 const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
 function onMsg(entry, m) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'hello') return send(entry.conn, snapshot());
+  if (m.t === 'hello') return send(entry.conn, snapshot(entry));
   if (m.t === 'ping' || screen !== 'play') return;
   const find = (id) => state.items.find((i) => i.id === id);
+  if (m.t === 'joy') { if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
+  if (m.t === 'tour') {
+    if (m.on && state.mode !== 'tour') {
+      state.mode = 'tour'; state.tourBy = entry.id;
+      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: -Math.PI / 2, pitch: -0.06 }); buildColliders(); joy.clear(); applyMode();
+    } else if (!m.on && state.tourBy === entry.id) endTour();
+    return broadcast();
+  }
+  if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
-    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; buildShell(); syncItems(true); } break;
-    case 'zoom': state.room = PLAN.rooms.some((r) => r.id === m.room) ? m.room : null; if (state.mode === 'tour') { state.mode = 'overview'; applyMode(); } setGoal(); break;
-    case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); const e = objs.get(it.id); if (e) placeObj(e.o, it, getItem(it.key)); } break; }
+    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; buildShell(); syncItems(); } break;
+    case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;
-    case 'add': if (getItem(m.key) && state.items.length < 150 && typeof m.id === 'string' && !find(m.id)) { state.items.push({ id: m.id.slice(0, 16), key: m.key, x: num(m.x, 0, PLAN.W), y: num(m.y, 0, PLAN.D), r: 0 }); syncItems(); } break;
-    case 'reset': state.items = PLAN.defaults.map((d) => ({ ...d })); syncItems(true); break;
-    case 'tour':
-      state.mode = m.on ? 'tour' : 'overview';
-      if (m.on) { state.room = null; Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: -Math.PI / 2, pitch: -0.06 }); buildColliders(); }
-      joy.clear(); applyMode(); break;
-    case 'joy': joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return;
+    case 'add': {
+      const spec = getItem(m.key); if (!spec || state.items.length >= 150 || typeof m.id !== 'string' || find(m.id)) break;
+      const x = num(m.x, 0, PLAN.W), y = num(m.y, 0, PLAN.D);
+      if (spec.t === 'person') { const rm = roomAt(x, y); if (rm && state.items.filter((i) => i.key.startsWith('person:') && roomAt(i.x, i.y) === rm).length >= 3) break; }
+      const it = { id: m.id.slice(0, 16), key: m.key, x, y, r: 0 };
+      if (spec.t !== 'person') it.st = STYLES[m.st] ? m.st : state.style;
+      state.items.push(it); syncItems(); break;
+    }
+    case 'reset': state.items = PLAN.defaults.map((d) => ({ ...d })); syncItems(); break;
     default: return;
   }
   broadcast();

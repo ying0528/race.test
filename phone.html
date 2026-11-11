@@ -6,9 +6,10 @@
 <meta name="theme-color" content="#F7F5F2">
 <title>打造我的家｜手機編輯器</title>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; background: #F7F5F2; color: #1D2129; overscroll-behavior: none;
+  html, body { margin: 0; height: 100%; overflow: hidden; position: fixed; inset: 0; width: 100%; background: #F7F5F2; color: #1D2129; overscroll-behavior: none;
     font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; }
   button { font-family: inherit; color: inherit; }
   .hidden { display: none !important; }
@@ -18,8 +19,9 @@
   #status i { width: 8px; height: 8px; border-radius: 8px; background: #9AA0A8; }
   #status[data-s="ok"] { background: #E5F2EA; color: #1F6B45; } #status[data-s="ok"] i { background: #2E9E5E; }
   #status[data-s="bad"] { background: #FBE9E7; color: #B3261E; } #status[data-s="bad"] i { background: #B3261E; }
-  main { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
-  h2 { margin: 0; font-size: 24px; font-weight: 900; } .muted { color: #5F6672; font-size: 13px; }
+  main { flex: 1; min-height: 0; overflow: hidden; padding: 2px 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+  main > * { flex-shrink: 0; }
+  h2 { margin: 0; font-size: 22px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .muted { color: #5F6672; font-size: 13px; }
   nav { display: flex; border-top: 1px solid #E4E1DC; background: #fff; padding-bottom: env(safe-area-inset-bottom); }
   nav button { flex: 1; height: 58px; border: none; background: none; font-size: 15px; font-weight: 700; color: #5F6672; }
   nav button.on { color: #A0673A; box-shadow: inset 0 3px 0 #A0673A; }
@@ -27,24 +29,30 @@
   .card { padding: 14px; border-radius: 16px; background: #fff; border: 2px solid #E4E1DC; text-align: left; display: flex; flex-direction: column; gap: 6px; }
   .card.on { border-color: #A0673A; background: #FBF6F1; }
   .card b { font-size: 17px; } .sw { display: flex; gap: 5px; } .sw i { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); }
-  .primary { height: 54px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
-  .second { height: 48px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
+  .primary.alt { background: #3C4047; }
+  .primary { height: 50px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
+  .second { height: 44px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
   .second:disabled { opacity: .4; }
   .rowb { display: flex; gap: 8px; } .rowb > * { flex: 1; }
-  #planWrap { background: #fff; border-radius: 16px; border: 1px solid #E4E1DC; padding: 6px; touch-action: none; }
-  #plan { width: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
-  #sel { min-height: 44px; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid #E4E1DC; font-size: 13px; }
-  #sel b { font-size: 15px; }
+  .planBox { flex: 1 1 0; min-height: 0; background: #fff; border-radius: 16px; border: 1px solid #E4E1DC; padding: 6px; touch-action: none; }
+  .plan { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #sel { height: 42px; padding: 0 12px; border-radius: 12px; background: #fff; border: 1px solid #E4E1DC; font-size: 13px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
+  #sel b { font-size: 14px; flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sel span { flex: 0 0 auto; color: #5F6672; white-space: nowrap; font-size: 12px; }
   /* 型錄 */
   #sheet { position: fixed; inset: 0; background: #F7F5F2; display: flex; flex-direction: column; z-index: 5; }
-  #sheet .top { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 6px; }
+  #sheet .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 16px 6px; }
+  #sheet .top h2 { min-width: 0; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding: 6px 16px; scrollbar-width: none; flex-shrink: 0; }
   .chips button { flex-shrink: 0; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #D9D5CE; background: #fff; font-size: 14px; font-weight: 700; }
   .chips button.on { background: #A0673A; border-color: #A0673A; color: #fff; }
   #list { flex: 1; overflow-y: auto; padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 8px; }
   .it { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; background: #fff; border: 1px solid #E4E1DC; text-align: left; width: 100%; }
-  .it .pv { width: 64px; height: 64px; border-radius: 10px; background: #F1EEE9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .it .nm { font-size: 15px; font-weight: 700; } .it .dm { font-size: 12px; color: #5F6672; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .it .pv { width: 84px; height: 84px; border-radius: 12px; background: #F1EEE9; flex-shrink: 0; }
+  .it .pv img { width: 100%; height: 100%; display: block; }
+  .it .tx { min-width: 0; flex: 1; }
+  .it:disabled { opacity: .4; }
+  .it .nm { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; } .it .dm { font-size: 12px; color: #5F6672; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .it .add { margin-left: auto; padding: 8px 14px; border-radius: 999px; background: #F6EDE4; color: #A0673A; font-weight: 700; font-size: 13px; flex-shrink: 0; }
   /* 導覽搖桿 */
   #pads { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; }
@@ -63,7 +71,7 @@
   </nav>
 </div>
 <div id="sheet" class="hidden">
-  <div class="top"><h2>新增家具</h2><button class="second" id="sheetClose" style="height:40px;padding:0 16px">關閉</button></div>
+  <div class="top"><h2 id="sheetTitle">新增家具</h2><button class="second" id="sheetClose" style="height:40px;padding:0 16px;flex-shrink:0">關閉</button></div>
   <div class="chips" id="groups"></div>
   <div class="chips" id="cats"></div>
   <div id="list"></div>

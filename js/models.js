@@ -135,7 +135,7 @@ B.sofa = (g, it, P) => {
 };
 
 B.table = (g, it, P) => {
-  const { w, d, h, v } = it;
+  const { w, d, v } = it, h = v === 'mirror' ? 75 : it.h;   // 含鏡梳妝台：桌面 75cm，其餘是鏡子
   const f = it.styled ? P.wood : it.color, top = finish(f);
   const leg = f === 'marble' ? BRASS() : f === 'black' ? DARK() : top;
   if (v === 'stoolseat') { legs4(g, w, d, h - 10, leg, 3, 3.5, true); box(g, w, 10, d, M('fabric', it.color || '#C8C2B6'), 0, h - 5, 0, 4); return; }
@@ -151,7 +151,7 @@ B.table = (g, it, P) => {
   if (h < 50 && w > 60) box(g, w - 14, 2, d - 14, top, 0, 13, 0);
   if (it.cat === 'desk') { box(g, w * 0.32, 12, d - 12, top, w / 2 - w * 0.16 - 6, h - 10, 0); box(g, 10, 1, 1.5, STEEL(), w / 2 - w * 0.16 - 6, h - 10, d / 2 - 5.2); }
   if (it.cat === 'dresser' && w >= 70) { box(g, w * 0.3, 10, d - 8, top, -w * 0.3, h - 9, 0); box(g, w * 0.3, 10, d - 8, top, w * 0.3, h - 9, 0); }
-  if (v === 'mirror') { box(g, w * 0.62, 62, 2.5, top, 0, h + 31, -d / 2 + 2); box(g, w * 0.62 - 5, 57, 0.6, M('mirror'), 0, h + 31, -d / 2 + 3.5); }
+  if (v === 'mirror') { const mh = it.h - h; box(g, w * 0.62, mh, 2.5, top, 0, h + mh / 2, -d / 2 + 2); box(g, w * 0.62 - 5, mh - 5, 0.6, M('mirror'), 0, h + mh / 2, -d / 2 + 3.5); }
 };
 
 B.cab = (g, it, P) => {
@@ -203,7 +203,7 @@ B.tv = (g, it) => {
 
 B.chair = (g, it, P) => {
   const { w, d, h, v } = it;
-  const wood = finish(it.styled ? P.wood : (it.color && it.color[0] === '#' ? 'oak' : it.color));
+  const wood = finish(it.color && it.color[0] === '#' ? P.wood : it.color);
   const pad = M('fabric', it.styled ? P.fabric : (it.color && it.color[0] === '#' ? it.color : '#C8C2B6'));
   if (v === 'bench') { box(g, w, 4, d, wood, 0, h - 2, 0, 0.6); legs4(g, w, d, h - 4, wood, 6, 5); return; }
   const sh = v === 'bar' ? 72 : 45;
@@ -217,17 +217,17 @@ B.chair = (g, it, P) => {
 
 B.ochair = (g, it) => {
   const { w, h } = it, fab = M('fabric', it.color || '#2E2F31'), dk = DARK(), st = STEEL();
-  for (let i = 0; i < 5; i++) { const a = i * 1.2566, s = box(g, w * 0.46, 2.5, 4, dk, Math.cos(a) * w * 0.23, 6, Math.sin(a) * w * 0.23); s.rotation.y = -a; cyl(g, 2.6, 2.6, 4, dk, Math.cos(a) * w * 0.44, 2.6, Math.sin(a) * w * 0.44, 10).rotation.z = Math.PI / 2; }
+  for (let i = 0; i < 5; i++) { const a = i * 1.2566, s = box(g, w * 0.48, 2.5, 4, dk, Math.cos(a) * w * 0.24, 6, Math.sin(a) * w * 0.24); s.rotation.y = -a; cyl(g, 2.6, 2.6, 4, dk, Math.cos(a) * w * 0.47, 2.6, Math.sin(a) * w * 0.47, 10).rotation.z = Math.PI / 2; }
   cyl(g, 2.4, 2.4, 34, st, 0, 24, 0, 12);
-  box(g, 48, 8, 48, fab, 0, 46, 2, 3.5);
-  const bh = h - 56; const b = box(g, 44, bh, 6, fab, 0, 56 + bh / 2, -21, 3); b.rotation.x = -0.1;
+  box(g, w * 0.82, 8, w * 0.8, fab, 0, 46, 2, 3.5);
+  const bh = h - 56; const b = box(g, w * 0.74, bh, 6, fab, 0, 56 + bh / 2, -21, 3); b.rotation.x = -0.1;
   box(g, 5, 14, 5, dk, 0, 52, -21);
   for (const sx of [-1, 1]) { box(g, 3, 18, 3, dk, sx * 25, 57, 0); box(g, 5, 2.5, 26, dk, sx * 25, 67, 2, 1); }
 };
 
 B.bed = (g, it, P) => {
   const { w, d, h, v } = it;
-  const fw = finish(it.styled ? P.wood : 'oak'), soft = v === 'soft';
+  const fw = finish(P.wood), soft = v === 'soft';
   const linen = M('fabric', '#F2EFE9'), duvet = M('fabric', it.styled ? '#E9E5DD' : it.color || '#E3DED4'), thr = M('fabric', it.styled ? P.accent : shade(it.color || '#B9B4AA', 0.7));
   const deck = (y0) => {
     box(g, w, 10, d, soft ? M('fabric', it.color) : fw, 0, y0 + 5, 0, 1);
@@ -339,7 +339,7 @@ B.tower = (g, it) => {
 // ---- 衛浴 ----
 B.toilet = (g, it) => {
   const { w, d, h, v } = it, c = M('ceramic', '#F6F6F4');
-  if (v === 'wall' && h > 50) { box(g, w, h, d * 0.55, c, 0, 40 + h / 2 - 20, -d * 0.2, 6); return; }
+  if (v === 'wall' && h > 50) { box(g, w, h, d, c, 0, 40 + h / 2 - 20, 0, 6); return; }
   const y0 = v === 'wall' ? 16 : 0, bh = (v === 'wall' ? h : Math.min(40, h)) - (v === 'wall' ? 0 : 0);
   const tankD = v === 'wall' ? 0 : v === 'smart' ? 20 : 19, bd = d - tankD;
   const bowl = cyl(g, w / 2, w * 0.34, bh - y0 - 2, c, 0, y0 + (bh - y0 - 2) / 2, tankD / 2 + (v === 'wall' ? 0 : 0), 28); bowl.scale.z = bd / w;
@@ -381,20 +381,46 @@ B.mirror = (g, it) => {
 };
 B.washer = (g, it) => {
   const { w, d, h, v } = it, wh = M('gloss', '#F3F3F1'), dk = M('gloss', '#1B1C1F');
-  box(g, w, h, d, wh, 0, h / 2, 0, 1.5);
+  const bh = v === 'top' ? h - 9 : h;
+  box(g, w, bh, d, wh, 0, bh / 2, 0, 1.5);
   const port = (y) => { const r = cyl(g, w * 0.3, w * 0.3, 2, STEEL(), 0, y, d / 2 + 0.6, 32); r.rotation.x = Math.PI / 2; const q = cyl(g, w * 0.24, w * 0.24, 2.4, dk, 0, y, d / 2 + 0.7, 32); q.rotation.x = Math.PI / 2; };
-  if (v === 'top') { box(g, w - 8, 1.2, d - 18, dk, 0, h + 0.3, 5, 0.4); box(g, w - 4, 9, 9, wh, 0, h + 4, -d / 2 + 5, 1.5); }
+  if (v === 'top') { box(g, w - 8, 1.2, d - 18, dk, 0, bh + 0.3, 5, 0.4); box(g, w - 4, 9, 9, wh, 0, bh + 4.5, -d / 2 + 5, 1.5); }
   else if (v === 'stack') { port(h * 0.25); port(h * 0.75); box(g, w - 6, 5, 0.6, dk, 0, h * 0.5, d / 2 + 0.2); }
   else { port(h * 0.48); box(g, w - 6, 7, 0.6, dk, 0, h - 7, d / 2 + 0.2); }
 };
 
-// 建立一件家具。P = { wood, fabric, accent }（風格配色，只有預設家具會套用）
-export function buildItem(it, style, styled) {
+// 建立一件家具。style = STYLES[風格]；spec 的顏色已經由 getItem(key, 風格) 換成該風格的款式
+export function buildItem(it, style) {
   const g = new THREE.Group();
-  const P = styled ? { wood: style.wood, fabric: style.fabric, accent: style.accent }
-    : { wood: 'oak', fabric: it.color && it.color[0] === '#' ? it.color : '#B9B4AA', accent: '#C9B8A0' };
-  const spec = Object.assign({}, it, { styled });
+  const hex = it.color && it.color[0] === '#';
+  const P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent };
+  const spec = Object.assign({}, it, { styled: false });
   (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P);
+  g.scale.setScalar(0.01);
+  return g;
+}
+
+// 模擬人偶。pose = { mode: 'stand' | 'sit' | 'lie', seat }；身高、肩寬都依實際比例
+export function buildPerson(spec, pose) {
+  const g = new THREE.Group(), b = new THREE.Group(); g.add(b);
+  const H = spec.h, m = M('paint', spec.color), sit = pose.mode === 'sit';
+  const legR = 0.042 * H, hipX = 0.058 * H, legL = 0.47 * H, torsoH = 0.35 * H, sh = sit ? pose.seat : legL;
+  const cap = (r, len, x, y, z, rx = 0) => { const me = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.1, len), 6, 14), m); me.position.set(x, y, z); me.rotation.x = rx; me.castShadow = me.receiveShadow = true; b.add(me); return me; };
+  box(b, spec.w - 0.12 * H, torsoH, spec.d * 0.8, m, 0, sh + torsoH / 2, 0, 0.04 * H);   // 肩寬（含手臂）= spec.w
+  cyl(b, 0.028 * H, 0.03 * H, 0.06 * H, m, 0, sh + torsoH + 0.02 * H, 0, 12);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.065 * H, 24, 18), m); head.position.set(0, sh + torsoH + 0.115 * H, 0); head.scale.set(0.9, 1, 0.95); head.castShadow = true; b.add(head);
+  for (const sx of [-1, 1]) {
+    cap(0.03 * H, 0.27 * H, sx * (spec.w / 2 - 0.03 * H), sh + torsoH - 0.03 * H - 0.165 * H, 0);
+    if (sit) {
+      cap(legR, 0.25 * H - 2 * legR, sx * hipX, sh + legR, 0.125 * H, Math.PI / 2);
+      const sl = Math.min(0.25 * H, sh + legR - 3); cap(legR * 0.85, sl - 2 * legR * 0.85, sx * hipX, sh + legR - sl / 2, 0.25 * H);
+      box(b, legR * 1.8, 3, 0.12 * H, m, sx * hipX, Math.max(1.5, sh + legR - sl - 1.5), 0.25 * H + 0.03 * H, 1.2);
+    } else {
+      cap(legR, legL - 2 * legR, sx * hipX, legL / 2 + 1, 0);
+      box(b, legR * 1.8, 3, 0.13 * H, m, sx * hipX, 1.5, 0.035 * H, 1.2);
+    }
+  }
+  if (pose.mode === 'lie') { b.rotation.x = -Math.PI / 2; b.position.set(0, 0.07 * H, H / 2); }
   g.scale.setScalar(0.01);
   return g;
 }

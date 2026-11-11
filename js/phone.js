@@ -1,10 +1,10 @@
-// 手機端：風格、平面圖編輯器、家具型錄、3D 導覽搖桿
-import { PLAN } from './plan.js';
-import { CATS, GROUPS, getItem, planColor, STYLES } from './catalog.js';
+// 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
+import { PLAN, roomAt } from './plan.js';
+import { CATS, GROUPS, PEOPLE, getItem, planColor, STYLES, resolvePeople } from './catalog.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const S = { tab: 'style', net: 'wait', netText: '正在連線…', st: null, sel: null, drag: null, resetArm: false, group: GROUPS[0], cat: null };
+const S = { tab: 'style', net: 'wait', netText: '正在連線…', st: null, room: null, sel: null, drag: null, resetArm: false, group: GROUPS[0], cat: null, sheet: null };
 const room = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 let peer = null, conn = null, lastKey = '';
 function send(m) { try { if (conn && conn.open) conn.send(m); } catch (e) { /* 連線已關閉 */ } }
@@ -36,40 +36,65 @@ function onData(m) {
   S.st = m;
   if (keep) { const i = m.items.findIndex((q) => q.id === keep.id); if (i >= 0) m.items[i] = keep; }
   if (S.sel && !m.items.some((i) => i.id === S.sel)) S.sel = null;
+  if (m.mode === 'tour') { S.drag = null; closeSheet(); }
   update();
 }
 
 // ================= 畫面 =================
-const curRoom = () => S.st && PLAN.rooms.find((r) => r.id === S.st.room);
+const curRoom = () => PLAN.rooms.find((r) => r.id === S.room);
+const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) => it.x >= a - 12 && it.x <= c + 12 && it.y >= b - 12 && it.y <= d + 12);
+const isPerson = (it) => it.key.startsWith('person:');
+const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.tab, S.net, st && st.ready, st && st.mode, st && st.room, st && st.style, S.resetArm].join('|');
+  const st = S.st, key = [S.tab, S.net, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
-  if (S.tab === 'edit' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
+  if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
+}
+const ROOM_COLORS = ['#E6B89C', '#9CC5E6', '#B7D9A8', '#E6D49C', '#C9B3E6', '#9CE0D6', '#E6A8C4', '#C8C8C8', '#D9C2A0'];
+function planBase(vb) {
+  let h = `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="#ECE9E4"/>`;
+  for (const [a, b, c, d] of PLAN.floors) h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="#FBFAF7"/>`;
+  return h;
+}
+function planWalls() {
+  let h = '';
+  for (const [a, b, c, d, z1, z2] of PLAN.walls) { if (z1 > 0) continue; h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${z2 >= 200 ? '#3B3F46' : z2 === 110 ? '#A9AEB5' : '#8FC0DA'}"/>`; }
+  const D = PLAN.door; return h + `<rect x="${D[0]}" y="${D[1]}" width="${D[2] - D[0]}" height="${D[3] - D[1]}" fill="#8A6A4F"/>`;
 }
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
   if (!st.ready) { el.innerHTML = '<h2>已連上大螢幕</h2><div class="muted">請先在大螢幕上按「開始遊戲」，再選擇戶型「新板東京 A1」。</div>'; return; }
+  const touring = st.mode === 'tour', mine = st.tourBy === st.you;
+  if (touring && S.tab !== 'tour') {
+    el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;
+  }
   if (S.tab === 'style') {
-    el.innerHTML = '<div><h2>選擇風格</h2><div class="muted">點一下，大螢幕立刻換裝（地板、牆面與預設家具）</div></div><div class="grid2">' +
+    el.innerHTML = '<div><h2>選擇風格</h2><div class="muted">大螢幕立刻換裝，家具型錄也會換成這個風格的款式</div></div><div class="grid2">' +
       Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b><span class="muted">${s.d}</span></button>`).join('') + '</div>';
   } else if (S.tab === 'edit') {
     const r = curRoom();
     if (!r) {
-      el.innerHTML = '<div><h2>選擇要佈置的區域</h2><div class="muted">大螢幕會放大到那一區，手機出現平面圖</div></div><div class="grid2">' +
-        PLAN.rooms.map((q) => `<button class="card" data-act="zoom" data-room="${q.id}"><b>${q.n}</b><span class="muted">約 ${((q.r[2] - q.r[0]) / 100).toFixed(1)} × ${((q.r[3] - q.r[1]) / 100).toFixed(1)} m</span></button>`).join('') +
-        `</div><button class="second" data-act="reset">${S.resetArm ? '再按一次，確定還原' : '全部還原成預設家具'}</button>`;
+      const vb = [-20, -20, PLAN.W + 40, PLAN.D + 40];
+      let h = planBase(vb);
+      PLAN.rooms.forEach((q, i) => { for (const [a, b, c, d] of q.rs) h += `<rect data-act="room" data-room="${q.id}" x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${ROOM_COLORS[i]}" fill-opacity="0.75"/>`; });
+      h += planWalls();
+      PLAN.rooms.forEach((q) => { const [a, b, c, d] = q.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m)); const fs = Math.min(46, (c - a - 14) / q.n.length);
+        h += `<text x="${(a + c) / 2}" y="${(b + d) / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="800" fill="#1D2129" pointer-events="none">${q.n}</text>`; });
+      el.innerHTML = `<div><h2>點選要佈置的區域</h2><div class="muted">直接點平面圖上的區域</div></div><div class="planBox"><svg class="plan" viewBox="${vb.join(' ')}" xmlns="http://www.w3.org/2000/svg">${h}</svg></div>` +
+        `<button class="second" data-act="reset">${S.resetArm ? '再按一次，確定還原' : '全部還原成預設家具'}</button>`;
     } else {
-      el.innerHTML = `<div class="rowb" style="align-items:center"><button class="second" data-act="zoom" data-room="" style="flex:0 0 96px">← 全戶</button><div><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 一格 50 cm</div></div></div>
-        <div id="planWrap"><svg id="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      el.innerHTML = `<div class="rowb" style="align-items:center;flex:none"><button class="second" data-act="room" data-room="" style="flex:0 0 92px">← 區域</button><div style="min-width:0"><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 一格 50 cm</div></div></div>
+        <div class="planBox"><svg id="plan" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div id="sel"></div>
         <div class="rowb"><button class="second" id="rotBtn" data-act="rot">旋轉 90°</button><button class="second" id="delBtn" data-act="del">刪除</button></div>
-        <button class="primary" data-act="open">＋ 新增家具</button>`;
+        <div class="rowb"><button class="primary" data-act="open">＋ 家具</button><button class="primary alt" data-act="person">＋ 模擬人偶</button></div>`;
       bindPlan();
     }
   } else {
-    if (st.mode !== 'tour') el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">佈置好了嗎？用第一人稱走進你的新家，大螢幕會變成你的視角。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>';
+    if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>';
+    else if (!mine) el.innerHTML = '<h2>3D 導覽中</h2><div class="muted">另一支手機正在操作導覽，請看大螢幕。</div>';
     else {
       el.innerHTML = '<div><h2>3D 導覽中</h2><div class="muted">左邊走路，右邊轉頭。看大螢幕。</div></div><div id="pads"><div class="padbox"><div class="pad" data-pad="move"><i></i></div>前後左右</div><div class="padbox"><div class="pad look" data-pad="look"><i></i></div>轉頭</div></div><button class="second" data-act="tour" data-on="">結束導覽</button>';
       bindPads();
@@ -82,10 +107,11 @@ $('main').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !S.st) return;
   const a = b.dataset.act;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
-  else if (a === 'zoom') { S.st.room = b.dataset.room || null; S.sel = null; send({ t: 'zoom', room: S.st.room }); }
+  else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
-  else if (a === 'tour') { S.st.mode = b.dataset.on ? 'tour' : 'overview'; send({ t: 'tour', on: !!b.dataset.on }); }
-  else if (a === 'open') openSheet();
+  else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
+  else if (a === 'open') openSheet('furn');
+  else if (a === 'person') openSheet('person');
   else if (a === 'rot' || a === 'del') {
     const it = S.st.items.find((i) => i.id === S.sel); if (!it) return;
     if (a === 'rot') { it.r = (it.r + 90) % 360; send({ t: 'rot', id: it.id, r: it.r }); }
@@ -100,30 +126,45 @@ function drawPlan() {
   const svg = $('plan'), r = curRoom(); if (!svg || !r) return;
   const [x1, y1, x2, y2] = r.r, vb = [x1 - PAD, y1 - PAD, x2 - x1 + 2 * PAD, y2 - y1 + 2 * PAD];
   svg.setAttribute('viewBox', vb.join(' '));
-  let h = `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="#ECE9E4"/>`;
-  for (const [a, b, c, d] of PLAN.floors) h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="#FBFAF7"/>`;
+  let h = planBase(vb);
   for (let gx = Math.ceil(vb[0] / 50) * 50; gx < vb[0] + vb[2]; gx += 50) h += `<line x1="${gx}" y1="${vb[1]}" x2="${gx}" y2="${vb[1] + vb[3]}" stroke="#E7E3DC" stroke-width="1"/>`;
   for (let gy = Math.ceil(vb[1] / 50) * 50; gy < vb[1] + vb[3]; gy += 50) h += `<line x1="${vb[0]}" y1="${gy}" x2="${vb[0] + vb[2]}" y2="${gy}" stroke="#E7E3DC" stroke-width="1"/>`;
-  for (const [a, b, c, d, z1, z2] of PLAN.walls) { if (z1 > 0) continue; h += `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${z2 >= 200 ? '#3B3F46' : z2 === 110 ? '#A9AEB5' : '#8FC0DA'}"/>`; }
-  const D = PLAN.door; h += `<rect x="${D[0]}" y="${D[1]}" width="${D[2] - D[0]}" height="${D[3] - D[1]}" fill="#8A6A4F"/>`;
-  const order = (s) => (s.t === 'rug' ? 0 : s.elev > 0 ? 2 : 1);
-  const list = S.st.items.map((it) => ({ it, s: getItem(it.key) })).filter((q) => q.s && q.it.x > vb[0] - 60 && q.it.x < vb[0] + vb[2] + 60 && q.it.y > vb[1] - 60 && q.it.y < vb[1] + vb[3] + 60)
+  h += planWalls();
+  const poses = resolvePeople(S.st.items);
+  const order = (s) => (s.t === 'rug' ? 0 : s.t === 'person' ? 3 : s.elev > 0 ? 2 : 1);
+  const list = S.st.items.map((it) => ({ it, s: getItem(it.key, it.st || S.st.style) })).filter((q) => q.s && q.it.x > vb[0] - 80 && q.it.x < vb[0] + vb[2] + 80 && q.it.y > vb[1] - 80 && q.it.y < vb[1] + vb[3] + 80)
     .sort((p, q) => order(p.s) - order(q.s) || (p.it.id === S.sel) - (q.it.id === S.sel));
   for (const { it, s } of list) {
-    const mine = it.x >= x1 && it.x <= x2 && it.y >= y1 && it.y <= y2, sel = it.id === S.sel, round = s.v === 'round' || s.t === 'plant' || s.t === 'lamp';
+    const mine = inRoom(r, it), sel = it.id === S.sel, attr = mine ? `data-id="${esc(it.id)}"` : 'pointer-events="none" opacity="0.35"';
+    const stroke = sel ? '#A0673A' : '#3B3F46';
+    if (s.t === 'person') {
+      const p = poses.get(it.id) || { mode: 'stand', x: it.x, y: it.y, r: it.r };
+      if (p.mode === 'lie') {   // 躺在床上：畫成一條與身高等長的線，圓點是頭
+        h += `<g ${attr} transform="translate(${p.x} ${p.y}) rotate(${p.r})"><line x1="0" y1="${-p.len / 2}" x2="0" y2="${p.len / 2}" stroke="#fff" stroke-width="${sel ? 22 : 17}" stroke-linecap="round"/>` +
+          `<line x1="0" y1="${-p.len / 2}" x2="0" y2="${p.len / 2}" stroke="${sel ? '#A0673A' : s.color}" stroke-width="12" stroke-linecap="round"/><circle cx="0" cy="${-p.len / 2 + 6}" r="9" fill="${s.color}" stroke="#3B3F46" stroke-width="1.5"/></g>`;
+      } else {
+        h += `<g ${attr} transform="translate(${p.x} ${p.y}) rotate(${p.r})"><ellipse rx="${s.w / 2}" ry="${s.d / 2}" fill="${s.color}" stroke="${stroke}" stroke-width="${sel ? 4 : 1.5}"/>` +
+          `<circle r="${s.h * 0.062}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/><line x1="0" y1="${s.d / 2}" x2="0" y2="${s.d / 2 + 9}" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/></g>`;
+      }
+      continue;
+    }
+    const round = s.v === 'round' || s.t === 'plant' || s.t === 'lamp';
     const shape = round ? `<ellipse rx="${s.w / 2}" ry="${s.d / 2}"` : `<rect x="${-s.w / 2}" y="${-s.d / 2}" width="${s.w}" height="${s.d}" rx="3"`;
-    const fs = Math.max(7, Math.min(13, Math.min(s.w, s.d) * 0.3));
-    h += `<g ${mine ? `data-id="${esc(it.id)}"` : 'pointer-events="none" opacity="0.35"'} transform="translate(${it.x} ${it.y}) rotate(${it.r})">` +
-      `${shape} fill="${planColor(s)}" fill-opacity="${s.elev > 0 ? 0.55 : s.t === 'rug' ? 0.6 : 1}" stroke="${sel ? '#A0673A' : '#3B3F46'}" stroke-width="${sel ? 4 : 1.2}" ${s.elev > 0 ? 'stroke-dasharray="5 4"' : ''}/>` +
+    const flip = it.r % 180 !== 0, dw = flip ? s.d : s.w, dh = flip ? s.w : s.d;      // 轉向後實際佔的寬高，字要塞得進去
+    const fs = Math.min(15, dh * 0.6, (dw - 6) / s.catName.length);
+    h += `<g ${attr} transform="translate(${it.x} ${it.y}) rotate(${it.r})">` +
+      `${shape} fill="${planColor(s)}" fill-opacity="${s.elev > 0 ? 0.55 : s.t === 'rug' ? 0.6 : 1}" stroke="${stroke}" stroke-width="${sel ? 4 : 1.2}" ${s.elev > 0 ? 'stroke-dasharray="5 4"' : ''}/>` +
       (round || s.t === 'rug' ? '' : `<line x1="${-s.w / 2 + 4}" y1="${s.d / 2 - 3}" x2="${s.w / 2 - 4}" y2="${s.d / 2 - 3}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>`) +
-      (Math.min(s.w, s.d) >= 30 && Math.max(s.w, s.d) >= 55 ? `<text transform="rotate(${-it.r})" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.55)" stroke-width="2.4" paint-order="stroke" pointer-events="none">${esc(s.catName)}</text>` : '') + '</g>';
+      (fs >= 8 ? `<text transform="rotate(${-it.r})" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.55)" stroke-width="2.4" paint-order="stroke" pointer-events="none">${esc(s.catName)}</text>` : '') + '</g>';
   }
   svg.innerHTML = h;
 }
 function updateSel() {
   const el = $('sel'); if (!el) return;
-  const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key);
-  el.innerHTML = s ? `<b>${esc(s.name)}</b><br>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '（壁掛）' : ''}` : '<span class="muted">點家具可以選取，按住拖曳就能移動。大螢幕會即時跟著變。</span>';
+  const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style);
+  if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
+  else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'lie' ? '躺在床上' : p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
+  else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s;
 }
 function bindPlan() {
@@ -135,6 +176,7 @@ function bindPlan() {
     if (!g) { S.sel = null; drawPlan(); updateSel(); return; }
     const it = S.st.items.find((i) => i.id === g.dataset.id); if (!it) return;
     e.preventDefault(); const p = pt(e);
+    if (isPerson(it)) { it.x = Math.round(p.x); it.y = Math.round(p.y); }     // 人偶（可能正躺著或坐著）直接跟著手指
     S.sel = it.id; drawPlan(); updateSel();
     S.drag = { id: it.id, ox: p.x - it.x, oy: p.y - it.y, pid: e.pointerId };
     svg.setPointerCapture(e.pointerId);
@@ -144,7 +186,8 @@ function bindPlan() {
     const it = S.st.items.find((i) => i.id === d.id), r = curRoom(); if (!it || !r) return;
     const p = pt(e), snap = (v) => Math.round(v / 5) * 5;
     it.x = Math.max(r.r[0], Math.min(r.r[2], snap(p.x - d.ox))); it.y = Math.max(r.r[1], Math.min(r.r[3], snap(p.y - d.oy)));
-    const g = svg.querySelector(`[data-id="${CSS.escape(it.id)}"]`); if (g) g.setAttribute('transform', `translate(${it.x} ${it.y}) rotate(${it.r})`);
+    if (isPerson(it) || S.st.items.some(isPerson)) drawPlan();      // 人偶姿勢會跟著改變，整張重畫
+    else { const g = svg.querySelector(`[data-id="${CSS.escape(it.id)}"]`); if (g) g.setAttribute('transform', `translate(${it.x} ${it.y}) rotate(${it.r})`); }
     const now = performance.now(); if (now - lastSend > 40) { lastSend = now; send({ t: 'move', id: it.id, x: it.x, y: it.y }); }
   });
   const end = (e) => {
@@ -155,29 +198,59 @@ function bindPlan() {
   svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 }
 
-// ================= 家具型錄 =================
-function openSheet() { $('sheet').classList.remove('hidden'); renderSheet(); }
-function renderSheet() {
-  const cats = CATS.filter((c) => c.g === S.group);
-  if (!cats.some((c) => c.id === S.cat)) S.cat = cats[0].id;
-  $('groups').innerHTML = GROUPS.map((g) => `<button class="${g === S.group ? 'on' : ''}" data-g="${g}">${g}</button>`).join('');
-  $('cats').innerHTML = cats.map((c) => `<button class="${c.id === S.cat ? 'on' : ''}" data-c="${c.id}">${c.n}</button>`).join('');
-  const cat = CATS.find((c) => c.id === S.cat), specs = cat.items.map((_, i) => getItem(cat.id + ':' + i));
-  const mx = Math.max(...specs.map((s) => Math.max(s.w, s.d)));
-  $('list').innerHTML = specs.map((s) => {
-    const k = 52 / mx, w = Math.max(4, s.w * k), d = Math.max(4, s.d * k), round = s.v === 'round' || s.t === 'plant' || s.t === 'lamp';
-    return `<button class="it" data-key="${s.key}"><div class="pv"><svg width="56" height="56" viewBox="-28 -28 56 56">${round ? `<ellipse rx="${w / 2}" ry="${d / 2}"` : `<rect x="${-w / 2}" y="${-d / 2}" width="${w}" height="${d}" rx="2"`} fill="${planColor(s)}" stroke="#3B3F46" stroke-width="1"/></svg></div>` +
-      `<div><div class="nm">${esc(s.name)}</div><div class="dm">寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm</div></div><div class="add">加入</div></button>`;
-  }).join('');
+// ================= 型錄（3D 縮圖） =================
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
+async function fillThumbs() {
+  const run = ++thumbRun;
+  try { thumbMod = thumbMod || await import('./thumbs.js'); } catch (e) { return; }
+  for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
+    if (run !== thumbRun) return;
+    const k = img.dataset.th;
+    if (!thumbCache.has(k)) {
+      const [key, sk] = k.split('@');
+      try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); }
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const u = thumbCache.get(k); if (u && img.isConnected) img.src = u;
+  }
 }
-$('sheetClose').addEventListener('click', () => $('sheet').classList.add('hidden'));
+function closeSheet() { S.sheet = null; $('sheet').classList.add('hidden'); }
+function openSheet(kind) { S.sheet = kind; $('sheet').classList.remove('hidden'); renderSheet(); }
+function row(s, sk, extra = '') {
+  const k = s.key + '@' + sk;
+  return `<button class="it" data-key="${s.key}" ${extra}><div class="pv"><img data-th="${k}" src="${thumbCache.get(k) || BLANK}" alt=""></div>` +
+    `<div class="tx"><div class="nm">${esc(s.name)}</div><div class="dm">${s.t === 'person' ? `肩寬 ${s.w} cm・身高 ${s.h} cm` : `寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm`}</div></div><div class="add">加入</div></button>`;
+}
+function renderSheet() {
+  const sk = S.st.style, r = curRoom();
+  if (S.sheet === 'person') {
+    const n = r ? peopleIn(r) : 0, full = n >= 3;
+    $('sheetTitle').textContent = '新增模擬人偶';
+    $('groups').innerHTML = ''; $('cats').innerHTML = `<div class="muted" style="padding:6px 0">這一區目前 ${n} / 3 人${full ? '，已達上限' : ''}。放到床上會躺下，放到椅子上會坐下。</div>`;
+    $('list').innerHTML = Object.keys(PEOPLE).map((k) => row(getItem('person:' + k), sk, full ? 'disabled' : '')).join('');
+  } else {
+    const cats = CATS.filter((c) => c.g === S.group);
+    if (!cats.some((c) => c.id === S.cat)) S.cat = cats[0].id;
+    $('sheetTitle').textContent = '新增家具・' + STYLES[sk].n + '款';
+    $('groups').innerHTML = GROUPS.map((g) => `<button class="${g === S.group ? 'on' : ''}" data-g="${g}">${g}</button>`).join('');
+    $('cats').innerHTML = cats.map((c) => `<button class="${c.id === S.cat ? 'on' : ''}" data-c="${c.id}">${c.n}</button>`).join('');
+    const cat = CATS.find((c) => c.id === S.cat);
+    $('list').innerHTML = cat.items.map((_, i) => row(getItem(cat.id + ':' + i, sk), sk)).join('');
+  }
+  $('list').scrollTop = 0; fillThumbs();
+}
+$('sheetClose').addEventListener('click', closeSheet);
 $('groups').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.group = b.dataset.g; S.cat = null; renderSheet(); } });
 $('cats').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.cat = b.dataset.c; renderSheet(); } });
 $('list').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-key]'), r = curRoom(); if (!b || !r || !S.st) return;
-  const it = { id: 'u' + Math.random().toString(36).slice(2, 10), key: b.dataset.key, x: Math.round((r.r[0] + r.r[2]) / 10) * 5, y: Math.round((r.r[1] + r.r[3]) / 10) * 5, r: 0 };
-  S.st.items.push(it); S.sel = it.id; send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y });
-  $('sheet').classList.add('hidden'); update();
+  const b = e.target.closest('[data-key]'), r = curRoom(); if (!b || b.disabled || !r || !S.st) return;
+  const person = b.dataset.key.startsWith('person:'); if (person && peopleIn(r) >= 3) return;
+  const big = r.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m));
+  const it = { id: 'u' + Math.random().toString(36).slice(2, 10), key: b.dataset.key, x: Math.round((big[0] + big[2]) / 10) * 5, y: Math.round((big[1] + big[3]) / 10) * 5, r: 0 };
+  if (!person) it.st = S.st.style;
+  S.st.items.push(it); S.sel = it.id; send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st });
+  closeSheet(); update();
 });
 
 // ================= 導覽搖桿 =================
@@ -193,11 +266,12 @@ function bindPads() {
     pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
   });
 }
-setInterval(() => { if (S.st && S.st.mode === 'tour' && (jDirty || J.f || J.s || J.tn || J.p)) { jDirty = false; send({ t: 'joy', f: J.f, s: J.s, tn: J.tn, p: J.p }); } }, 60);
+const myTour = () => S.st && S.st.mode === 'tour' && S.st.tourBy === S.st.you;
+setInterval(() => { if (myTour() && (jDirty || J.f || J.s || J.tn || J.p)) { jDirty = false; send({ t: 'joy', f: J.f, s: J.s, tn: J.tn, p: J.p }); } }, 60);
 // 在電腦上測試：WASD 走路、Q／E 或 ←／→ 轉頭
 const KEYS = {};
 const keyUpd = () => { J.f = (KEYS.KeyW || KEYS.ArrowUp ? 1 : 0) - (KEYS.KeyS || KEYS.ArrowDown ? 1 : 0); J.s = (KEYS.KeyD ? 1 : 0) - (KEYS.KeyA ? 1 : 0); J.tn = (KEYS.KeyE || KEYS.ArrowRight ? 1 : 0) - (KEYS.KeyQ || KEYS.ArrowLeft ? 1 : 0); jDirty = true; };
-addEventListener('keydown', (e) => { if (S.st && S.st.mode === 'tour') { KEYS[e.code] = true; keyUpd(); } });
+addEventListener('keydown', (e) => { if (myTour()) { KEYS[e.code] = true; keyUpd(); } });
 addEventListener('keyup', (e) => { if (KEYS[e.code]) { KEYS[e.code] = false; keyUpd(); } });
 
 update(); connect();
