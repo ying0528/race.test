@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js';
-import { buildItem, buildPerson, M } from './models.js';
-import * as MT from './mats.js';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261111b';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261111b';
+import { buildItem, buildPerson, M } from './models.js?v=20261111b';
+import * as MT from './mats.js?v=20261111b';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
