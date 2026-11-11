@@ -1,6 +1,6 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
 import { PLAN, roomAt } from './plan.js';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople } from './catalog.js';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js';
 import * as ART from './planart.js';
 
 const $ = (id) => document.getElementById(id);
@@ -148,7 +148,7 @@ function updateSel() {
   const el = $('sel'); if (!el) return;
   const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style);
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
-  else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'lie' ? '躺在床上' : p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
+  else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s;
 }
@@ -171,6 +171,7 @@ function bindPlan() {
     const it = S.st.items.find((i) => i.id === d.id), r = curRoom(); if (!it || !r) return;
     const p = pt(e), snap = (v) => Math.round(v / 5) * 5;
     it.x = Math.max(r.r[0], Math.min(r.r[2], snap(p.x - d.ox))); it.y = Math.max(r.r[1], Math.min(r.r[3], snap(p.y - d.oy)));
+    if (isPerson(it)) keepOffBeds(it, S.st.items); else if (getItem(it.key).t === 'bed') for (const q of S.st.items) if (isPerson(q)) keepOffBeds(q, S.st.items);
     if (isPerson(it) || S.st.items.some(isPerson)) drawPlan();      // 人偶姿勢會跟著改變，整張重畫
     else { const g = svg.querySelector(`[data-id="${CSS.escape(it.id)}"]`); if (g) g.setAttribute('transform', `translate(${it.x} ${it.y}) rotate(${it.r})`); }
     const now = performance.now(); if (now - lastSend > 40) { lastSend = now; send({ t: 'move', id: it.id, x: it.x, y: it.y }); }
@@ -212,7 +213,7 @@ function renderSheet() {
   if (S.sheet === 'person') {
     const n = r ? peopleIn(r) : 0, full = n >= 3;
     $('sheetTitle').textContent = '新增模擬人偶';
-    $('groups').innerHTML = ''; $('cats').innerHTML = `<div class="muted" style="padding:6px 0">這一區目前 ${n} / 3 人${full ? '，已達上限' : ''}。放到床上會躺下，放到椅子上會坐下。</div>`;
+    $('groups').innerHTML = ''; $('cats').innerHTML = `<div class="muted" style="padding:6px 0">這一區目前 ${n} / 3 人${full ? '，已達上限' : ''}。放到椅子或沙發上會坐下；人偶不能放在床上。</div>`;
     $('list').innerHTML = Object.keys(PEOPLE).map((k) => row(getItem('person:' + k), sk, full ? 'disabled' : '')).join('');
   } else {
     const cats = CATS.filter((c) => c.g === S.group);
@@ -233,7 +234,7 @@ $('list').addEventListener('click', (e) => {
   const person = b.dataset.key.startsWith('person:'); if (person && peopleIn(r) >= 3) return;
   const big = r.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m));
   const it = { id: 'u' + Math.random().toString(36).slice(2, 10), key: b.dataset.key, x: Math.round((big[0] + big[2]) / 10) * 5, y: Math.round((big[1] + big[3]) / 10) * 5, r: 0 };
-  if (!person) it.st = S.st.style;
+  if (!person) it.st = S.st.style; else keepOffBeds(it, S.st.items);
   S.st.items.push(it); S.sel = it.id; send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st });
   closeSheet(); update();
 });

@@ -174,7 +174,7 @@ export function planColor(it) {
   return { tv: '#2A2B2D', plant: '#6E9A5B', hood: '#B8BCC1', toilet: '#F4F4F2', tub: '#F4F4F2', shower: '#CFE2EA', mirror: '#CFE0E8', washer: '#ECECEA' }[it.t] || '#CCCCCC';
 }
 
-// ---------- 人偶姿勢：在床上躺、在椅子上坐，其餘站著 ----------
+// ---------- 人偶姿勢：在椅子上坐，其餘站著；人偶不能和床重疊 ----------
 function seatOf(s) {
   if (s.t === 'ochair') return { h: 50, single: true, back: -18 };
   if (s.t === 'chair') {
@@ -197,24 +197,6 @@ export function resolvePeople(items) {
   const local = (f, p) => { const [c, s] = cs(f), dx = p.it.x - f.it.x, dy = p.it.y - f.it.y; return [dx * c + dy * s, -dx * s + dy * c]; };
   const world = (f, lx, ly) => { const [c, s] = cs(f); return [f.it.x + lx * c - ly * s, f.it.y + lx * s + ly * c]; };
   const inside = (f, p) => { const [lx, ly] = local(f, p); return Math.abs(lx) <= f.s.w / 2 && Math.abs(ly) <= f.s.d / 2 ? lx : null; };
-  for (const b of furn) {
-    if (b.s.t !== 'bed') continue;
-    const cap = b.s.v === 'bunk' || b.s.w < 140 ? 1 : b.s.w < 185 ? 2 : 3;   // 單人 1；雙人 2；加大雙人 2 大人 + 1 小孩
-    const acc = []; let adults = 0;
-    for (const p of ppl) {
-      if (out.has(p.it.id)) continue;
-      const lx = inside(b, p); if (lx === null) continue;
-      const child = p.s.v === 'c';
-      if (acc.length >= cap || (!child && adults >= Math.min(cap, 2))) continue;
-      if (!child) adults++; acc.push({ p, lx }); out.set(p.it.id, null);
-    }
-    acc.sort((a, c) => a.lx - c.lx);
-    acc.forEach((q, i) => {
-      const n = acc.length, H = q.p.s.h, lx = n === 1 ? 0 : n === 2 ? (i ? 1 : -1) * b.s.w / 4 : (i - 1) * b.s.w * 0.33;
-      const [x, y] = world(b, lx, -b.s.d / 2 + (b.s.v === 'soft' ? 13 : 7) + 4 + H / 2);   // 頭頂靠近床頭，枕在枕頭上
-      out.set(q.p.it.id, { mode: 'lie', x, y, r: b.it.r, elev: 54, len: H, on: b.it.id });
-    });
-  }
   const taken = new Set();
   for (const p of ppl) {
     if (out.get(p.it.id)) continue;
@@ -230,4 +212,18 @@ export function resolvePeople(items) {
     out.set(p.it.id, res || { mode: 'stand', x: p.it.x, y: p.it.y, r: p.it.r, elev: 0 });
   }
   return out;
+}
+
+// 人偶不能和床重疊：落在床的範圍內就推到最近的床邊外側。有移動就回傳 true
+export function keepOffBeds(person, items) {
+  const ps = getItem(person.key); if (!ps || ps.t !== 'person') return false;
+  let moved = false; const m = ps.w / 2 + 2;
+  for (let pass = 0; pass < 3; pass++) for (const b of items) {
+    const s = getItem(b.key); if (!s || s.t !== 'bed') continue;
+    const a = b.r * Math.PI / 180, co = Math.cos(a), si = Math.sin(a), dx = person.x - b.x, dy = person.y - b.y, lx = dx * co + dy * si, ly = -dx * si + dy * co, hx = s.w / 2 + m, hy = s.d / 2 + m;
+    if (Math.abs(lx) >= hx || Math.abs(ly) >= hy) continue;
+    const opts = [[hx - lx, hx, ly], [lx + hx, -hx, ly], [hy - ly, lx, hy], [ly + hy, lx, -hy]].sort((p, q) => p[0] - q[0])[0];
+    person.x = Math.round(b.x + opts[1] * co - opts[2] * si); person.y = Math.round(b.y + opts[1] * si + opts[2] * co); moved = true;
+  }
+  return moved;
 }

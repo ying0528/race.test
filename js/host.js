@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 import { PLAN, roomAt } from './plan.js';
-import { getItem, STYLES, resolvePeople } from './catalog.js';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js';
 import { buildItem, buildPerson, M } from './models.js';
 import * as MT from './mats.js';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
@@ -142,6 +142,7 @@ function sigOf(it, people, used) {
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
+  for (const it of state.items) if (it.key.startsWith('person:')) keepOffBeds(it, state.items);   // 人偶不能和床重疊
   const seen = new Set(), people = resolvePeople(state.items), used = new Set([...people.values()].map((p) => p.on).filter(Boolean));
   for (const it of state.items) {
     const q = sigOf(it, people, used); if (!q) continue;
