@@ -1,5 +1,5 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, roomAt } from './plan.js';
+import { PLAN, UNIT, setUnit, roomAt } from './plan.js';
 import { CATS, GROUPS, PEOPLE, getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js';
 import * as ART from './planart.js';
 
@@ -36,6 +36,8 @@ function onData(m) {
   if (!m || m.t !== 'state') return;
   const keep = S.drag && S.st ? S.st.items.find((i) => i.id === S.drag.id) : null;
   S.st = m;
+  if (m.unit && m.unit !== UNIT.id && setUnit(m.unit)) { S.room = null; S.sel = null; S.view = null; S.drag = null; closeSheet(); }   // 大螢幕換了戶型
+  $('unitName').textContent = m.ready ? UNIT.name : '';
   if (keep) { const i = m.items.findIndex((q) => q.id === keep.id); if (i >= 0) m.items[i] = keep; }
   for (const [id, pd] of pending) {   // 剛新增、大螢幕還沒回報的家具先留著，避免閃一下消失
     if (m.items.some((q) => q.id === id) || Date.now() - pd.t > 4000) pending.delete(id); else m.items.push(pd.it);
@@ -51,7 +53,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.tab, S.net, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, S.resetArm].join('|');
+  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -61,7 +63,7 @@ const planBase = (vb) => ART.defs(S.st.style) + ART.floors(vb), planWalls = () =
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
-  if (!st.ready) { el.innerHTML = '<h2>已連上大螢幕</h2><div class="muted">請先在大螢幕上按「開始遊戲」，再選擇戶型「新板東京 A1」。</div>'; return; }
+  if (!st.ready) { el.innerHTML = '<h2>已連上大螢幕</h2><div class="muted">請先在大螢幕上按「開始遊戲」，再選擇戶型。</div>'; return; }
   const touring = st.mode === 'tour', mine = st.tourBy === st.you;
   if (touring && S.tab !== 'tour') {
     el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;

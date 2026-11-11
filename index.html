@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>打造我的家｜新板東京 A1</title>
+<title>打造我的家</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
@@ -62,15 +62,12 @@
 
 <div id="select" class="overlay hidden">
   <div class="brand">選擇戶型</div>
-  <div class="units">
-    <button class="unit" id="unitA1"><b>新板東京 A1</b><span>3 房 2 廳 2 衛 · 11F</span><span>依實際平面圖 1:1 建模</span><em>進入佈置</em></button>
-    <button class="unit" disabled><b>其他戶型</b><span>即將開放</span><span>&nbsp;</span><em>敬請期待</em></button>
-  </div>
+  <div class="units" id="units"></div>
   <button class="ghost" id="backBtn">回到開始頁</button>
 </div>
 
 <div id="hud" class="hidden">
-  <div id="title" class="card"><div><b>新板東京 A1</b><br><span>3 房 2 廳 2 衛 · 11F</span></div><div id="modeChip">全戶鳥瞰</div></div>
+  <div id="title" class="card"><div><b id="unitName"></b><br><span id="unitSpec"></span></div><div id="modeChip">全戶鳥瞰</div></div>
   <div id="panel" class="card">
     <div id="qr">產生中…</div>
     <div style="font-size:14px;font-weight:700;text-align:center">手機掃碼加入</div>
