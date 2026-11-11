@@ -510,7 +510,15 @@ const HT = {
   f: { head: 0.132, sh: 0.112, hip: 0.098, waist: 0.068, chest: 0.095, crotch: 0.47, shY: 0.812, limb: 0.88, c: ['#E6C2A6', '#C98274', '#E9E2D6', '#8A6A4F', '#4A3328'] },
   c: { head: 0.185, sh: 0.115, hip: 0.095, waist: 0.088, chest: 0.100, crotch: 0.42, shY: 0.765, limb: 1.05, c: ['#E8C5A8', '#E3B23C', '#5E7FA3', '#F2F2F0', '#3A2A20'] },
 };
+// 把人偶校正成剛好等於標示身高（含頭髮與鞋底），腳底貼地
+const PK = {};
 export function buildPerson(spec, pose) {
+  if (!PK[spec.v]) { const b = new THREE.Box3().setFromObject(rawPerson(spec, { mode: 'stand' })); PK[spec.v] = { k: spec.h * 0.01 / (b.max.y - b.min.y), y0: b.min.y * 100 }; }
+  const g = rawPerson(spec, pose), { k, y0 } = PK[spec.v];
+  g.scale.multiplyScalar(k); if (pose.mode === 'stand') g.children[0].position.y -= y0;
+  return g;
+}
+function rawPerson(spec, pose) {
   const type = spec.v, T = HT[type], H = spec.h, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const skin = MT.flat(T.c[0], 0.6), topM = MT.fabric(T.c[1], 3), bot = MT.fabric(T.c[2], 3), shoe = MT.flat(T.c[3], 0.7), hair = MT.flat(T.c[4], 0.8);
   const add = (p, geo, m, x = 0, y = 0, z = 0) => mesh(p, geo, m, x, y, z), sph = (p, r, m, x, y, z) => add(p, new THREE.SphereGeometry(r, 18, 12), m, x, y, z);

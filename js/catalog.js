@@ -211,7 +211,7 @@ export function resolvePeople(items) {
     acc.sort((a, c) => a.lx - c.lx);
     acc.forEach((q, i) => {
       const n = acc.length, H = q.p.s.h, lx = n === 1 ? 0 : n === 2 ? (i ? 1 : -1) * b.s.w / 4 : (i - 1) * b.s.w * 0.33;
-      const [x, y] = world(b, lx, -b.s.d / 2 + 20 + H / 2);
+      const [x, y] = world(b, lx, -b.s.d / 2 + (b.s.v === 'soft' ? 13 : 7) + 4 + H / 2);   // 頭頂靠近床頭，枕在枕頭上
       out.set(q.p.it.id, { mode: 'lie', x, y, r: b.it.r, elev: 54, len: H, on: b.it.id });
     });
   }

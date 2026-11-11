@@ -52,12 +52,12 @@ for (const r of PLAN.rooms) {
   const pts = big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]];
   for (const [u, v] of pts) { const p = new THREE.PointLight(0xffe2c2, 2.6, 7, 1.8); p.position.set((x1 + (x2 - x1) * u) * cm, 2.55, (y1 + (y2 - y1) * v) * cm); bulbs.add(p); }
 }
-bulbs.visible = false;
+const BULB = 2.6; bulbs.children.forEach((p) => { p.intensity = 0; });   // 燈一直存在、只調亮度：切換導覽時不必重新編譯著色器
 
 // ================= 房子外殼 =================
 const shell = new THREE.Group(); scene.add(shell);
 let wallsCut, wallsFull, ceiling, wallMat, floorMats = {};
-const CUT = 165;
+const CUT = 165, CLIP = new THREE.Plane(new THREE.Vector3(0, -1, 0), CUT * cm + 0.012);   // 鳥瞰時，高過牆面剖切線的家具也一起切平
 
 function wbox(parent, x1, y1, x2, y2, z1, z2, mat, cast = true) {
   const m = new THREE.Mesh(new THREE.BoxGeometry((x2 - x1) * cm, (z2 - z1) * cm, (y2 - y1) * cm), mat);
@@ -70,8 +70,13 @@ function floorMesh(x1, y1, x2, y2, mat, scale) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + ox) / scale, (pos.getZ(i) + oz) / scale);
   const m = new THREE.Mesh(geo, mat); m.position.set(ox, 0, oz); m.receiveShadow = true; return m;
 }
+const wallMeshes = [], mainFloors = [];
+function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
+  const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
+  for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm;
+}
 function buildShell() {
-  shell.clear();
+  shell.clear(); wallMeshes.length = 0; mainFloors.length = 0;
   const st = STYLES[state.style];
   wallMat = MT.wallPaint(st.wall);
   const capMat = new THREE.MeshStandardMaterial({ color: '#3B3F46', roughness: 0.8 });
@@ -82,13 +87,13 @@ function buildShell() {
     bath: [MT.tiles('#D9D7D2', 2, false), 0.6], kit: [MT.tiles('#D2CEC7', 2, true), 1.2],
     foyer: [MT.tiles('#E9E5DE', 2, true), 1.6], balc: [MT.tiles('#B4B1AB', 2, false, 0.7), 0.6],
   };
-  for (const [x1, y1, x2, y2, k] of PLAN.floors) shell.add(floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]));
+  for (const [x1, y1, x2, y2, k] of PLAN.floors) { const f = floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]); if (k === 'main') mainFloors.push(f); shell.add(f); }
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(shell, x1, y1, x2, y2, -30, -0.5, slabMat, false);
   wallsCut = new THREE.Group(); wallsFull = new THREE.Group(); shell.add(wallsCut, wallsFull);
   for (const [x1, y1, x2, y2, z1, z2] of PLAN.walls) {
-    wbox(wallsFull, x1, y1, x2, y2, z1, z2, wallMat);
+    wallMeshes.push(wbox(wallsFull, x1, y1, x2, y2, z1, z2, wallMat));
     if (z1 === 0 && z2 >= 200) wbox(wallsFull, x1 - 1, y1 - 1, x2 + 1, y2 + 1, 0, 8, baseMat, false);
-    if (z1 < CUT) { const top = Math.min(z2, CUT); wbox(wallsCut, x1, y1, x2, y2, z1, top, wallMat); if (z2 > CUT) wbox(wallsCut, x1, y1, x2, y2, top, top + 0.6, capMat, false); }
+    if (z1 < CUT) { const top = Math.min(z2, CUT); wallMeshes.push(wbox(wallsCut, x1, y1, x2, y2, z1, top, wallMat)); if (z2 > CUT) wbox(wallsCut, x1, y1, x2, y2, top, top + 0.6, capMat, false); }
   }
   // 窗：玻璃 + 鋁框
   const glass = M('glass', '#BFDDEE'), frame = M('paint', '#4A4E55');
@@ -123,29 +128,48 @@ function buildShell() {
 // ================= 家具 =================
 const furn = new THREE.Group(); scene.add(furn);
 const objs = new Map();
-function freeObj(o) { furn.remove(o); o.traverse((n) => { if (n.geometry) n.geometry.dispose(); }); }
+// 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
+const protos = new Map(), dblCache = new Map();
+const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; dblCache.set(m, c); } return dblCache.get(m); };
+function proto(sig, make, tall) {
+  if (!protos.has(sig)) { const o = make(); if (tall) o.traverse((n) => { if (n.isMesh && n.material.side !== THREE.DoubleSide) n.material = dbl(n.material); }); protos.set(sig, o); }
+  return protos.get(sig).clone();
+}
+function sigOf(it, people, used) {
+  const sk = it.st || state.style, spec = getItem(it.key, sk); if (!spec) return null;
+  const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') };
+}
+const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
   const seen = new Set(), people = resolvePeople(state.items), used = new Set([...people.values()].map((p) => p.on).filter(Boolean));
   for (const it of state.items) {
-    const sk = it.st || state.style, spec = getItem(it.key, sk); if (!spec) continue;
+    const q = sigOf(it, people, used); if (!q) continue;
     seen.add(it.id);
-    const pose = spec.t === 'person' ? people.get(it.id) : null;
-    const decor = !used.has(it.id), sig = pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-');
     let e = objs.get(it.id);
-    if (!e || e.sig !== sig) {
-      if (e) freeObj(e.o);
-      e = { sig, o: pose ? buildPerson(spec, pose) : buildItem(spec, STYLES[sk], { decor }) }; furn.add(e.o); objs.set(it.id, e);
-    }
-    if (pose) { e.o.position.set(pose.x * cm, pose.elev * cm, pose.y * cm); e.o.rotation.y = -pose.r * Math.PI / 180; }
-    else { e.o.position.set(it.x * cm, spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; }
+    if (!e || e.sig !== q.sig) { if (e) furn.remove(e.o); e = { sig: q.sig, o: makeObj(q) }; furn.add(e.o); objs.set(it.id, e); }
+    if (q.pose) { e.o.position.set(q.pose.x * cm, q.pose.elev * cm, q.pose.y * cm); e.o.rotation.y = -q.pose.r * Math.PI / 180; }
+    else { e.o.position.set(it.x * cm, q.spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; }
   }
-  for (const [id, e] of objs) if (!seen.has(id)) { freeObj(e.o); objs.delete(id); }
+  for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); objs.delete(id); }
+}
+// 閒置時先把其他風格的材質與預設家具準備好，之後切換風格就不用現算
+const warm = [];
+function queueWarm() {
+  for (const sk of Object.keys(STYLES)) {
+    if (sk === state.style) continue;
+    const st = STYLES[sk];
+    warm.push(() => MT.wallPaint(st.wall), () => (st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC)));
+    for (const d of PLAN.defaults) warm.push(() => { const spec = getItem(d.key, sk), sig = d.key + '@' + sk; if (spec && !protos.has(sig)) proto(sig, () => buildItem(spec, st, { decor: true }), spec.elev + spec.h > CUT); });
+  }
+  const step = () => { const f = warm.shift(); if (!f) return; try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, state.mode === 'tour' ? 400 : 60); };
+  setTimeout(step, 800);
 }
 
 // ================= 鏡頭 =================
 const view = { tx: CX, tz: CZ, dist: 22, az: 0.14, el: 1.05 };      // 目前值
 const goal = { tx: CX, tz: CZ, dist: 22, az: 0.14, el: 1.05 };      // 目標值
-const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: -Math.PI / 2, pitch: -0.06 };
+const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 };
 const joy = new Map();   // 每支手機的搖桿
 
 const PANEL = 216;   // 右側面板寬度（px）：鳥瞰時把畫面往左移，面板才不會擋到玄關
@@ -167,7 +191,8 @@ function setGoal() {
 function applyMode() {
   const t = state.mode === 'tour';
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
-  bulbs.visible = t;
+  bulbs.children.forEach((p) => { p.intensity = t ? BULB : 0; });
+  renderer.clippingPlanes = t ? [] : [CLIP];
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.22 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.22 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
@@ -315,13 +340,13 @@ function onMsg(entry, m) {
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
       state.mode = 'tour'; state.tourBy = entry.id;
-      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: -Math.PI / 2, pitch: -0.06 }); buildColliders(); joy.clear(); applyMode();
+      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 }); buildColliders(); joy.clear(); applyMode();
     } else if (!m.on && state.tourBy === entry.id) endTour();
     return broadcast();
   }
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
-    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; buildShell(); syncItems(); } break;
+    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;
@@ -349,5 +374,7 @@ function showQR() {
 
 // ================= 啟動 =================
 buildShell(); syncItems(); show('start'); startPeer();
+wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ } applyMode();
+queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm };   // 給測試用
