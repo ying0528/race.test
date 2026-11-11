@@ -1,7 +1,7 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, roomAt } from './plan.js';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js';
 import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js';
 import { buildItem, buildPerson, M } from './models.js';
 import * as MT from './mats.js';
@@ -47,17 +47,21 @@ sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
 Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 60 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
 scene.add(sun); scene.add(sun.target);
-const CX = PLAN.W * cm / 2, CZ = PLAN.D * cm / 2;
+let CX = PLAN.W * cm / 2, CZ = PLAN.D * cm / 2;
 sun.target.position.set(CX, 0, CZ);
 
 // 室內燈（只在 3D 導覽時開）
 const bulbs = new THREE.Group(); scene.add(bulbs);
-for (const r of PLAN.rooms) {
-  const [x1, y1, x2, y2] = r.r, big = (x2 - x1) * (y2 - y1) > 60000;
-  const pts = big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]];
-  for (const [u, v] of pts) { const p = new THREE.PointLight(0xffe2c2, 2.6, 7, 1.8); p.position.set((x1 + (x2 - x1) * u) * cm, 2.55, (y1 + (y2 - y1) * v) * cm); bulbs.add(p); }
+const BULB = 2.6;
+function buildBulbs() {   // 每個房間一到兩盞；換戶型時重建
+  bulbs.clear();
+  for (const r of PLAN.rooms) {
+    const [x1, y1, x2, y2] = r.r, big = (x2 - x1) * (y2 - y1) > 60000;
+    const pts = big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]];
+    for (const [u, v] of pts) { const p = new THREE.PointLight(0xffe2c2, 2.6, 7, 1.8); p.position.set((x1 + (x2 - x1) * u) * cm, 2.55, (y1 + (y2 - y1) * v) * cm); bulbs.add(p); }
+  }
+  bulbs.children.forEach((p) => { p.intensity = 0; });   // 燈一直存在、只調亮度：切換導覽時不必重新編譯著色器
 }
-const BULB = 2.6; bulbs.children.forEach((p) => { p.intensity = 0; });   // 燈一直存在、只調亮度：切換導覽時不必重新編譯著色器
 
 // ================= 房子外殼 =================
 const shell = new THREE.Group(); scene.add(shell);
@@ -82,7 +86,7 @@ function applyStyle() {   // 換風格只換牆面和主地板的材質，不重
   for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm;
 }
 function buildShell() {
-  shell.clear(); wallMeshes.length = 0; mainFloors.length = 0;
+  shell.clear(); wallMeshes.length = 0; mainFloors.length = 0; buildBulbs();
   const st = STYLES[state.style];
   wallMat = MT.wallPaint(st.wall);
   const capMat = new THREE.MeshStandardMaterial({ color: '#3B3F46', roughness: 0.8 });
@@ -300,11 +304,25 @@ function show(name) {
   applyOffset(); setGoal(); updateHud();
 }
 $('startBtn').addEventListener('click', () => show('select'));
-$('unitA1').addEventListener('click', () => { show('play'); broadcast(); });
+// 選戶型：卡片依 UNITS 產生；換戶型時重建房子、家具與燈
+$('units').innerHTML = UNITS.map((u) => `<button class="unit" data-unit="${u.id}"><b>${u.name}</b><span>${u.spec}</span><span>${u.note}</span><em>進入佈置</em></button>`).join('');
+function useUnit(id) {
+  if (id === UNIT.id || !setUnit(id)) return;
+  CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
+  Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 });
+  for (const e of objs.values()) furn.remove(e.o); objs.clear();
+  state.items = PLAN.defaults.map((d) => ({ ...d }));
+  buildShell(); syncItems(); warm.length = 0; queueWarm();
+}
+$('units').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-unit]'); if (!b || b.disabled) return;
+  useUnit(b.dataset.unit); show('play'); broadcast();
+});
 $('backBtn').addEventListener('click', () => show('start'));
 
 function updateHud() {
   const st = STYLES[state.style];
+  $('unitName').textContent = UNIT.name; $('unitSpec').textContent = UNIT.spec; document.title = '打造我的家｜' + UNIT.name;
   $('modeChip').textContent = state.mode === 'tour' ? '3D 導覽中' : '全戶鳥瞰';
   $('styleName').textContent = st.n;
   $('swatches').innerHTML = st.sw.map((c) => `<i style="background:${c}"></i>`).join('');
@@ -319,7 +337,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', style: state.style, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -393,4 +411,4 @@ buildShell(); syncItems(); show('start'); startPeer();
 wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ } applyMode();
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit };   // 給測試用
