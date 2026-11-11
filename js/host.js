@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112a';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112a';
-import { buildItem, buildPerson, M } from './models.js?v=20261112a';
-import * as MT from './mats.js?v=20261112a';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112b';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112b';
+import { buildItem, buildPerson, M } from './models.js?v=20261112b';
+import * as MT from './mats.js?v=20261112b';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -202,7 +202,7 @@ function queueWarm() {
 // ================= 鏡頭 =================
 const view = { tx: CX, tz: CZ, dist: 22, az: 0, el: 1.05 };      // 目前值
 const goal = { tx: CX, tz: CZ, dist: 22, az: 0, el: 1.05 };      // 目標值
-const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 };
+const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 };
 const joy = new Map();   // 每支手機的搖桿
 
 const PANEL = 216;   // 右側面板寬度（px）：鳥瞰時把畫面往左移，面板才不會擋到玄關
@@ -337,7 +337,7 @@ $('units').innerHTML = UNITS.map((u) => `<button class="unit" data-unit="${u.id}
 function useUnit(id) {
   if (id === UNIT.id || !setUnit(id)) return;
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
-  Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 });
+  Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
   state.items = PLAN.defaults.map((d) => ({ ...d }));
   buildShell(); syncItems(); warm.length = 0; queueWarm();
@@ -403,7 +403,7 @@ function onMsg(entry, m) {
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
       state.mode = 'tour'; state.tourBy = entry.id;
-      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 }); buildColliders(); joy.clear(); applyMode();
+      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 }); buildColliders(); joy.clear(); applyMode();
     } else if (!m.on && state.tourBy === entry.id) endTour();
     return broadcast();
   }
