@@ -328,7 +328,7 @@ function startPeer() {
 }
 function endTour() { state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
 function drop(entry) { if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ } if (state.tourBy === entry.id) endTour(); broadcast(); }
-setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 15000) drop(e); }, 1000);
+setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 30000) drop(e); }, 1000);
 
 const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
 function onMsg(entry, m) {
