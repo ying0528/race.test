@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261111b';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261111b';
-import { buildItem, buildPerson, M } from './models.js?v=20261111b';
-import * as MT from './mats.js?v=20261111b';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112a';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112a';
+import { buildItem, buildPerson, M } from './models.js?v=20261112a';
+import * as MT from './mats.js?v=20261112a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -52,15 +52,17 @@ sun.target.position.set(CX, 0, CZ);
 
 // 室內燈（只在 3D 導覽時開）
 const bulbs = new THREE.Group(); scene.add(bulbs);
-const BULB = 2.6;
-function buildBulbs() {   // 每個房間一到兩盞；換戶型時重建
-  bulbs.clear();
+const BULB = 2.6, MAX_BULBS = 24;
+// 燈的數量固定（燈池）：燈的數量一變，所有材質都要重新編譯，換戶型就會卡很久。
+// 燈一直存在、只調亮度，切換導覽時也不必重新編譯著色器。
+for (let i = 0; i < MAX_BULBS; i++) { const p = new THREE.PointLight(0xffe2c2, 0, 7, 1.8); p.userData.on = false; p.position.set(0, -50, 0); bulbs.add(p); }
+function buildBulbs() {   // 每個房間一到兩盞；換戶型時只搬位置
+  const pos = [];
   for (const r of PLAN.rooms) {
     const [x1, y1, x2, y2] = r.r, big = (x2 - x1) * (y2 - y1) > 60000;
-    const pts = big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]];
-    for (const [u, v] of pts) { const p = new THREE.PointLight(0xffe2c2, 2.6, 7, 1.8); p.position.set((x1 + (x2 - x1) * u) * cm, 2.55, (y1 + (y2 - y1) * v) * cm); bulbs.add(p); }
+    for (const [u, v] of big ? [[0.3, 0.3], [0.7, 0.7]] : [[0.5, 0.5]]) pos.push([(x1 + (x2 - x1) * u) * cm, (y1 + (y2 - y1) * v) * cm]);
   }
-  bulbs.children.forEach((p) => { p.intensity = 0; });   // 燈一直存在、只調亮度：切換導覽時不必重新編譯著色器
+  bulbs.children.forEach((p, i) => { const q = pos[i]; p.userData.on = !!q; p.intensity = 0; if (q) p.position.set(q[0], 2.55, q[1]); else p.position.set(0, -50, 0); });
 }
 
 // ================= 房子外殼 =================
@@ -131,12 +133,20 @@ function buildShell() {
   const ceilMat = new THREE.MeshStandardMaterial({ color: '#F7F5F1', roughness: 0.95 });
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(ceiling, x1, y1, x2, y2, PLAN.H, PLAN.H + 12, ceilMat);
   const dl = M('emit', '#FFF4E0');
-  bulbs.children.forEach((p) => { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), dl); d.position.set(p.position.x, PLAN.H * cm - 0.004, p.position.z); ceiling.add(d); });
+  bulbs.children.forEach((p) => { if (!p.userData.on) return; const d = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), dl); d.position.set(p.position.x, PLAN.H * cm - 0.004, p.position.z); ceiling.add(d); });
   applyMode();
 }
 
 // ================= 家具 =================
 const furn = new THREE.Group(); scene.add(furn);
+const caps = new THREE.Group(); scene.add(caps);
+const CAP_T = new Set(['cab', 'shelf', 'fridge', 'tower', 'washer']), capGeo = new THREE.BoxGeometry(1, 0.004, 1);
+const capMat = new THREE.MeshStandardMaterial({ color: '#E6E2DA', roughness: 0.9 });
+function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片板子
+  if (!CAP_T.has(spec.t) || spec.elev + spec.h <= CUT) return null;
+  const m = new THREE.Mesh(capGeo, capMat); m.scale.set(spec.w * cm, 1, spec.d * cm); m.position.y = CUT * cm + 0.008; m.receiveShadow = true;
+  const g = new THREE.Group(); g.add(m); return g;
+}
 const objs = new Map();
 // 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
 const protos = new Map(), dblCache = new Map();
@@ -159,28 +169,39 @@ function syncItems() {
     const q = sigOf(it, people, used); if (!q) continue;
     seen.add(it.id);
     let e = objs.get(it.id);
-    if (!e || e.sig !== q.sig) { if (e) furn.remove(e.o); e = { sig: q.sig, o: makeObj(q) }; furn.add(e.o); objs.set(it.id, e); }
+    if (!e || e.sig !== q.sig) { if (e) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } e = { sig: q.sig, o: makeObj(q), cap: q.pose ? null : capFor(q.spec) }; furn.add(e.o); if (e.cap) caps.add(e.cap); objs.set(it.id, e); }
     if (q.pose) { e.o.position.set(q.pose.x * cm, q.pose.elev * cm, q.pose.y * cm); e.o.rotation.y = -q.pose.r * Math.PI / 180; }
-    else { e.o.position.set(it.x * cm, q.spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; }
+    else { e.o.position.set(it.x * cm, q.spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; if (e.cap) { e.cap.position.set(it.x * cm, 0, it.y * cm); e.cap.rotation.y = e.o.rotation.y; } }
   }
-  for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); objs.delete(id); }
+  for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); objs.delete(id); }
 }
 // 閒置時先把其他風格的材質與預設家具準備好，之後切換風格就不用現算
-const warm = [];
+const warm = []; let warming = false, camMoving = false;
+const stage = new THREE.Scene();
+function warmProto(key, sk) {   // 先把家具模型建好，並在背景編譯著色器（不擋住畫面）
+  const spec = getItem(key, sk), sig = key + '@' + sk; if (!spec || protos.has(sig)) return;
+  const o = proto(sig, () => buildItem(spec, STYLES[sk], { decor: true }), spec.elev + spec.h > CUT);
+  if (renderer.compileAsync) { stage.add(o); renderer.compileAsync(stage, camera, scene).catch(() => {}).finally(() => stage.remove(o)); }
+}
+let lastInput = 0;
+for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
 function queueWarm() {
+  for (const u of UNITS) if (u.plan !== PLAN) for (const d of u.plan.defaults) warm.push(() => warmProto(d.key, state.style));
   for (const sk of Object.keys(STYLES)) {
     if (sk === state.style) continue;
     const st = STYLES[sk];
     warm.push(() => MT.wallPaint(st.wall), () => (st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC)));
-    for (const d of PLAN.defaults) warm.push(() => { const spec = getItem(d.key, sk), sig = d.key + '@' + sk; if (spec && !protos.has(sig)) proto(sig, () => buildItem(spec, st, { decor: true }), spec.elev + spec.h > CUT); });
+    for (const d of PLAN.defaults) warm.push(() => warmProto(d.key, sk));
   }
-  const step = () => { if (state.mode === 'tour') return setTimeout(step, 1000); const f = warm.shift(); if (!f) return; try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, 80); };
+  if (warming) return; warming = true;
+  const busy = () => state.mode === 'tour' || camMoving || performance.now() - lastInput < 1200;
+  const step = () => { if (busy()) return setTimeout(step, 400); const f = warm.shift(); if (!f) { warming = false; return; } try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, 60); };
   setTimeout(step, 800);
 }
 
 // ================= 鏡頭 =================
-const view = { tx: CX, tz: CZ, dist: 22, az: 0.14, el: 1.05 };      // 目前值
-const goal = { tx: CX, tz: CZ, dist: 22, az: 0.14, el: 1.05 };      // 目標值
+const view = { tx: CX, tz: CZ, dist: 22, az: 0, el: 1.05 };      // 目前值
+const goal = { tx: CX, tz: CZ, dist: 22, az: 0, el: 1.05 };      // 目標值
 const tour = { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 };
 const joy = new Map();   // 每支手機的搖桿
 
@@ -197,14 +218,15 @@ function fitDist(wm, dm) { // 讓 wm × dm（公尺）的區域塞進畫面
   return Math.max(dv, dh) * 1.12 + 1.5;
 }
 function setGoal() {
-  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; goal.az = 0.3; return; }
-  goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0.14;   // 佈置時固定全戶鳥瞰
+  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; goal.az = 0; return; }
+  goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0;   // 佈置時固定全戶鳥瞰；az = 0：房子的底邊和螢幕平行
 }
 function applyMode() {
   invalidate(6);
   const t = state.mode === 'tour';
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
-  bulbs.children.forEach((p) => { p.intensity = t ? BULB : 0; });
+  bulbs.children.forEach((p) => { p.intensity = t && p.userData.on ? BULB : 0; });
+  caps.visible = !t;
   renderer.clippingPlanes = t ? [] : [CLIP];
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.22 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.22 : 0.4;
@@ -255,6 +277,12 @@ function setupComposer() {
   aoPass = new GTAOPass(scene, camera, w, h); aoPass.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.2, thickness: 1.2, scale: 1.2, samples: 12 }); aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
   composer.addPass(aoPass); composer.addPass(new OutputPass());
 }
+let ovSlow = 0, ovN = 0;
+function tuneOverview(dt) {   // 鳥瞰移動時如果明顯跑不動，就關掉接觸陰影（只降一次）
+  if (Q0 !== null) return;
+  ovN++; if (dt > 0.06) ovSlow++;
+  if (ovN >= 30) { if (ovSlow > 20) quality = 1; ovN = ovSlow = 0; }
+}
 function tuneQuality(dt) {   // 導覽時如果跑不順，就降低解析度與陰影精細度（只降一次）
   if (lowRes) return;
   if (dt > 0.04) slow++; else fast++;
@@ -282,13 +310,13 @@ function frame(now) {
   } else {
     const k = 1 - Math.exp(-dt * 3.2); let moving = false;
     for (const key of ['tx', 'tz', 'dist', 'az', 'el']) { const d = goal[key] - view[key]; if (Math.abs(d) > 1e-3) { view[key] += d * k; moving = true; } else view[key] = goal[key]; }
-    if (moving) invalidate(2, false);
+    camMoving = moving; if (moving) invalidate(2, false);
     if (dirty > 0) {
       dirty--;
       const ce = Math.cos(view.el);
       camera.position.set(view.tx + Math.sin(view.az) * ce * view.dist, Math.sin(view.el) * view.dist, view.tz + Math.cos(view.az) * ce * view.dist);
       camera.lookAt(view.tx, 0.4, view.tz);
-      if (quality === 2 && screen === 'play' && !moving) { if (!composer) setupComposer(); composer.render(); } else renderer.render(scene, camera);
+      if (quality === 2 && screen === 'play') { if (!composer) setupComposer(); composer.render(); if (moving) tuneOverview(dt); } else renderer.render(scene, camera);
     }
   }
   requestAnimationFrame(frame);
@@ -310,9 +338,10 @@ function useUnit(id) {
   if (id === UNIT.id || !setUnit(id)) return;
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: Math.PI, pitch: -0.04 });
-  for (const e of objs.values()) furn.remove(e.o); objs.clear();
+  for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
   state.items = PLAN.defaults.map((d) => ({ ...d }));
   buildShell(); syncItems(); warm.length = 0; queueWarm();
+  try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ }
 }
 $('units').addEventListener('click', (e) => {
   const b = e.target.closest('[data-unit]'); if (!b || b.disabled) return;
@@ -409,6 +438,7 @@ function showQR() {
 // ================= 啟動 =================
 buildShell(); syncItems(); show('start'); startPeer();
 wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ } applyMode();
+if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
 window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit };   // 給測試用
