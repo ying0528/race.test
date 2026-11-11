@@ -2,278 +2,72 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0F1114">
-<title>賽車遙控器</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#F7F5F2">
+<title>打造我的家｜手機編輯器</title>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; min-height: 100%; background: #0F1114; color: #F2F3F5;
+  html, body { margin: 0; height: 100%; background: #F7F5F2; color: #1D2129; overscroll-behavior: none;
     font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  button { font-family: inherit; color: inherit; }
   .hidden { display: none !important; }
-  .muted { color: #9AA0A8; font-size: 14px; }
-
-  /* 選車畫面 */
-  #select { max-width: 480px; margin: 0 auto; padding: 32px 20px 28px; display: flex; flex-direction: column; gap: 18px; min-height: 100vh; }
-  h1 { margin: 0; font-size: 28px; font-weight: 900; }
-  label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #9AA0A8; }
-  input { height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid #2E3238; background: #1A1D21;
-    color: #F2F3F5; font-size: 16px; font-family: inherit; }
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .car { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: #1A1D21;
-    border: 2px solid #262A30; color: #F2F3F5; font-family: inherit; text-align: left; cursor: pointer; }
-  .car:disabled { opacity: 0.35; cursor: not-allowed; }
-  .car .pic { height: 76px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #23272C; }
-  .car .top { display: flex; justify-content: space-between; align-items: baseline; }
-  .car .nm { font-size: 17px; font-weight: 700; }
-  .car .tp { font-size: 12px; color: #9AA0A8; }
-  .stat { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #9AA0A8; }
-  .stat .track { flex: 1; height: 5px; border-radius: 3px; background: #2E3238; }
-  .stat .fill { height: 5px; border-radius: 3px; }
-  .go { height: 56px; border: none; border-radius: 14px; background: #F5C518; color: #111214; font-size: 18px;
-    font-weight: 900; font-family: inherit; cursor: pointer; }
-  .go:disabled { background: #2E3238; color: #6B717A; }
-  .err { color: #FF7A7F; font-size: 14px; min-height: 20px; text-align: center; }
-
-  /* 遙控器畫面 */
-  #pad { position: fixed; inset: 0; display: grid; touch-action: none; user-select: none; -webkit-user-select: none;
-    padding: max(16px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
-    grid-template-columns: 1fr auto 1fr; grid-template-areas: "lr info fb"; align-items: center; gap: 16px; }
-  .lr { grid-area: lr; display: flex; gap: 14px; justify-content: flex-start; }
-  .fb { grid-area: fb; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
-  .info { grid-area: info; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-  .btn { border-radius: 26px; border: 2px solid #2E3238; background: #1A1D21; color: #F2F3F5; font-family: inherit;
-    font-weight: 800; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    touch-action: none; -webkit-touch-callout: none; transition: transform 0.05s; }
-  .btn.side { width: min(26vw, 130px); height: min(26vw, 130px); font-size: 15px; }
-  .btn.gas { width: min(32vw, 170px); height: min(36vh, 150px); background: #F5C518; color: #111214; border: none; font-size: 18px; }
-  .btn.brake { width: min(32vw, 170px); height: min(30vh, 130px); font-size: 16px; }
-  .btn.on { transform: scale(0.94); border-color: var(--car); background: #2A2D33; }
-  .btn.gas.on { background: #D9AE0F; }
-  .badge { padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; }
-  .rank { font-size: 56px; font-weight: 800; line-height: 1; color: #F5C518; }
-  .rank small { font-size: 20px; color: #F2F3F5; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: #30C46B; margin-right: 6px; }
-  .rotate { display: none; }
-
-  /* 直拿手機時：上面資訊、下面按鈕 */
-  @media (orientation: portrait) {
-    #pad { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; grid-template-areas: "info info" "lr fb"; align-items: end; }
-    .lr { flex-direction: column; align-items: flex-start; }
-    .btn.side { width: 38vw; height: 22vh; }
-    .btn.gas { width: 42vw; height: 26vh; }
-    .btn.brake { width: 42vw; height: 18vh; }
-    .rotate { display: block; font-size: 12px; color: #6B717A; }
-  }
+  #app { display: flex; flex-direction: column; height: 100dvh; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; font-size: 12px; color: #5F6672; }
+  #status { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #ECE8E2; font-weight: 700; }
+  #status i { width: 8px; height: 8px; border-radius: 8px; background: #9AA0A8; }
+  #status[data-s="ok"] { background: #E5F2EA; color: #1F6B45; } #status[data-s="ok"] i { background: #2E9E5E; }
+  #status[data-s="bad"] { background: #FBE9E7; color: #B3261E; } #status[data-s="bad"] i { background: #B3261E; }
+  main { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+  h2 { margin: 0; font-size: 24px; font-weight: 900; } .muted { color: #5F6672; font-size: 13px; }
+  nav { display: flex; border-top: 1px solid #E4E1DC; background: #fff; padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; height: 58px; border: none; background: none; font-size: 15px; font-weight: 700; color: #5F6672; }
+  nav button.on { color: #A0673A; box-shadow: inset 0 3px 0 #A0673A; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .card { padding: 14px; border-radius: 16px; background: #fff; border: 2px solid #E4E1DC; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+  .card.on { border-color: #A0673A; background: #FBF6F1; }
+  .card b { font-size: 17px; } .sw { display: flex; gap: 5px; } .sw i { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); }
+  .primary { height: 54px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
+  .second { height: 48px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
+  .second:disabled { opacity: .4; }
+  .rowb { display: flex; gap: 8px; } .rowb > * { flex: 1; }
+  #planWrap { background: #fff; border-radius: 16px; border: 1px solid #E4E1DC; padding: 6px; touch-action: none; }
+  #plan { width: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #sel { min-height: 44px; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid #E4E1DC; font-size: 13px; }
+  #sel b { font-size: 15px; }
+  /* 型錄 */
+  #sheet { position: fixed; inset: 0; background: #F7F5F2; display: flex; flex-direction: column; z-index: 5; }
+  #sheet .top { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 6px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 6px 16px; scrollbar-width: none; flex-shrink: 0; }
+  .chips button { flex-shrink: 0; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #D9D5CE; background: #fff; font-size: 14px; font-weight: 700; }
+  .chips button.on { background: #A0673A; border-color: #A0673A; color: #fff; }
+  #list { flex: 1; overflow-y: auto; padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 8px; }
+  .it { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; background: #fff; border: 1px solid #E4E1DC; text-align: left; width: 100%; }
+  .it .pv { width: 64px; height: 64px; border-radius: 10px; background: #F1EEE9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .it .nm { font-size: 15px; font-weight: 700; } .it .dm { font-size: 12px; color: #5F6672; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .it .add { margin-left: auto; padding: 8px 14px; border-radius: 999px; background: #F6EDE4; color: #A0673A; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  /* 導覽搖桿 */
+  #pads { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; }
+  .padbox { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 13px; color: #5F6672; }
+  .pad { width: min(40vw, 160px); height: min(40vw, 160px); border-radius: 50%; background: #fff; border: 2px solid #D9D5CE; position: relative; touch-action: none; }
+  .pad i { position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; margin: -22% 0 0 -22%; border-radius: 50%; background: #A0673A; box-shadow: 0 6px 14px rgba(160,103,58,.35); pointer-events: none; }
+  .pad.look i { background: #3C4047; box-shadow: 0 6px 14px rgba(0,0,0,.25); }
 </style>
 </head>
 <body>
-
-<div id="select">
-  <div class="muted" id="netStatus"><span class="dot" style="background:#9AA0A8"></span>正在連線到電腦…</div>
-  <div>
-    <h1>選擇你的賽車</h1>
-    <div class="muted" style="margin-top:6px">點一台車，再按確定</div>
-  </div>
-  <label>暱稱
-    <input id="name" type="text" maxlength="8" placeholder="輸入你的名字" autocomplete="off">
-  </label>
-  <div class="grid" id="cars"></div>
-  <div style="flex:1"></div>
-  <div class="err" id="err"></div>
-  <button class="go" id="joinBtn" disabled>請先選一台車</button>
+<div id="app">
+  <header><div id="status"><i></i><span id="statusText">正在連線…</span></div><div>新板東京 A1</div></header>
+  <main id="main"></main>
+  <nav id="nav">
+    <button data-tab="style">風格</button><button data-tab="edit">佈置</button><button data-tab="tour">3D 導覽</button>
+  </nav>
 </div>
-
-<div id="pad" class="hidden">
-  <div class="lr">
-    <button class="btn side" data-key="left" aria-label="左轉">
-      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>左
-    </button>
-    <button class="btn side" data-key="right" aria-label="右轉">
-      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>右
-    </button>
-  </div>
-  <div class="info">
-    <div class="badge" id="badge">P1</div>
-    <div class="rank" id="rank">-</div>
-    <div class="muted" id="msg">等待電腦開始比賽</div>
-    <div class="muted" style="font-size:12px" id="conn"><span class="dot"></span>已連線</div>
-    <div class="rotate">橫拿手機更好操作</div>
-  </div>
-  <div class="fb">
-    <button class="btn gas" data-key="up" aria-label="前進">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>前進
-    </button>
-    <button class="btn brake" data-key="down" aria-label="後退">後退
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg>
-    </button>
-  </div>
+<div id="sheet" class="hidden">
+  <div class="top"><h2>新增家具</h2><button class="second" id="sheetClose" style="height:40px;padding:0 16px">關閉</button></div>
+  <div class="chips" id="groups"></div>
+  <div class="chips" id="cats"></div>
+  <div id="list"></div>
 </div>
-
-<script>
-const CARS = [
-  { id: 'red',    name: '閃電', type: '速度型', color: '#E5484D', spd: 95, hdl: 55 },
-  { id: 'blue',   name: '藍鯨', type: '平衡型', color: '#3E8BFF', spd: 80, hdl: 72 },
-  { id: 'yellow', name: '黃蜂', type: '操控型', color: '#F5C518', spd: 68, hdl: 95 },
-  { id: 'green',  name: '綠蛙', type: '越野型', color: '#30C46B', spd: 74, hdl: 64 },
-];
-let picked = null, taken = [], myId = null, myCar = null;
-const carsEl = document.getElementById('cars');
-const joinBtn = document.getElementById('joinBtn');
-const errEl = document.getElementById('err');
-const nameEl = document.getElementById('name');
-try { nameEl.value = localStorage.getItem('raceName') || ''; } catch (e) {}
-
-function carSvg(color) {
-  return '<svg width="40" height="64" viewBox="-20 -32 40 64" aria-hidden="true">' +
-    '<rect x="-18" y="-20" width="5" height="12" rx="2" fill="#0B0C0E"/><rect x="13" y="-20" width="5" height="12" rx="2" fill="#0B0C0E"/>' +
-    '<rect x="-18" y="9" width="5" height="12" rx="2" fill="#0B0C0E"/><rect x="13" y="9" width="5" height="12" rx="2" fill="#0B0C0E"/>' +
-    '<rect x="-14" y="-26" width="28" height="52" rx="9" fill="' + color + '"/><rect x="-10" y="-14" width="20" height="11" rx="3" fill="#1A1D21"/></svg>';
-}
-function renderCars() {
-  carsEl.innerHTML = '';
-  CARS.forEach(c => {
-    const isTaken = taken.includes(c.id);
-    if (isTaken && picked === c.id) picked = null;
-    const b = document.createElement('button');
-    b.className = 'car'; b.type = 'button'; b.disabled = isTaken;
-    if (picked === c.id) b.style.borderColor = c.color;
-    b.innerHTML = '<div class="pic">' + carSvg(c.color) + '</div>' +
-      '<div class="top"><div class="nm">' + c.name + '</div><div class="tp">' + (isTaken ? '已被選' : c.type) + '</div></div>' +
-      '<div class="stat">速度<div class="track"><div class="fill" style="width:' + c.spd + '%;background:' + c.color + '"></div></div></div>' +
-      '<div class="stat">操控<div class="track"><div class="fill" style="width:' + c.hdl + '%;background:' + c.color + '"></div></div></div>';
-    b.onclick = () => { picked = c.id; renderCars(); };
-    carsEl.appendChild(b);
-  });
-  const car = CARS.find(c => c.id === picked);
-  joinBtn.disabled = !car;
-  joinBtn.textContent = car ? '確定，選 ' + car.name : '請先選一台車';
-}
-const room = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-const netStatus = document.getElementById('netStatus');
-let peer = null, conn = null, connected = false, failed = false, joining = false;
-function setStatus(text, color) {
-  netStatus.innerHTML = '<span class="dot" style="background:' + color + '"></span>';
-  netStatus.appendChild(document.createTextNode(text));
-}
-function fail(text) {
-  if (failed) return;
-  failed = true;
-  setStatus('連線失敗', '#FF7A7F');
-  errEl.textContent = text;
-  joinBtn.disabled = true;
-  if (myId) {
-    document.getElementById('msg').textContent = '連線中斷，請重新整理頁面再加入';
-    document.getElementById('conn').innerHTML = '<span class="dot" style="background:#FF7A7F"></span>連線中斷';
-  }
-}
-function send(msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {} }
-
-function connect() {
-  if (!room) { fail('網址缺少房間代碼，請重新掃描電腦上的 QR code'); return; }
-  if (typeof Peer === 'undefined') { fail('無法載入連線元件，請檢查網路後重新整理'); return; }
-  peer = new Peer();
-  peer.on('open', () => {
-    setStatus('找到配對伺服器，正在連到電腦…', '#F5C518');
-    conn = peer.connect('mobilerace-' + room.toLowerCase(), { reliable: true });
-    conn.on('open', () => {
-      connected = true;
-      setStatus('已連上房間 ' + room, '#30C46B');
-      send({ type: 'hello' });
-    });
-    conn.on('data', onData);
-    conn.on('close', () => fail('和電腦的連線中斷了，請重新整理頁面'));
-    conn.on('error', () => fail('和電腦的連線出錯，請重新整理頁面'));
-  });
-  peer.on('error', (err) => {
-    if (err.type === 'peer-unavailable') fail('找不到房間 ' + room + '：請確認電腦上的遊戲畫面還開著，再重新掃碼');
-    else if (!connected) fail('連線失敗（' + err.type + '），可能是網路擋住了，試試換個網路');
-  });
-  setTimeout(() => {
-    if (!connected) fail('連線逾時：可能是電腦或手機的網路擋住了這種連線，試試換個網路（例如手機改用行動網路）');
-  }, 20000);
-  // 心跳：讓電腦知道手機還在
-  setInterval(() => send({ type: 'ping' }), 1000);
-}
-
-function onData(msg) {
-  if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'cars' && !myId) {
-    taken = msg.taken || [];
-    if (msg.full) errEl.textContent = '已經滿 4 人了';
-    else if (msg.phase === 'countdown' || msg.phase === 'racing') errEl.textContent = '比賽進行中，這場結束後就能加入';
-    else if (!joining) errEl.textContent = '';
-    renderCars();
-  } else if (msg.type === 'error') {
-    joining = false;
-    errEl.textContent = msg.error || '加入失敗';
-    renderCars();
-  } else if (msg.type === 'joined') {
-    joining = false;
-    myId = 'me';
-    myCar = CARS.find(c => c.id === picked);
-    startPad(msg.slot, nameEl.value.trim() || '玩家');
-  } else if (msg.type === 'status' && myId) {
-    updateStatus(msg);
-  }
-}
-
-const _render = renderCars;
-renderCars = function () { _render(); if (!connected || joining) joinBtn.disabled = true; };
-renderCars();
-connect();
-
-joinBtn.onclick = () => {
-  const name = nameEl.value.trim() || '玩家';
-  try { localStorage.setItem('raceName', name); } catch (e) {}
-  joining = true; joinBtn.disabled = true; errEl.textContent = '加入中…';
-  send({ type: 'join', name, car: picked });
-};
-
-// ===== 遙控器 =====
-const keys = { up: false, down: false, left: false, right: false };
-function sendInput() { send(Object.assign({ type: 'input' }, keys)); }
-function setKey(k, v) {
-  if (keys[k] === v) return;
-  keys[k] = v;
-  document.querySelector('[data-key="' + k + '"]').classList.toggle('on', v);
-  if (v && navigator.vibrate) navigator.vibrate(12);
-  sendInput();
-}
-
-function startPad(slot, name) {
-  document.getElementById('select').classList.add('hidden');
-  document.getElementById('pad').classList.remove('hidden');
-  document.documentElement.style.setProperty('--car', myCar.color);
-  const badge = document.getElementById('badge');
-  badge.textContent = 'P' + slot + ' · ' + name + ' · ' + myCar.name;
-  badge.style.background = myCar.color;
-  badge.style.color = myCar.id === 'red' ? '#FFFFFF' : '#111214';
-  document.querySelectorAll('.btn').forEach(btn => {
-    const k = btn.dataset.key;
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); btn.setPointerCapture(e.pointerId); setKey(k, true); });
-    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => btn.addEventListener(t, () => setKey(k, false)));
-    btn.addEventListener('contextmenu', e => e.preventDefault());
-  });
-  // 按住時每 0.5 秒補送一次，避免訊號遺失
-  setInterval(() => { if (keys.up || keys.down || keys.left || keys.right) sendInput(); }, 500);
-}
-
-function updateStatus(s) {
-  const msg = document.getElementById('msg'), rank = document.getElementById('rank');
-  if (s.phase === 'lobby') { rank.innerHTML = '-'; msg.textContent = '等待電腦開始比賽'; }
-  else if (s.phase === 'countdown') { rank.innerHTML = '-'; msg.textContent = '準備…踩油門！'; }
-  else if (s.rank) {
-    rank.innerHTML = s.rank + '<small> 名</small>';
-    msg.textContent = s.finished ? '完賽！時間 ' + s.time : '第 ' + s.lap + ' / ' + s.laps + ' 圈';
-    if (s.phase === 'finished') msg.textContent = '比賽結束！時間 ' + (s.time || '-');
-  }
-}
-
-// 在電腦上測試：方向鍵或 WASD
-const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-document.addEventListener('keydown', e => { if (myId && KEYMAP[e.code]) { e.preventDefault(); setKey(KEYMAP[e.code], true); } });
-document.addEventListener('keyup', e => { if (myId && KEYMAP[e.code]) setKey(KEYMAP[e.code], false); });
-</script>
+<script type="module" src="./js/phone.js"></script>
 </body>
 </html>
