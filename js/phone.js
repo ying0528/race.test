@@ -106,7 +106,7 @@ $('main').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !S.st) return;
   const a = b.dataset.act;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
-  else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; }
+  else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.view = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
   else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
   else if (a === 'open') openSheet('furn');
@@ -124,7 +124,7 @@ const PAD = 22;
 function drawPlan() {
   const svg = $('plan'), r = curRoom(); if (!svg || !r) return;
   const [x1, y1, x2, y2] = r.r, vb = [x1 - PAD, y1 - PAD, x2 - x1 + 2 * PAD, y2 - y1 + 2 * PAD];
-  svg.setAttribute('viewBox', vb.join(' '));
+  svg.setAttribute('viewBox', (S.view || vb).join(' '));
   let h = planBase(vb);
   h += planWalls();
   const poses = resolvePeople(S.st.items);
@@ -160,19 +160,34 @@ function updateSel() {
 }
 function bindPlan() {
   const svg = $('plan');
-  const pt = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
-  let lastSend = 0;
+  const pt = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); };
+  const pts = new Map(); let lastSend = 0, pinch = null;
+  const baseVB = () => { const r = curRoom().r; return [r[0] - PAD, r[1] - PAD, r[2] - r[0] + 2 * PAD, r[3] - r[1] + 2 * PAD]; };
+  const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) send({ t: 'move', id: it.id, x: it.x, y: it.y }); S.drag = null; };
+  // 兩指：縮放與平移平面圖（改 viewBox，家具比例不變）
+  const two = () => { const [a, b] = [...pts.values()]; return { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
+  const startPinch = () => { const t = two(), q = svg.createSVGPoint(); q.x = t.mx; q.y = t.my; const a = q.matrixTransform(svg.getScreenCTM().inverse()); pinch = { d0: t.d, w0: (S.view || baseVB())[2], ax: a.x, ay: a.y }; };
+  const doPinch = () => {
+    const t = two(), B = baseVB(), rc = svg.getBoundingClientRect(), k = Math.max(B[2] / 6, Math.min(B[2], pinch.w0 * pinch.d0 / t.d)) / B[2], w = B[2] * k, h = B[3] * k;
+    const sc = Math.min(rc.width / w, rc.height / h), ox = rc.left + (rc.width - w * sc) / 2, oy = rc.top + (rc.height - h * sc) / 2;
+    const x = Math.max(B[0], Math.min(B[0] + B[2] - w, pinch.ax - (t.mx - ox) / sc)), y = Math.max(B[1], Math.min(B[1] + B[3] - h, pinch.ay - (t.my - oy) / sc));
+    S.view = k > 0.995 ? null : [x, y, w, h]; svg.setAttribute('viewBox', (S.view || B).join(' '));
+  };
   svg.addEventListener('pointerdown', (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+    if (pts.size === 2) { e.preventDefault(); endDrag(); startPinch(); return; }
+    if (pts.size > 2) return;
     const g = e.target.closest('[data-id]');
     if (!g) { S.sel = null; drawPlan(); updateSel(); return; }
     const it = S.st.items.find((i) => i.id === g.dataset.id); if (!it) return;
     e.preventDefault(); const p = pt(e);
-    if (isPerson(it)) { it.x = Math.round(p.x); it.y = Math.round(p.y); }     // 人偶（可能正躺著或坐著）直接跟著手指
+    if (isPerson(it)) { it.x = Math.round(p.x); it.y = Math.round(p.y); }     // 人偶（可能正坐著）直接跟著手指
     S.sel = it.id; drawPlan(); updateSel();
     S.drag = { id: it.id, ox: p.x - it.x, oy: p.y - it.y, pid: e.pointerId };
-    svg.setPointerCapture(e.pointerId);
   });
   svg.addEventListener('pointermove', (e) => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) { if (pts.size >= 2) doPinch(); return; }
     const d = S.drag; if (!d || e.pointerId !== d.pid) return;
     const it = S.st.items.find((i) => i.id === d.id), r = curRoom(); if (!it || !r) return;
     const p = pt(e), snap = (v) => Math.round(v / 5) * 5;
@@ -183,9 +198,10 @@ function bindPlan() {
     const now = performance.now(); if (now - lastSend > 40) { lastSend = now; send({ t: 'move', id: it.id, x: it.x, y: it.y }); }
   });
   const end = (e) => {
-    const d = S.drag; if (!d || e.pointerId !== d.pid) return;
-    const it = S.st.items.find((i) => i.id === d.id); if (it) send({ t: 'move', id: it.id, x: it.x, y: it.y });
-    S.drag = null; drawPlan(); updateSel();
+    pts.delete(e.pointerId);
+    if (pinch) { if (pts.size === 0) { pinch = null; drawPlan(); updateSel(); } return; }
+    if (!S.drag || e.pointerId !== S.drag.pid) return;
+    endDrag(); drawPlan(); updateSel();
   };
   svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 }
