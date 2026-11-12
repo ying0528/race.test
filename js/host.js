@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112j';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112j';
-import { buildItem, buildPerson, M } from './models.js?v=20261112j';
-import * as MT from './mats.js?v=20261112j';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112k';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112k';
+import { buildItem, buildPerson, M } from './models.js?v=20261112k';
+import * as MT from './mats.js?v=20261112k';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -141,13 +141,13 @@ function buildShell() {
   // 大門
   const [dx1, dy1, dx2, dy2] = PLAN.door;
   wbox(wallsFull, dx1, dy1, dx2, dy2, 0, 210, M('wood', '#6A4F3B')); wbox(wallsCut, dx1, dy1, dx2, dy2, 0, CUT, M('wood', '#6A4F3B'));
-  // 室內門：畫成打開的深咖啡色門扇（不擋路）
-  { const dm = M('wood', '#4A3324'), R = Math.PI / 180, [ex1, ey1, ex2, ey2] = PLAN.door;
-    for (const [x, y, w, , a1] of PLAN.doors) {
-      if (x > ex1 - 30 && x < ex2 + 30 && y > ey1 - 30 && y < ey2 + 30) continue;   // 大門已經有門扇
-      const ox = x + w * Math.cos(a1 * R), oy = y + w * Math.sin(a1 * R), horiz = Math.abs(ox - x) > Math.abs(oy - y);
-      const bx = horiz ? [Math.min(x, ox), y - 2, Math.max(x, ox), y + 2] : [x - 2, Math.min(y, oy), x + 2, Math.max(y, oy)];
-      wbox(wallsFull, ...bx, 0, 208, dm); wbox(wallsCut, ...bx, 0, CUT, dm);
+  // 門洞兩側的牆面（門框位置）上深咖啡色：門洞 = 上方有門楣、下方沒有牆的開口
+  { const dm = new THREE.MeshStandardMaterial({ color: '#4A3324', roughness: 0.6 }), T = 3, E = 0.4;
+    for (const [x1, y1, x2, y2, z1] of PLAN.walls) {
+      if (z1 < 200 || PLAN.walls.some((w) => w[4] === 0 && w[0] < x2 - 1 && w[2] > x1 + 1 && w[1] < y2 - 1 && w[3] > y1 + 1)) continue;   // 窗戶下方有矮牆，不算門
+      const horiz = x2 - x1 > y2 - y1;
+      for (const s of [0, 1]) { const bx = horiz ? (s ? [x2 - T, y1 - E, x2, y2 + E] : [x1, y1 - E, x1 + T, y2 + E]) : (s ? [x1 - E, y2 - T, x2 + E, y2] : [x1 - E, y1, x2 + E, y1 + T]);
+        wbox(wallsFull, ...bx, 0, z1, dm, false); wbox(wallsCut, ...bx, 0, CUT + 0.5, dm, false); }
     } }
   // 天花板 + 嵌燈
   ceiling = new THREE.Group(); shell.add(ceiling);
