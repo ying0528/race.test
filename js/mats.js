@@ -68,6 +68,7 @@ export const ceramic = (color) => memo('c' + color, () => new THREE.MeshStandard
 export const metal = (color = '#2B2B2D', rough = 0.35) => memo('m' + color + rough, () => new THREE.MeshStandardMaterial({ color, metalness: 1, roughness: rough }));
 export const flat = (color, rough = 0.62) => memo('p' + color + rough, () => new THREE.MeshStandardMaterial({ color, roughness: rough }));
 export const gloss = (color) => memo('g' + color, () => new THREE.MeshStandardMaterial({ color, roughness: 0.14 }));
+export const frost = () => memo('frost', () => new THREE.MeshStandardMaterial({ color: '#EEF3F2', roughness: 0.85, transparent: true, opacity: 0.8 }));
 export const glass = (color) => memo('gl' + color, () => new THREE.MeshStandardMaterial({ color, roughness: 0.04, transparent: true, opacity: 0.22, depthWrite: false }));
 export const emit = (color) => memo('e' + color, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.8 }));
 export const mirror = () => memo('mirror', () => new THREE.MeshStandardMaterial({ color: '#E8EEF2', metalness: 1, roughness: 0.03 }));

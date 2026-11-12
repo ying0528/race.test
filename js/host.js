@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112k';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112k';
-import { buildItem, buildPerson, M } from './models.js?v=20261112k';
-import * as MT from './mats.js?v=20261112k';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112l';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, LEN, wallSegs, resolvePeople, keepOffBeds } from './catalog.js?v=20261112l';
+import { buildItem, buildPerson, M } from './models.js?v=20261112l';
+import * as MT from './mats.js?v=20261112l';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', floor: null, floors: {}, mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { style: 'nordic', floor: null, floors: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -101,6 +101,7 @@ function applyStyle() {   // 換風格只換牆面和主地板的材質，不重
   for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm; applyRoomFloors();
 }
 function buildShell() {
+  setCuts(state.cut);   // 被拆掉的牆不蓋
   shell.clear(); wallMeshes.length = 0; mainFloors.length = 0; buildBulbs();
   const st = STYLES[state.style];
   wallMat = MT.wallPaint(st.wall);
@@ -113,6 +114,7 @@ function buildShell() {
     foyer: [MT.tiles('#E9E5DE', 2, true), 1.6], balc: [MT.tiles('#B4B1AB', 2, false, 0.7), 0.6],
   };
   for (const [x1, y1, x2, y2, k] of PLAN.floors) { const f = floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]); if (k === 'main') mainFloors.push(f); shell.add(f); }
+  for (const i of state.cut) for (const [x1, y1, x2, y2] of cutRects(i)) { const f = floorMesh(x1, y1, x2, y2, floorMats.main[0], 1.6); f.position.y = -0.001; mainFloors.push(f); shell.add(f); }   // 拆掉的牆底下補地板
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(shell, x1, y1, x2, y2, -30, -0.5, slabMat, false);
   wallsCut = new THREE.Group(); wallsFull = new THREE.Group(); shell.add(wallsCut, wallsFull);
   for (const [x1, y1, x2, y2, z1, z2] of PLAN.walls) {
@@ -164,6 +166,11 @@ const caps = new THREE.Group(); scene.add(caps);
 const CAP_T = new Set(['cab', 'shelf', 'fridge', 'tower', 'washer']), capGeo = new THREE.BoxGeometry(1, 0.004, 1);
 const capMat = new THREE.MeshStandardMaterial({ color: '#E6E2DA', roughness: 0.9 });
 function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片板子
+  if (spec.t === 'wall') {   // 新增的牆：只在實心區段蓋上剖切面，門洞與拉門開口留空
+    const g = new THREE.Group();
+    for (const [a, b] of wallSegs(spec)) { const m = new THREE.Mesh(capGeo, capMat); m.scale.set((b - a) * cm, 1, spec.d * cm); m.position.set((a + b) / 2 * cm, CUT * cm + 0.008, 0); m.receiveShadow = true; g.add(m); }
+    return g;
+  }
   if (!CAP_T.has(spec.t) || spec.elev + spec.h <= CUT) return null;
   const m = new THREE.Mesh(capGeo, capMat); m.scale.set(spec.w * cm, 1, spec.d * cm); m.position.y = CUT * cm + 0.008; m.receiveShadow = true;
   const g = new THREE.Group(); g.add(m); return g;
@@ -187,7 +194,7 @@ function proto(sig, make, tall) {
 function sigOf(it, people, used) {
   const sk = it.st || state.style, spec = getItem(it.key, sk, it); if (!spec) return null;
   const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
-  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') };
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (spec.t === 'wall' ? '~L' + spec.w : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
@@ -271,7 +278,13 @@ function buildColliders() {
   colliders = PLAN.walls.filter((w) => w[4] < 140 && w[5] > 25).map((w) => [w[0] * cm, w[1] * cm, w[2] * cm, w[3] * cm]);
   const d = PLAN.door; colliders.push([d[0] * cm, d[1] * cm, d[2] * cm, d[3] * cm]);
   for (const it of state.items) {
-    const s = getItem(it.key); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp' || s.t === 'person') continue;
+    const s = getItem(it.key, null, it); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp' || s.t === 'person') continue;
+    if (s.t === 'wall') {   // 牆：每個實心區段一個碰撞盒，門洞與拉門開口可以走過去
+      const k = it.r % 360, ax = k === 0 ? [1, 0] : k === 90 ? [0, 1] : k === 180 ? [-1, 0] : [0, -1], t = s.d / 2;
+      for (const [a, b] of wallSegs(s)) { const p1 = [it.x + ax[0] * a, it.y + ax[1] * a], p2 = [it.x + ax[0] * b, it.y + ax[1] * b];
+        colliders.push([(Math.min(p1[0], p2[0]) - (ax[0] ? 0 : t)) * cm, (Math.min(p1[1], p2[1]) - (ax[1] ? 0 : t)) * cm, (Math.max(p1[0], p2[0]) + (ax[0] ? 0 : t)) * cm, (Math.max(p1[1], p2[1]) + (ax[1] ? 0 : t)) * cm]); }
+      continue;
+    }
     const rot = it.r % 180 !== 0, hw = (rot ? s.d : s.w) / 2 - 8, hd = (rot ? s.w : s.d) / 2 - 8;
     if (hw > 2 && hd > 2) colliders.push([(it.x - hw) * cm, (it.y - hd) * cm, (it.x + hw) * cm, (it.y + hd) * cm]);
   }
@@ -369,7 +382,7 @@ function useUnit(id) {
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
-  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {};
+  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {}; state.cut = [];
   buildShell(); syncItems(); warm.length = 0; queueWarm();
   try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ }
 }
@@ -397,7 +410,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -452,6 +465,9 @@ function onMsg(entry, m) {
       if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) { it.m = m.m; it.c = m.c; syncItems(); } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
+    case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
+      state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
+    case 'len': { const it = find(m.id), s = it && getItem(it.key); if (s && s.t === 'wall') { it.len = Math.max(LEN.min, Math.min(LEN.max, Math.round(num(m.len, LEN.min, LEN.max) / LEN.step) * LEN.step)); syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;
     case 'add': {
@@ -462,7 +478,7 @@ function onMsg(entry, m) {
       if (spec.t !== 'person') it.st = STYLES[m.st] ? m.st : state.style;
       state.items.push(it); syncItems(); break;
     }
-    case 'reset': state.items = PLAN.defaults.map((d) => ({ ...d })); syncItems(); break;
+    case 'reset': state.items = PLAN.defaults.map((d) => ({ ...d })); if (state.cut.length) { state.cut = []; buildShell(); } syncItems(); break;
     default: return;
   }
   broadcast();

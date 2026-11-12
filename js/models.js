@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112k';
-import * as MT from './mats.js?v=20261112k';
+import { WOODS } from './catalog.js?v=20261112l';
+import * as MT from './mats.js?v=20261112l';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -280,6 +280,45 @@ B.tower = (g, it) => {
   else { const n = Math.max(2, Math.round(w / 50)), dw = (w - 0.6) / n; for (let i = 0; i < n; i++) box(g, dw - 0.8, h - 10, 2, m, -w / 2 + 0.3 + dw * (i + 0.5), 8 + (h - 8) / 2, d / 2 - 2); }
 };
 
+// ---- 牆面與拉門（寬＝長度，沿 x；厚度沿 z） ----
+const WOODC = { '#D9C2A3': 1, '#C08A52': 1, '#7A5236': 1 };
+const frameMat = (c) => (WOODC[c] ? MT.wood(c, { rings: 14, warp: 0.5, vert: true, gloss: 0.1 }) : MT.flat(c, 0.45));
+const paneMat = (fin) => (fin === 'frost' ? MT.frost() : MT.glass('#CFE3E6'));
+const WHITE_WALL = '#F1EEE8';
+// 一片有外框的玻璃：x 置中、y0 為底
+function glazed(g, w, h, y0, fm, pm, t = 4, d = 6, z = 0) {
+  box(g, w, t, d, fm, 0, y0 + t / 2, z); box(g, w, t, d, fm, 0, y0 + h - t / 2, z);
+  const n = Math.max(1, Math.round(w / 85)); for (let i = 0; i <= n; i++) box(g, i === 0 || i === n ? t : 3, h, d, fm, -w / 2 + t / 2 + (w - t) * i / n, y0 + h / 2, z);
+  box(g, w - t, h - 2 * t, 1, pm, 0, y0 + h / 2, z).castShadow = false;
+}
+B.wall = (g, it) => {
+  const { w, d, h, v } = it, fin = it.fin || 'solid', c = it.color || WHITE_WALL, sol = fin === 'solid', fm = frameMat(c), wm = sol ? (WOODC[c] ? fm : MT.wallPaint(c)) : MT.wallPaint(WHITE_WALL), base = MT.flat('#E4E1DB', 0.5);
+  if (v === 'full') { if (sol) { box(g, w, h, d, wm, 0, h / 2, 0); box(g, w, 8, d + 1, base, 0, 4, 0); } else glazed(g, w, h, 0, fm, paneMat(fin)); return; }
+  if (v === 'open') {   // 中間 90cm 門洞，門洞兩側深咖啡色
+    const dw = Math.min(90, w - 30), sw = (w - dw) / 2, dm = MT.flat('#4A3324', 0.6);
+    for (const s of [-1, 1]) { const x = s * (dw / 2 + sw / 2); if (sol) { box(g, sw, h, d, wm, x, h / 2, 0); box(g, sw, 8, d + 1, base, x, 4, 0); } else { const q = new THREE.Group(); q.position.x = x; g.add(q); glazed(q, sw, h, 0, fm, paneMat(fin)); } box(g, 3, 210, d + 0.6, dm, s * (dw / 2 - 1.5), 105, 0); }
+    if (sol) box(g, dw, h - 210, d, wm, 0, 210 + (h - 210) / 2, 0); else { const q = new THREE.Group(); g.add(q); glazed(q, dw, h - 210, 210, fm, paneMat(fin)); }
+    box(g, dw, 3, d + 0.6, dm, 0, 208.5, 0); return;
+  }
+  if (v === 'hslat' || v === 'hglass') {   // 下方 110cm 實牆
+    const lw = MT.wallPaint(WHITE_WALL); box(g, w, 110, d, lw, 0, 55, 0); box(g, w, 8, d + 1, base, 0, 4, 0);
+    if (v === 'hglass') { glazed(g, w, h - 110, 110, fm, paneMat(fin)); return; }
+    box(g, w, 4, d, fm, 0, 112, 0); box(g, w, 5, d - 2, fm, 0, h - 2.5, 0); for (const s of [-1, 1]) box(g, 5, h - 119, d - 2, fm, s * (w / 2 - 2.5), 114 + (h - 119) / 2, 0);
+    const n = Math.max(2, Math.round((w - 5) / 12.5)); for (let i = 1; i < n; i++) box(g, 2.6, h - 119, 5, fm, -w / 2 + 2.5 + (w - 5) * i / n, 114 + (h - 119) / 2, 0);
+    return;
+  }
+  const pm = paneMat(fin), top = MT.wallPaint(WHITE_WALL);
+  if (v === 'slide2') {   // 雙扇對開：一扇關著、一扇拉開一半，中間可以走過去
+    box(g, w, h - 230, d - 2, top, 0, 230 + (h - 230) / 2, 0); box(g, w, 6, d, fm, 0, 227, 0); for (const s of [-1, 1]) box(g, 6, 224, d, fm, s * (w / 2 - 3), 112, 0);
+    const lw = (w - 12) / 2 + 3;
+    for (const [x, z] of [[-w / 2 + 6 + lw / 2, -2.2], [-w / 2 + 6 + lw * 0.75, 2.2]]) { for (const s of [-1, 1]) box(g, 5, 222, 3.5, fm, x + s * (lw / 2 - 2.5), 113, z); box(g, lw, 5, 3.5, fm, x, 4.5, z); box(g, lw, 5, 3.5, fm, x, 221.5, z); box(g, lw - 10, 212, 1, pm, x, 113, z).castShadow = false; }
+    return;
+  }
+  // slide1：單扇懸吊式，門扇停在左半邊
+  box(g, w, h - 238, d, top, 0, 238 + (h - 238) / 2, 0); box(g, w, 6, d - 2, fm, 0, 235, 0); for (const s of [-1, 1]) box(g, 8, 232, d, top, s * (w / 2 - 4), 116, 0);
+  const lw = (w - 16) / 2 + 4, x = -w / 2 + 8 + lw / 2, z = d / 2 + 1.5;
+  for (const s of [-1, 1]) box(g, 2.5, 230, 3, fm, x + s * (lw / 2 - 1.25), 117, z); for (const y of [3.2, 117, 230.8]) box(g, lw, 2.5, 3, fm, x, y, z); box(g, lw - 5, 226, 1, pm, x, 117, z).castShadow = false;
+};
 // ---- 衛浴 ----
 B.toilet = (g, it) => {
   const { w, d, h, v } = it, c = M('ceramic', '#F6F6F4');

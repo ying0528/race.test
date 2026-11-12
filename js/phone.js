@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112k';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112k';
-import * as ART from './planart.js?v=20261112k';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112l';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, LEN, resolvePeople, keepOffBeds } from './catalog.js?v=20261112l';
+import * as ART from './planart.js?v=20261112l';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -38,7 +38,7 @@ function onData(m) {
   if (!m || m.t !== 'state') return;
   const keep = S.drag && S.st ? S.st.items.find((i) => i.id === S.drag.id) : null;
   S.st = m;
-  if (m.unit && m.unit !== UNIT.id && setUnit(m.unit)) { S.room = null; S.sel = null; S.view = null; S.drag = null; closeSheet(); }   // 大螢幕換了戶型
+  if (m.unit && m.unit !== UNIT.id && setUnit(m.unit)) { S.room = null; S.sel = null; S.selCut = null; S.view = null; S.drag = null; closeSheet(); }   // 大螢幕換了戶型
   $('unitName').textContent = m.ready ? UNIT.name : '';
   if (keep) { const i = m.items.findIndex((q) => q.id === keep.id); if (i >= 0) m.items[i] = keep; }
   for (const [id, pd] of pending) {   // 剛新增、大螢幕還沒回報的家具先留著，避免閃一下消失
@@ -61,7 +61,8 @@ function update() {
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
 }
 const ROOM_COLORS = ['#E6B89C', '#9CC5E6', '#B7D9A8', '#E6D49C', '#C9B3E6', '#9CE0D6', '#E6A8C4', '#C8C8C8', '#D9C2A0'];
-const planBase = (vb) => ART.defs(S.st.style, S.st.floor, S.st.floors) + ART.floors(vb, S.st.floors), planWalls = () => ART.walls();
+const cutPatch = () => (S.st.cut || []).flatMap((i) => cutRects(i)).map(([a, b, c, d]) => `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="url(#f-main)"/>`).join('');   // 拆掉的牆底下補地板
+const planBase = (vb) => (setCuts(S.st.cut), ART.defs(S.st.style, S.st.floor, S.st.floors) + ART.floors(vb, S.st.floors) + cutPatch()), planWalls = () => ART.walls();
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
@@ -119,12 +120,20 @@ $('main').addEventListener('click', (e) => {
   if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; }
   if (a === 'fg') S.fg = +b.dataset.i;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
-  else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.view = null; }
+  else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
   else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
   else if (a === 'open') openSheet('furn');
   else if (a === 'fin') openSheet('fin');
   else if (a === 'person') openSheet('person');
+  else if (a === 'del' && S.selCut != null) {   // 拆牆／復原牆
+    const i = S.selCut, gone = (S.st.cut || []).includes(i); S.st.cut = (S.st.cut || []).filter((k) => k !== i); if (!gone) S.st.cut.push(i);
+    send({ t: 'cut', i, on: !gone });
+  }
+  else if (a === 'len') {
+    const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it); if (!s || s.t !== 'wall') return;
+    it.len = Math.max(LEN.min, Math.min(LEN.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len });
+  }
   else if (a === 'rot' || a === 'del') {
     const it = S.st.items.find((i) => i.id === S.sel); if (!it) return;
     if (a === 'rot') { it.r = (it.r + 90) % 360; send({ t: 'rot', id: it.id, r: it.r }); }
@@ -141,6 +150,10 @@ function drawPlan() {
   svg.setAttribute('viewBox', (S.view || vb).join(' '));
   let h = planBase(vb);
   h += planWalls();
+  (PLAN.cuts || []).forEach((_, i) => {   // 可拆的牆：橘色虛線框；已拆的：灰色虛線。點一下選取，再按下面的按鈕
+    const gone = (S.st.cut || []).includes(i), sel = S.selCut === i;
+    h += `<g data-cut="${i}">` + cutRects(i).map(([a, b, c, d]) => `<rect x="${a - 7}" y="${b - 7}" width="${c - a + 14}" height="${d - b + 14}" fill="transparent"/><rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${sel ? '#E8742A' : gone ? 'none' : '#E8742A'}" fill-opacity="${sel ? 0.85 : 0.28}" stroke="${gone ? '#8C8F94' : '#E8742A'}" stroke-width="${sel ? 3 : 1.6}" stroke-dasharray="${sel ? '' : '6 4'}"/>`).join('') + '</g>';
+  });
   const poses = resolvePeople(S.st.items);
   const order = (s) => (s.t === 'rug' ? 0 : s.t === 'person' ? 3 : s.elev > 0 ? 2 : 1);
   const list = S.st.items.map((it) => ({ it, s: getItem(it.key, it.st || S.st.style, it) })).filter((q) => q.s && q.it.x > vb[0] - 80 && q.it.x < vb[0] + vb[2] + 80 && q.it.y > vb[1] - 80 && q.it.y < vb[1] + vb[3] + 80)
@@ -166,9 +179,16 @@ function drawPlan() {
 }
 function updateSel() {
   const el = $('sel'); if (!el) return;
+  if (S.selCut != null && (PLAN.cuts || [])[S.selCut]) {
+    const gone = (S.st.cut || []).includes(S.selCut), len = Math.round(cutRects(S.selCut).reduce((t, [a, b, c, d]) => t + Math.max(c - a, d - b), 0));
+    el.innerHTML = `<b>${gone ? '已拆除的牆' : '隔間牆'}</b><span>長約 ${len} cm・${gone ? '按「復原牆面」可以蓋回來' : '按「刪除」可以拆掉'}</span>`;
+    $('rotBtn').disabled = $('finBtn').disabled = true; $('delBtn').disabled = false; $('delBtn').textContent = gone ? '復原牆面' : '刪除'; return;
+  }
+  $('delBtn').textContent = '刪除';
   const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it);
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
   else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
+  else if (s.t === 'wall') el.innerHTML = `<b>${esc(s.name)}</b><span>長 ${s.w} cm</span><span class="lenb"><button data-act="len" data-d="-${LEN.step}" ${s.w <= LEN.min ? 'disabled' : ''}>－${LEN.step}</button><button data-act="len" data-d="${LEN.step}" ${s.w >= LEN.max ? 'disabled' : ''}>＋${LEN.step}</button></span>`;
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
 }
@@ -191,7 +211,8 @@ function bindPlan() {
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
     if (pts.size === 2) { e.preventDefault(); endDrag(); startPinch(); return; }
     if (pts.size > 2) return;
-    const g = e.target.closest('[data-id]');
+    const g = e.target.closest('[data-id]'), cg = g ? null : e.target.closest('[data-cut]');
+    S.selCut = cg ? +cg.dataset.cut : null;
     if (!g) { S.sel = null; drawPlan(); updateSel(); return; }
     const it = S.st.items.find((i) => i.id === g.dataset.id); if (!it) return;
     e.preventDefault(); const p = pt(e);
@@ -225,7 +246,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112k'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112l'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -249,7 +270,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112k'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112l'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);

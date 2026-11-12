@@ -1,9 +1,9 @@
 // 手機型錄用的 3D 縮圖：把每件家具的 3D 模型算成一張小圖
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { STYLES } from './catalog.js?v=20261112k';
-import { buildItem, buildPerson } from './models.js?v=20261112k';
-import { setTexSize } from './mats.js?v=20261112k';
+import { STYLES } from './catalog.js?v=20261112l';
+import { buildItem, buildPerson } from './models.js?v=20261112l';
+import { setTexSize } from './mats.js?v=20261112l';
 setTexSize(256);
 
 let R = null, scene, cam;
