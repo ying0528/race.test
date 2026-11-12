@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112i';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112i';
-import * as ART from './planart.js?v=20261112i';
+import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112j';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112j';
+import * as ART from './planart.js?v=20261112j';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -55,13 +55,13 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, S.fg, S.resetArm].join('|');
+  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), S.fg, S.fr, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
 }
 const ROOM_COLORS = ['#E6B89C', '#9CC5E6', '#B7D9A8', '#E6D49C', '#C9B3E6', '#9CE0D6', '#E6A8C4', '#C8C8C8', '#D9C2A0'];
-const planBase = (vb) => ART.defs(S.st.style, S.st.floor) + ART.floors(vb), planWalls = () => ART.walls();
+const planBase = (vb) => ART.defs(S.st.style, S.st.floor, S.st.floors) + ART.floors(vb, S.st.floors), planWalls = () => ART.walls();
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
@@ -71,10 +71,12 @@ function renderMain() {
     el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;
   }
   if (S.tab === 'style') {
-    const fg = S.fg ?? Math.max(0, FLOOR_GROUPS.findIndex((g) => g.items.some((f) => f[0] === st.floor))), sw = (f) => { const [id, n, c, k = 'wood'] = f; return `<button class="fsw ${id === st.floor ? 'on' : ''}" data-act="floor" data-k="${id}"><i class="fk-${k}" style="--c:${c}"></i><span>${n}</span></button>`; };
+    const fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', cur = fr ? (st.floors || {})[fr] : st.floor;
+    const fg = S.fg ?? Math.max(0, FLOOR_GROUPS.findIndex((g) => g.items.some((f) => f[0] === cur))), sw = (f) => { const [id, n, c, k = 'wood'] = f; return `<button class="fsw ${id === cur ? 'on' : ''}" data-act="floor" data-k="${id}"><i class="fk-${k}" style="--c:${c}"></i><span>${n}</span></button>`; };
     el.innerHTML = '<h2>選擇風格</h2><div class="grid2 styles">' +
       Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b></button>`).join('') + '</div>' +
-      `<div class="rowb" style="align-items:center"><h2>地板材質</h2><button class="second ${st.floor ? '' : 'on'}" data-act="floor" data-k="" style="flex:0 0 108px;height:36px">跟著風格</button></div>` +
+      `<div class="rowb" style="align-items:center"><h2>地板材質</h2><button class="second ${cur ? '' : 'on'}" data-act="floor" data-k="" style="flex:0 0 108px;height:36px">${fr ? '跟著全戶' : '跟著風格'}</button></div>` +
+      '<div class="chips">' + [['', '全戶'], ...PLAN.rooms.map((q) => [q.id, q.n])].map(([id, n]) => `<button class="${id === fr ? 'on' : ''}" data-act="fr" data-k="${id}">${n}${id && (st.floors || {})[id] ? ' ●' : ''}</button>`).join('') + '</div>' +
       '<div class="chips">' + FLOOR_GROUPS.map((g, i) => `<button class="${i === fg ? 'on' : ''}" data-act="fg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
       '<div class="fgrid">' + FLOOR_GROUPS[fg].items.map(sw).join('') + '</div>';
   } else if (S.tab === 'edit') {
@@ -113,7 +115,8 @@ $('nav').addEventListener('click', (e) => { const b = e.target.closest('button')
 $('main').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !S.st) return;
   const a = b.dataset.act;
-  if (a === 'floor') { S.st.floor = b.dataset.k || null; send({ t: 'floor', k: S.st.floor }); }
+  if (a === 'floor') { const k = b.dataset.k || null, fr = S.fr || ''; S.st.floors = S.st.floors || {}; if (fr) { if (k) S.st.floors[fr] = k; else delete S.st.floors[fr]; } else { S.st.floor = k; S.st.floors = {}; } send({ t: 'floor', k, room: fr || undefined }); }
+  if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; }
   if (a === 'fg') S.fg = +b.dataset.i;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.view = null; }
@@ -222,7 +225,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112i'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112j'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -246,7 +249,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112i'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112j'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);

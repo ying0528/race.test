@@ -1,6 +1,6 @@
 // 手機平面圖的繪製：有材質的地板、粗黑牆、門弧線，以及每種家具的俯視圖（單位 cm，等比例）
-import { PLAN } from './plan.js?v=20261112i';
-import { STYLES, FLOORS, planColor } from './catalog.js?v=20261112i';
+import { PLAN } from './plan.js?v=20261112j';
+import { STYLES, FLOORS, planColor } from './catalog.js?v=20261112j';
 
 const INK = '#4A4038';
 function tint(hex, f) {   // f > 1 變亮，f < 1 變暗
@@ -13,18 +13,21 @@ const ln = (x1, y1, x2, y2, stroke = INK, sw = 0.8, extra = '') => `<line x1="${
 const S = `stroke="${INK}" stroke-width="0.8"`;
 
 // ---------- 地板、牆、門 ----------
-export function defs(styleKey, floorKey) {
-  const st = STYLES[styleKey] || STYLES.nordic, fl = FLOORS[floorKey], wc = fl ? fl.c : st.floorC, marble = fl ? fl.k !== 'wood' : st.floor === 'marble';
+export function defs(styleKey, floorKey, roomFloors) {
+  const st = STYLES[styleKey] || STYLES.nordic;
   const tile = (id, size, base, line, vein) => `<pattern id="${id}" width="${size}" height="${size}" patternUnits="userSpaceOnUse"><rect width="${size}" height="${size}" fill="${base}"/>` +
     (vein ? `<path d="M0 ${size * 0.3} Q ${size * 0.4} ${size * 0.1} ${size * 0.7} ${size * 0.5} T ${size} ${size * 0.8}" fill="none" stroke="${vein}" stroke-width="1" opacity=".28"/><path d="M${size * 0.2} ${size} Q ${size * 0.5} ${size * 0.6} ${size * 0.9} ${size * 0.1}" fill="none" stroke="${vein}" stroke-width=".6" opacity=".22"/>` : '') +
     `<path d="M0 0H${size}M0 0V${size}" stroke="${line}" stroke-width="1.4"/></pattern>`;
-  const wood = `<pattern id="f-main" width="160" height="60" patternUnits="userSpaceOnUse"><rect width="160" height="60" fill="${wc}"/>` +
+  const main = (id, fl) => { const wc = fl ? fl.c : st.floorC, marble = fl ? fl.k !== 'wood' : st.floor === 'marble';
+  const wood = `<pattern id="${id}" width="160" height="60" patternUnits="userSpaceOnUse"><rect width="160" height="60" fill="${wc}"/>` +
     [[0, 0, 100, 1.05], [100, 0, 60, 0.98], [0, 15, 45, 0.97], [45, 15, 115, 1.08], [0, 30, 130, 1.0], [130, 30, 30, 1.06], [0, 45, 75, 1.07], [75, 45, 85, 0.975]].map(([x, y, w, f]) => r(x, y, w, 15, 0, tint(wc, f), `stroke="${tint(wc, 0.88)}" stroke-width=".5"`)).join('') + '</pattern>';
-  return `<defs>${marble ? tile('f-main', fl && fl.k === 'stone' ? 40 : 80, wc, fl && (fl.k === 'terrazzo' || fl.k === 'carpet') ? wc : tint(wc, 0.86), fl ? null : '#B9B2A6') : wood}${tile('f-bath', 30, '#E4E2DD', '#C5C2BC')}${tile('f-kit', 60, '#EFEADF', '#D3CDBF', '#CFC6B3')}${tile('f-foyer', 80, '#EFEADF', '#D3CDBF', '#C9BFAC')}${tile('f-balc', 30, '#BEBBB5', '#A29F99', '#A9A6A0')}</defs>`;
+  return marble ? tile(id, fl && fl.k === 'stone' ? 40 : 80, wc, fl && (fl.k === 'terrazzo' || fl.k === 'carpet') ? wc : tint(wc, 0.86), fl ? null : '#B9B2A6') : wood; };
+  return `<defs>${main('f-main', FLOORS[floorKey])}${[...new Set(Object.values(roomFloors || {}))].filter((k) => FLOORS[k]).map((k) => main('f-x-' + k, FLOORS[k])).join('')}${tile('f-bath', 30, '#E4E2DD', '#C5C2BC')}${tile('f-kit', 60, '#EFEADF', '#D3CDBF', '#CFC6B3')}${tile('f-foyer', 80, '#EFEADF', '#D3CDBF', '#C9BFAC')}${tile('f-balc', 30, '#BEBBB5', '#A29F99', '#A9A6A0')}</defs>`;
 }
-export function floors(vb) {
+export function floors(vb, roomFloors) {
   let h = `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="#F3F1ED"/>`;
   for (const [a, b, c, d, k] of PLAN.floors) h += r(a, b, c - a, d - b, 0, `url(#f-${k})`);
+  for (const q of PLAN.rooms) { const k = roomFloors && roomFloors[q.id]; if (FLOORS[k]) for (const [a, b, c, d] of q.rs) h += r(a, b, c - a, d - b, 0, `url(#f-x-${k})`); }   // 個別區域指定的地板
   return h;
 }
 export function walls() {

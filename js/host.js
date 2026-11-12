@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112i';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112i';
-import { buildItem, buildPerson, M } from './models.js?v=20261112i';
-import * as MT from './mats.js?v=20261112i';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112j';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112j';
+import { buildItem, buildPerson, M } from './models.js?v=20261112j';
+import * as MT from './mats.js?v=20261112j';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', floor: null, mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { style: 'nordic', floor: null, floors: {}, mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -82,14 +82,23 @@ function floorMesh(x1, y1, x2, y2, mat, scale) {
 }
 const wallMeshes = [], mainFloors = [];
 function mainFloorMat() {   // 手機指定了地板就用指定的，否則跟著風格
-  const f = FLOORS[state.floor], st = STYLES[state.style];
+  return floorMatOf(state.floor);
+}
+const roomFloors = new THREE.Group();
+function applyRoomFloors() {   // 個別區域的地板：疊一層薄薄的在原地板上方 2mm
+  for (const m of roomFloors.children) m.geometry.dispose(); roomFloors.clear();
+  for (const q of PLAN.rooms) { const k = state.floors[q.id]; if (FLOORS[k]) for (const [a, b, c, d] of q.rs) { const m = floorMesh(a, b, c, d, floorMatOf(k), 1.6); m.position.y = 0.002; roomFloors.add(m); } }
+  if (roomFloors.parent !== scene) scene.add(roomFloors);
+}
+function floorMatOf(key) {
+  const f = FLOORS[key], st = STYLES[state.style];
   if (!f) return st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
   return f.k === 'terrazzo' ? MT.terrazzo(f.c) : f.k === 'tile' ? MT.tiles(f.c, 2, false, 0.35) : f.k === 'stone' ? MT.stoneTile(f.c, 4) : f.k === 'carpet' ? MT.carpet(f.c) : MT.floorWood(f.c);
 }
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
   invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
-  for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm;
+  for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm; applyRoomFloors();
 }
 function buildShell() {
   shell.clear(); wallMeshes.length = 0; mainFloors.length = 0; buildBulbs();
@@ -132,13 +141,21 @@ function buildShell() {
   // 大門
   const [dx1, dy1, dx2, dy2] = PLAN.door;
   wbox(wallsFull, dx1, dy1, dx2, dy2, 0, 210, M('wood', '#6A4F3B')); wbox(wallsCut, dx1, dy1, dx2, dy2, 0, CUT, M('wood', '#6A4F3B'));
+  // 室內門：畫成打開的深咖啡色門扇（不擋路）
+  { const dm = M('wood', '#4A3324'), R = Math.PI / 180, [ex1, ey1, ex2, ey2] = PLAN.door;
+    for (const [x, y, w, , a1] of PLAN.doors) {
+      if (x > ex1 - 30 && x < ex2 + 30 && y > ey1 - 30 && y < ey2 + 30) continue;   // 大門已經有門扇
+      const ox = x + w * Math.cos(a1 * R), oy = y + w * Math.sin(a1 * R), horiz = Math.abs(ox - x) > Math.abs(oy - y);
+      const bx = horiz ? [Math.min(x, ox), y - 2, Math.max(x, ox), y + 2] : [x - 2, Math.min(y, oy), x + 2, Math.max(y, oy)];
+      wbox(wallsFull, ...bx, 0, 208, dm); wbox(wallsCut, ...bx, 0, CUT, dm);
+    } }
   // 天花板 + 嵌燈
   ceiling = new THREE.Group(); shell.add(ceiling);
   const ceilMat = new THREE.MeshStandardMaterial({ color: '#F7F5F1', roughness: 0.95 });
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(ceiling, x1, y1, x2, y2, PLAN.H, PLAN.H + 12, ceilMat);
   const dl = M('emit', '#FFF4E0');
   bulbs.children.forEach((p) => { if (!p.userData.on) return; const d = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), dl); d.position.set(p.position.x, PLAN.H * cm - 0.004, p.position.z); ceiling.add(d); });
-  applyMode();
+  applyRoomFloors(); applyMode();
 }
 
 // ================= 家具 =================
@@ -352,7 +369,7 @@ function useUnit(id) {
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
-  state.items = PLAN.defaults.map((d) => ({ ...d }));
+  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {};
   buildShell(); syncItems(); warm.length = 0; queueWarm();
   try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ }
 }
@@ -380,7 +397,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -427,7 +444,10 @@ function onMsg(entry, m) {
   }
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
-    case 'floor': { const k = FLOORS[m.k] ? m.k : null; if (k !== state.floor) { state.floor = k; applyStyle(); } break; }
+    case 'floor': { const k = FLOORS[m.k] ? m.k : null;
+      if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.floors[m.room] = k; else delete state.floors[m.room]; }
+      else { state.floor = k; state.floors = {}; }   // 選「全戶」會蓋掉各區域的設定
+      applyStyle(); break; }
     case 'fin': { const it = find(m.id), f = it && FINISH[finishOf(getItem(it.key))];
       if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) { it.m = m.m; it.c = m.c; syncItems(); } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
