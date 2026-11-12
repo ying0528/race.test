@@ -30,6 +30,19 @@
   .card { padding: 14px; border-radius: 16px; background: #fff; border: 2px solid #E4E1DC; text-align: left; display: flex; flex-direction: column; gap: 6px; }
   .card.on { border-color: #A0673A; background: #FBF6F1; }
   .card b { font-size: 17px; } .sw { display: flex; gap: 5px; } .sw i { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); }
+  .styles .card { padding: 10px 12px; flex-direction: row; align-items: center; gap: 10px; } .styles .sw i { width: 18px; height: 18px; }
+  .second.on { border-color: #A0673A; background: #FBF6F1; color: #A0673A; }
+  main > .chips { margin: 0 -14px; padding: 0 14px; }
+  .fgrid { flex: 1 1 0; min-height: 0; overflow-y: auto; touch-action: pan-y; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-content: start; }
+  .fsw { padding: 5px 5px 6px; border-radius: 12px; border: 2px solid #E4E1DC; background: #fff; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+  .fsw.on { border-color: #A0673A; background: #FBF6F1; }
+  .fsw span { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fsw i { display: block; aspect-ratio: 1.25; border-radius: 7px; background-color: var(--c); border: 1px solid rgba(0,0,0,.1); }
+  .fk-wood { background-image: linear-gradient(90deg, transparent 49%, rgba(0,0,0,.16) 49% 51%, transparent 51%), repeating-linear-gradient(0deg, rgba(0,0,0,.2) 0 1px, transparent 1px 11px), repeating-linear-gradient(0deg, rgba(255,255,255,.1) 0 11px, rgba(0,0,0,.07) 11px 22px); }
+  .fk-terrazzo { background-image: radial-gradient(rgba(60,50,40,.5) 1.4px, transparent 1.8px), radial-gradient(rgba(255,255,255,.75) 1.6px, transparent 2px), radial-gradient(rgba(190,140,80,.5) 1.2px, transparent 1.6px); background-size: 13px 13px, 17px 17px, 11px 11px; background-position: 2px 3px, 8px 9px, 5px 1px; }
+  .fk-tile { background-image: linear-gradient(rgba(0,0,0,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.2) 1px, transparent 1px); background-size: 50% 50%; }
+  .fk-stone { background-image: linear-gradient(rgba(0,0,0,.22) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.22) 1px, transparent 1px), radial-gradient(rgba(255,255,255,.14) 30%, transparent 70%); background-size: 25% 33.4%, 25% 33.4%, 60% 80%; }
+  .fk-carpet { background-image: radial-gradient(rgba(255,255,255,.22) 1px, transparent 1.4px); background-size: 4px 4px; }
   .primary.alt { background: #3C4047; }
   .primary { height: 50px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
   .second { height: 44px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
@@ -80,6 +93,6 @@
   <div class="chips" id="cats"></div>
   <div id="list"></div>
 </div>
-<script type="module" src="./js/phone.js?v=20261112f"></script>
+<script type="module" src="./js/phone.js?v=20261112g"></script>
 </body>
 </html>

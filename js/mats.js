@@ -36,6 +36,15 @@ const floorFn = (x, y, S) => { const pw = S / 8, pl = S / 2, row = Math.floor(y 
 const veins = (x, y, S) => { const k = 1024 / S, X = x * k, Y = y * k, n = fbm(X * 0.004, Y * 0.004, 4), v = Math.abs(Math.sin((X * 0.7 + Y) * 0.011 + n * 7)), v2 = Math.abs(Math.sin((X - Y * 0.6) * 0.02 + n * 11)); return 1 - 0.2 * Math.pow(1 - v, 14) - 0.1 * Math.pow(1 - v2, 22) + (n - 0.5) * 0.06; };
 const marbleFn = (x, y, S) => [0.5, veins(x, y, S)];
 const tilesFn = (nx, soft) => (x, y, S) => { const t = S / nx, ex = Math.min(x % t, t - (x % t)), ey = Math.min(y % t, t - (y % t)), g = Math.min(1, Math.min(ex, ey) / (S / 300)), id = hash(Math.floor(x / t), Math.floor(y / t)); return [g, (soft ? veins(x + id * 900, y + id * 500, S) : 0.97 + 0.05 * id + (fbm(x * 0.05, y * 0.05, 2) - 0.5) * 0.04) * (0.74 + 0.26 * g)]; };
+// 彩色石紋：底色上散佈深、淺、暖色碎石（格點用 mod 包起來，貼圖可無縫重複）
+const terrazzoFn = (x, y, S) => { const N = 44, g = S / N, cx = Math.floor(x / g), cy = Math.floor(y / g); let t = 1 + (fbm(x * 0.02, y * 0.02, 2) - 0.5) * 0.05, warm = 0, h = 0.5;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const ax = ((cx + i) % N + N) % N, ay = ((cy + j) % N + N) % N, k = hash(ax + 3, ay + 7); if (k < 0.45) continue;
+    const px = (cx + i + 0.15 + 0.7 * hash(ax, ay)) * g, py = (cy + j + 0.15 + 0.7 * hash(ay + 11, ax)) * g, dx = x - px, dy = y - py, an = hash(ax + 5, ay) * 3.14, u = dx * Math.cos(an) + dy * Math.sin(an), v = -dx * Math.sin(an) + dy * Math.cos(an), r = g * (0.14 + 0.3 * hash(ax, ay + 9));
+    if (u * u + v * v * 2.6 < r * r) { const q = hash(ax + 1, ay + 2); if (q < 0.4) t = 0.74; else if (q < 0.7) t = 1.1; else { t = 0.9; warm = 0.1; } h = 0.56; } }
+  return [h, t, warm]; };
+const stoneFn = (nx) => (x, y, S) => { const t = S / nx, ex = Math.min(x % t, t - (x % t)), ey = Math.min(y % t, t - (y % t)), g = Math.min(1, Math.min(ex, ey) / (S / 300)), id = hash(Math.floor(x / t), Math.floor(y / t)), n = fbm(x * 0.012 + id * 40, y * 0.012 + id * 70, 4), f = fbm(x * 0.09, y * 0.09, 3);
+  return [g * (0.55 + 0.45 * f), (0.88 + 0.26 * n + (f - 0.5) * 0.08) * (0.7 + 0.3 * g)]; };
+const loopFn = (x, y, S) => { const p = S / 96, u = (x % p) / p, row = Math.floor(x / p), v = ((y + (row % 2) * p / 2) % p) / p, h = Math.sin(Math.PI * u) * (0.5 + 0.5 * Math.abs(Math.sin(Math.PI * (v + u * 0.5)))); return [h, 0.72 + 0.4 * h + (hash(row, Math.floor(y / p)) - 0.5) * 0.08]; };
 const plaster = (x, y) => { const h = fbm(x * 0.04, y * 0.04, 4); return [h, 0.97 + 0.05 * h]; };
 const pile = (x, y, S) => { const h = vnoise(x * 0.9, y * 0.9) * 0.6 + fbm(x * 0.06, y * 0.06, 3) * 0.4, e = Math.min(x, S - x, y, S - y) / S, bx = e < 0.045 && e > 0.03; return [h, (0.84 + 0.24 * h) * (bx ? 0.8 : 1)]; };
 const grainy = (x, y) => { const h = fbm(x * 0.35, y * 0.35, 3); return [h, 0.95 + 0.1 * h]; };
@@ -47,6 +56,9 @@ export const wood = (color, { rings = 9, gloss = 0.25 } = {}) => memo('w' + colo
 export const marble = (color) => memo('mb' + color, () => new THREE.MeshStandardMaterial({ map: maps('marble', color, marbleFn, 0).map, roughness: 0.14 }));
 export const floorWood = (color) => memo('fw' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('floor', color, floorFn, 2.5, 1, Math.max(SIZE, 1024)), { roughness: 0.36 })));
 export const tiles = (color, nx = 2, soft = false, rough = 0.3) => memo('tl' + color + nx + soft, () => new THREE.MeshStandardMaterial(Object.assign(maps('tile' + nx + soft, color, tilesFn(nx, soft), 2.2), { roughness: soft ? Math.min(rough, 0.16) : rough * 0.8 })));
+export const terrazzo = (color) => memo('tz' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('terrazzo', color, terrazzoFn, 0.6, 1, Math.max(SIZE, 1024)), { roughness: 0.3 })));
+export const stoneTile = (color, nx = 2) => memo('st' + color + nx, () => new THREE.MeshStandardMaterial(Object.assign(maps('stone' + nx, color, stoneFn(nx), 2.4, 1, Math.max(SIZE, 1024)), { roughness: 0.62 })));
+export const carpet = (color) => memo('cp' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('loop', color, loopFn, 5, 1, Math.max(SIZE, 1024)), { roughness: 1 })));
 export const wallPaint = (color) => memo('wl' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('plaster', color, plaster, 0.7, 3), { roughness: 0.95 })));
 export const rugPile = (color) => memo('rg' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('pile', color, pile, 5), { roughness: 1 })));
 export const ceramic = (color) => memo('c' + color, () => new THREE.MeshStandardMaterial({ color, roughness: 0.12 }));

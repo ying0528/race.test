@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112f';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112f';
-import { buildItem, buildPerson, M } from './models.js?v=20261112f';
-import * as MT from './mats.js?v=20261112f';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112g';
+import { getItem, STYLES, FLOORS, resolvePeople, keepOffBeds } from './catalog.js?v=20261112g';
+import { buildItem, buildPerson, M } from './models.js?v=20261112g';
+import * as MT from './mats.js?v=20261112g';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { style: 'nordic', floor: null, mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -81,9 +81,14 @@ function floorMesh(x1, y1, x2, y2, mat, scale) {
   const m = new THREE.Mesh(geo, mat); m.position.set(ox, 0, oz); m.receiveShadow = true; return m;
 }
 const wallMeshes = [], mainFloors = [];
+function mainFloorMat() {   // 手機指定了地板就用指定的，否則跟著風格
+  const f = FLOORS[state.floor], st = STYLES[state.style];
+  if (!f) return st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
+  return f.k === 'terrazzo' ? MT.terrazzo(f.c) : f.k === 'tile' ? MT.tiles(f.c, 2, false, 0.35) : f.k === 'stone' ? MT.stoneTile(f.c, 4) : f.k === 'carpet' ? MT.carpet(f.c) : MT.floorWood(f.c);
+}
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
   invalidate(6);
-  const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
+  const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
   for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm;
 }
 function buildShell() {
@@ -94,7 +99,7 @@ function buildShell() {
   const baseMat = new THREE.MeshStandardMaterial({ color: '#E3DED6', roughness: 0.6 });
   const slabMat = new THREE.MeshStandardMaterial({ color: '#C4C8CD', roughness: 0.9 });
   floorMats = {   // [材質, 一張貼圖鋪多少公尺]
-    main: st.floor === 'marble' ? [MT.tiles(st.floorC, 2, true), 1.6] : [MT.floorWood(st.floorC), 1.6],
+    main: [mainFloorMat(), 1.6],
     bath: [MT.tiles('#D9D7D2', 2, false), 0.6], kit: [MT.tiles('#D2CEC7', 2, true), 1.2],
     foyer: [MT.tiles('#E9E5DE', 2, true), 1.6], balc: [MT.tiles('#B4B1AB', 2, false, 0.7), 0.6],
   };
@@ -367,7 +372,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -414,6 +419,7 @@ function onMsg(entry, m) {
   }
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
+    case 'floor': { const k = FLOORS[m.k] ? m.k : null; if (k !== state.floor) { state.floor = k; applyStyle(); } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
