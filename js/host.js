@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112e';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112e';
-import { buildItem, buildPerson, M } from './models.js?v=20261112e';
-import * as MT from './mats.js?v=20261112e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112f';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112f';
+import { buildItem, buildPerson, M } from './models.js?v=20261112f';
+import * as MT from './mats.js?v=20261112f';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -149,7 +149,7 @@ function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片
 const objs = new Map();
 // 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
 const protos = new Map(), dblCache = new Map();
-const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; dblCache.set(m, c); } return dblCache.get(m); };
+const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; c.clippingPlanes = [CLIP]; dblCache.set(m, c); } return dblCache.get(m); };
 function proto(sig, make, tall) {
   if (!protos.has(sig)) { const o = make(); if (tall) o.traverse((n) => { if (n.isMesh && n.material.side !== THREE.DoubleSide) n.material = dbl(n.material); }); protos.set(sig, o); }
   return protos.get(sig).clone();
@@ -226,7 +226,7 @@ function applyMode() {
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
   bulbs.children.forEach((p) => { p.intensity = t && p.userData.on ? BULB : 0; });
   caps.visible = !t;
-  renderer.clippingPlanes = t ? [] : [CLIP];
+  renderer.localClippingEnabled = !t;
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
