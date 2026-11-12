@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112c';
-import * as MT from './mats.js?v=20261112c';
+import { WOODS } from './catalog.js?v=20261112e';
+import * as MT from './mats.js?v=20261112e';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -103,16 +103,16 @@ B.cab = (g, it, P) => {
   const hm = f === 'black' ? BRASS() : STEEL();
   if (v === 'drawer') {
     const rows = Math.max(2, Math.round(bh / 24)), rh = (bh - 3) / rows;
-    for (let i = 0; i < rows; i++) { const y = lh + 1 + rh * (i + 0.5); box(g, w - 1.6, rh - 1, 2, m, 0, y, d / 2 - 0.2); box(g, Math.min(16, w * 0.3), 1.2, 1.6, hm, 0, y + rh * 0.2, d / 2 + 1.4); }
+    for (let i = 0; i < rows; i++) { const y = lh + 1 + rh * (i + 0.5); box(g, w - 1.6, rh - 1, 2, m, 0, y, d / 2 - 1); box(g, Math.min(16, w * 0.3), 1.2, 1.6, hm, 0, y + rh * 0.2, d / 2 + 0.7); }
     return;
   }
   const n = v === 'slide' ? Math.max(2, Math.round(w / 90)) : Math.max(1, Math.round(w / (tall ? 48 : 55))), dw = (w - 1) / n, ph = bh - (tall ? 1.5 : 3.5);
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + 0.5 + dw * (i + 0.5);
-    box(g, dw - 0.8, ph, 2, m, x, lh + 0.8 + ph / 2, d / 2 - 0.2 + (v === 'slide' && i % 2 ? 1.6 : 0));
+    const out = v === 'slide' && i % 2 ? 1.6 : 0; box(g, dw - 0.8, ph, 2 + out, m, x, lh + 0.8 + ph / 2, d / 2 - 1 + out / 2);
     const hx = n === 1 ? x + dw * 0.32 : x + (i % 2 ? -1 : 1) * (dw / 2 - 4);
-    if (tall) box(g, 1.2, 22, 2, hm, hx, lh + bh * 0.48, d / 2 + 1.6 + (v === 'slide' && i % 2 ? 1.6 : 0));
-    else box(g, 1.2, 8, 1.6, hm, hx, lh + bh * 0.62, d / 2 + 1.4);
+    if (tall) box(g, 1.2, 22, 2, hm, hx, lh + bh * 0.48, d / 2 + 0.9 + out);
+    else box(g, 1.2, 8, 1.6, hm, hx, lh + bh * 0.62, d / 2 + 0.7);
   }
 };
 
@@ -155,11 +155,13 @@ B.chair = (g, it, P) => {
 B.ochair = (g, it) => {
   const { w, h } = it, fab = M('fabric', it.color || '#2E2F31'), dk = DARK(), st = STEEL();
   for (let i = 0; i < 5; i++) { const a = i * 1.2566, s = box(g, w * 0.48, 2.5, 4, dk, Math.cos(a) * w * 0.24, 6, Math.sin(a) * w * 0.24); s.rotation.y = -a; cyl(g, 2.6, 2.6, 4, dk, Math.cos(a) * w * 0.47, 2.6, Math.sin(a) * w * 0.47, 10).rotation.z = Math.PI / 2; }
-  cyl(g, 2.4, 2.4, 34, st, 0, 24, 0, 12);
-  box(g, w * 0.82, 8, w * 0.8, fab, 0, 46, 2, 3.5);
-  const bh = h - 56; const b = box(g, w * 0.74, bh, 6, fab, 0, 56 + bh / 2, -21, 3); b.rotation.x = -0.1;
-  box(g, 5, 14, 5, dk, 0, 52, -21);
-  if (w >= 56) for (const sx of [-1, 1]) { box(g, 3, 18, 3, dk, sx * w * 0.42, 57, 0); box(g, 5, 2.5, 26, dk, sx * w * 0.42, 67, 2, 1); }
+  const sy = Math.min(46, h * 0.5);   // 椅座中心高度：矮的兒童椅跟著降低
+  cyl(g, 2.4, 2.4, sy - 10, st, 0, 7 + (sy - 10) / 2, 0, 12);
+  box(g, w * 0.82, 8, w * 0.8, fab, 0, sy, 2, 3.5);
+  const bh = h - sy - 9, sz = 2 - w * 0.4 + 2.5;   // sz = 椅座後緣內側
+  const b = box(g, w * 0.74, bh, 6, fab, 0, sy + 9 + bh / 2, sz - 1.5, 3); b.rotation.x = -0.1;
+  box(g, 5, 16, 5, dk, 0, sy + 5, sz);
+  if (w >= 56) for (const sx of [-1, 1]) { box(g, 3, 20, 3, dk, sx * (w * 0.41 - 2.5), sy + 10, 0); box(g, 5, 2.5, 26, dk, sx * (w * 0.41 - 2.5), sy + 21, 2, 1); }
 };
 
 B.bed = (g, it, P) => {
@@ -198,8 +200,9 @@ B.rug = (g, it) => {
 B.lamp = (g, it) => {
   const { w, h, v } = it, shd = M('emit', it.color || '#F4EBDD'), mt = v === 'tripod' ? M('wood', WOODS.oak) : DARK();
   const sr = w / 2, sh = v === 'small' ? h * 0.42 : 28;
-  if (v === 'tripod') for (let i = 0; i < 3; i++) { const a = i * 2.094; const p = cyl(g, 1.3, 1.3, h - sh + 4, mt, Math.cos(a) * w * 0.2, (h - sh) / 2, Math.sin(a) * w * 0.2, 8); p.rotation.z = -Math.cos(a) * 0.2; p.rotation.x = Math.sin(a) * 0.2; }
+  if (v === 'tripod') for (let i = 0; i < 3; i++) { const a = i * 2.094, top = new THREE.Vector3(0, h - sh + 2, 0), dv = new THREE.Vector3(Math.cos(a) * w * 0.42, 0, Math.sin(a) * w * 0.42).sub(top), p = cyl(g, 1.3, 1.3, dv.length(), mt, 0, 0, 0, 8); p.position.copy(top).addScaledVector(dv, 0.5); p.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.normalize()); }
   else { cyl(g, sr * 0.75, sr * 0.8, 2, mt, 0, 1, 0); cyl(g, 1.1, 1.1, h - sh, mt, 0, (h - sh) / 2 + 1, 0, 10); }
+  cyl(g, 1.1, 1.1, sh + 8, mt, 0, h - 1 - (sh + 8) / 2, 0, 10); cyl(g, sr * 0.72, sr * 0.72, 0.8, shd, 0, h - 0.6, 0, 28).castShadow = false; cyl(g, sr * 0.9, sr * 0.9, 0.6, shd, 0, h - sh * 0.75, 0, 28).castShadow = false;
   const s = new THREE.Mesh(new THREE.CylinderGeometry(sr * 0.72, sr, sh, 28, 1, true), shd); s.material.side = THREE.DoubleSide; s.position.y = h - sh / 2; g.add(s);
 };
 
@@ -216,6 +219,8 @@ B.plant = (g, it) => {
     const me = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), M('leaf', greens[Math.floor(R() * 4)]));
     me.position.set(Math.cos(a) * rr, base + r * 0.7 + R() * Math.max(4, h - base - r * 1.7), Math.sin(a) * rr); me.scale.set(1, 0.45 + R() * 0.3, 0.7 + R() * 0.3); me.rotation.set(R() * 1.2 - 0.6, R() * 6.28, R() * 1.2 - 0.6);
     me.castShadow = me.receiveShadow = true; g.add(me);
+    const a0 = new THREE.Vector3(0, tall ? ph + h * 0.5 - 2 : ph - 1, 0), dv = me.position.clone().sub(a0), st = cyl(g, 0.45, 0.8, dv.length(), M('paint', tall ? '#5A4632' : '#4E6B3A'), 0, 0, 0, 5);
+    st.position.copy(a0).addScaledVector(dv, 0.5); st.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.normalize()); st.castShadow = false;
   }
 };
 
@@ -268,9 +273,9 @@ B.tower = (g, it) => {
   if (v === 'dw') { baseCab(g, w, d, h, it.color); box(g, w - 1.5, h - 18, 1, STEEL(), 0, 10 + (h - 14) / 2, d / 2 - 1.6); return; }
   const m = finish(it.color);
   box(g, w - 4, 8, d - 8, DARK(), 0, 4, -2); box(g, w, h - 8, d - 3, m, 0, 8 + (h - 8) / 2, -1.5);
-  const ov = (y, hh) => { box(g, w - 6, hh, 2.5, M('gloss', '#101113'), 0, y, d / 2 - 1.2, 0.5); box(g, w - 16, 1.4, 2, STEEL(), 0, y + hh / 2 - 5, d / 2 + 1); };
-  if (w <= 90 && h >= 150) { ov(105, 56); if (v === 2) ov(152, 34); box(g, w - 1, 68, 2, m, 0, 8 + 35, d / 2 - 1.4); box(g, w - 1, h - (v === 2 ? 174 : 138), 2, m, 0, h - (h - (v === 2 ? 172 : 136)) / 2, d / 2 - 1.4); }
-  else { const n = Math.max(2, Math.round(w / 50)), dw = (w - 0.6) / n; for (let i = 0; i < n; i++) box(g, dw - 0.8, h - 10, 2, m, -w / 2 + 0.3 + dw * (i + 0.5), 8 + (h - 8) / 2, d / 2 - 1.4); }
+  const ov = (y, hh) => { box(g, w - 6, hh, 2.5, M('gloss', '#101113'), 0, y, d / 2 - 1.75, 0.5); box(g, w - 16, 1.4, 2, STEEL(), 0, y + hh / 2 - 5, d / 2 + 0.4); };
+  if (w <= 90 && h >= 150) { ov(105, 56); if (v === 2) ov(152, 34); box(g, w - 1, 68, 2, m, 0, 8 + 35, d / 2 - 2); box(g, w - 1, h - (v === 2 ? 174 : 138), 2, m, 0, h - (h - (v === 2 ? 172 : 136)) / 2, d / 2 - 2); }
+  else { const n = Math.max(2, Math.round(w / 50)), dw = (w - 0.6) / n; for (let i = 0; i < n; i++) box(g, dw - 0.8, h - 10, 2, m, -w / 2 + 0.3 + dw * (i + 0.5), 8 + (h - 8) / 2, d / 2 - 2); }
 };
 
 // ---- 衛浴 ----
@@ -288,8 +293,8 @@ B.toilet = (g, it) => {
 };
 B.vanity = (g, it) => {
   const { w, d, h, v } = it, c = M('ceramic', '#F6F6F4');
-  if (v === 'ped') cyl(g, 9, 11, h - 14, c, 0, (h - 14) / 2, -2, 20);
-  else { const m = finish(it.styled ? 'white' : it.color); box(g, w - 2, 50, d - 4, m, 0, 28 + 25, -2); const n = w > 75 ? 2 : 1; for (let i = 0; i < n; i++) { const dw = (w - 2.6) / n; box(g, dw - 0.7, 48, 1.8, m, -(w - 2.6) / 2 + dw * (i + 0.5), 53, d / 2 - 3.2); box(g, 1.1, 12, 1.5, STEEL(), -(w - 2.6) / 2 + dw * (i + 0.5) + (i ? -1 : 1) * (n === 1 ? dw * 0.3 : dw / 2 - 4), 60, d / 2 - 1.6); } }
+  if (v === 'ped') cyl(g, 9, 11, h - 6, c, 0, (h - 6) / 2, -2, 20);
+  else { const m = finish(it.styled ? 'white' : it.color); box(g, w - 2, 50, d - 4, m, 0, h - 32, -2); if (h > 60) box(g, w - 8, h - 56, d - 12, m, 0, (h - 56) / 2, -3); const n = w > 75 ? 2 : 1; for (let i = 0; i < n; i++) { const dw = (w - 2.6) / n; box(g, dw - 0.7, 48, 1.8, m, -(w - 2.6) / 2 + dw * (i + 0.5), h - 32, d / 2 - 3.1); box(g, 1.1, 12, 1.5, STEEL(), -(w - 2.6) / 2 + dw * (i + 0.5) + (i ? -1 : 1) * (n === 1 ? dw * 0.3 : dw / 2 - 4), h - 25, d / 2 - 1.5); } }
   box(g, w, 7, d, c, 0, h - 3.5, 0, 2.2);
   const xs = v === 'double' ? [-w / 4, w / 4] : [0];
   for (const x of xs) {
@@ -309,7 +314,7 @@ B.shower = (g, it) => {
   box(g, w, 5, d, M('ceramic', '#F1F1EF'), 0, 2.5, 0, 1);
   box(g, w, h - 5, 1, gl, 0, 5 + (h - 5) / 2, d / 2 - 0.5).castShadow = false; box(g, 1, h - 5, d, gl, w / 2 - 0.5, 5 + (h - 5) / 2, 0).castShadow = false;
   box(g, w, 2.5, 2.5, ch, 0, h - 1.2, d / 2 - 1.2); box(g, 2.5, 2.5, d, ch, w / 2 - 1.2, h - 1.2, 0); box(g, 2.5, h - 5, 2.5, ch, w / 2 - 1.2, 5 + (h - 5) / 2, d / 2 - 1.2);
-  cyl(g, 1.2, 1.2, h - 20, ch, -w / 2 + 10, (h - 20) / 2 + 5, -d / 2 + 6, 10); cyl(g, 11, 11, 1.2, ch, -w / 2 + 10, h - 14, -d / 2 + 20, 20); const a = cyl(g, 1, 1, 16, ch, -w / 2 + 10, h - 13, -d / 2 + 13, 8); a.rotation.x = Math.PI / 2;
+  cyl(g, 1.2, 1.2, h - 17, ch, -w / 2 + 10, (h - 17) / 2 + 5, -d / 2 + 6, 10); cyl(g, 11, 11, 1.2, ch, -w / 2 + 10, h - 14, -d / 2 + 20, 20); const a = cyl(g, 1, 1, 16, ch, -w / 2 + 10, h - 13, -d / 2 + 13, 8); a.rotation.x = Math.PI / 2;
 };
 B.mirror = (g, it) => {
   const { w, d, h, v } = it;
@@ -442,7 +447,7 @@ B.table = (g, it, P, o) => {
     if (!low) rbox(g, w - 30, 6, d - 30, lg, 0, h - 5.8, 0, 1);
     const ix = low ? 8 : 15, iz = low ? 8 : 14, rt = low ? 2.2 : 3.3, rb = low ? 1.3 : 1.7;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, h - 2.8, rt, rb, lg, sx * Math.max(4, w / 2 - ix), sz * Math.max(4, d / 2 - iz), w > 60 ? 0.1 : 0.05, null);
-    if (low && w > 60) rbox(g, w - 22, 1.8, d - 22, top, 0, 13, 0, 0.8);
+    if (low && w > 60) rbox(g, w - 15, 1.8, d - 15, top, 0, 13, 0, 0.8);
     if (it.cat === 'desk') { rbox(g, w * 0.3, 11, d - 14, lg, w / 2 - w * 0.15 - 12, h - 8.3, 0, 0.8); rbox(g, 10, 1, 1.6, BRASSY(), w / 2 - w * 0.15 - 12, h - 8.3, d / 2 - 6.4, 0.3); }
     if (it.cat === 'dresser' && w >= 70) for (const sx of [-1, 1]) { rbox(g, w * 0.28, 9, d - 10, lg, sx * w * 0.27, h - 7.3, 0, 0.8); rbox(g, 8, 1, 1.6, BRASSY(), sx * w * 0.27, h - 7.3, d / 2 - 4.4, 0.3); }
     if (v === 'mirror') { const mh = it.h - h, mm = mesh(g, new THREE.CylinderGeometry(w * 0.3, w * 0.3, 2.2, 48), BRASSY(), 0, h + mh / 2, -d / 2 + 1.6); mm.rotation.x = Math.PI / 2; mm.scale.z = 1; mm.scale.y = 1; mm.scale.x = 1; mm.scale.set(1, 1, mh / (w * 0.6)); const mf = mesh(g, new THREE.CylinderGeometry(w * 0.3 - 1.4, w * 0.3 - 1.4, 0.5, 48), MT.mirror(), 0, h + mh / 2, -d / 2 + 2.9); mf.rotation.x = Math.PI / 2; mf.scale.set(1, 1, (mh - 2.8) / (w * 0.6 - 2.8)); }
@@ -451,7 +456,7 @@ B.table = (g, it, P, o) => {
   if (it.cat === 'dtable') {
     if (v !== 'round') mesh(g, new THREE.BoxGeometry(Math.min(38, w * 0.3), 0.25, d - 4), MT.fabric('#A9A294', 1), 0, h + 0.13, 0);
     vase(g, 0, h + 0.25, 0, 1, '#D9D2C4', 8);
-    if (w >= 110) for (const [x, z] of [[-w / 4, -d / 4 - 3], [w / 4, d / 4 + 3]]) { lathe(g, [[0, 0.5], [7.5, 0.5], [12.5, 2.2], [13, 2.6], [7.5, 1.1], [0, 1.1]], MT.ceramic('#EEEAE2'), x, h, z); lathe(g, [[0, 0.5], [4.5, 0.5], [7, 3.6], [7.3, 3.8], [4.5, 1], [0, 1]], MT.ceramic('#3F5A54'), x, h + 0.7, z); }
+    if (w >= 110) for (const [x, z] of [[-w / 4, -d / 4 - 3], [w / 4, d / 4 + 3]]) { lathe(g, [[0, 0.5], [7.5, 0.5], [12.5, 2.2], [13, 2.6], [7.5, 1.1], [0, 1.1]], MT.ceramic('#EEEAE2'), x, h - 0.5, z); lathe(g, [[0, 0.5], [4.5, 0.5], [7, 3.6], [7.3, 3.8], [4.5, 1], [0, 1]], MT.ceramic('#3F5A54'), x, h + 0.1, z); }
   } else if (it.cat === 'coffee' && w >= 80) { books(g, -w * 0.16, h, d * 0.05, 2, 0.3); vase(g, w * 0.2, h, -d * 0.1, 0.5, '#3F5A54'); }
   else if (it.cat === 'side' || it.cat === 'nstand') vase(g, 0, h, 0, 0.42, '#EEEAE2');
 };
@@ -464,8 +469,10 @@ B.chair = (g, it, P, o) => {
   if (v === 'bar') rbox(g, w - 10, 1.6, 1.6, MT.metal('#AEB3B8'), 0, 26, d / 2 - 5.6, 0.6);
   if (v !== 'bar' || true) cushion(g, w - 4, v === 'pad' ? 6 : 3.2, d - 8, v === 'pad' || v === 'bar' ? f : wm, 0, sh + (v === 'pad' ? 3.9 : 2.4), 0.6, { r: v === 'pad' ? 2.7 : 1.4, bulge: v === 'pad' ? 0.35 : 0.1, pipe: v === 'pad' });
   const bh = Math.min(22, (h - sh) * 0.5), bend = (geo) => { const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); pos.setZ(i, pos.getZ(i) + 0.013 * x * x); } return smooth(geo); };
-  mesh(g, bend(new RoundedBoxGeometry(w - 5, bh, 2.8, 4, 1.2)), wm, 0, h - bh / 2 - 1, -d / 2 + 0.6).rotation.x = -0.1;
-  if (v === 'pad') mesh(g, bend(new RoundedBoxGeometry(w - 9, bh - 5, 3.4, 4, 1.6)), f, 0, h - bh / 2 - 1, -d / 2 + 2.3).rotation.x = -0.1;
+  // 椅背柱往後斜，椅背板兩端往前彎：算出柱子在椅背高度的位置，讓板子兩端剛好嵌進柱子
+  const by = h - bh / 2 - 1, postZ = -d / 2 + 6 - Math.tan(0.1) * (by - (h / 2 - 0.5)), e = 0.013 * ((w - 5) / 2 - 2) ** 2, bz = postZ - e;
+  mesh(g, bend(new RoundedBoxGeometry(w - 5, bh, 2.8, 4, 1.2)), wm, 0, by, bz).rotation.x = -0.1;
+  if (v === 'pad') mesh(g, bend(new RoundedBoxGeometry(w - 9, bh - 5, 3.4, 4, 1.6)), f, 0, by, bz + 1.7).rotation.x = -0.1;
 };
 
 B.rug = (g, it) => {
@@ -486,7 +493,7 @@ B.cab = (g, it, P, o) => {
   rbox(g, dw, bh - 4, 1, MT.flat(shade(WOODS[f] || WOODS.oak, 0.4), 0.7), x0 + dw / 2, by, d / 2 - 1.6, 0.3);
   for (let x = 0.95; x < dw; x += 2.3) { if (Math.abs(x - dw / 2) < 1) continue; mesh(g, new THREE.CylinderGeometry(0.9, 0.9, bh - 4, 8), wm, x0 + x, by, d / 2 - 0.75); }
   for (const s of [-1, 1]) rbox(g, 0.9, 9, 1.6, BRASSY(), x0 + dw / 2 + s * 2.6, by + 4, d / 2 + 0.6, 0.3);
-  rbox(g, open - 3, 1.4, d - 5, wm, nx, by + 0.5, 0, 0.4);
+  rbox(g, open - 1.2, 1.4, d - 5, wm, w / 2 - open / 2 - 1.25, by + 0.5, 0, 0.4);
   if (!o.decor) return;
   let bx = nx - open / 2 + 3; for (const [bw, hh, c] of [[3.2, 13, '#B5654A'], [2.6, 14, '#EDE6D8'], [4, 12.5, '#2F3E5C'], [3, 14, '#7C8471'], [2.4, 12, '#C8A464']]) { if (bx + bw > nx + open / 2 - 12 || hh > bh / 2 - 3) continue; rbox(g, bw, hh, 18, MT.flat(c, 0.8), bx + bw / 2, by + 1.2 + hh / 2, d / 2 - 12, 0.4); bx += bw + 0.25; }
   vase(g, -w / 2 + 22, h, 2, 1.05, '#3F5A54'); vase(g, -w / 2 + 40, h, -4, 0.58, '#EEEAE2'); books(g, w / 2 - 30, h, 1, 3, -0.1);

@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112c';
-import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112c';
-import { buildItem, buildPerson, M } from './models.js?v=20261112c';
-import * as MT from './mats.js?v=20261112c';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112e';
+import { getItem, STYLES, resolvePeople, keepOffBeds } from './catalog.js?v=20261112e';
+import { buildItem, buildPerson, M } from './models.js?v=20261112e';
+import * as MT from './mats.js?v=20261112e';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -329,6 +329,7 @@ function show(name) {
   $('hud').classList.toggle('hidden', name !== 'play');
   document.body.dataset.screen = name; invalidate(6);
   applyOffset(); setGoal(); updateHud();
+  if (name === 'play') Object.assign(view, goal);   // 進鳥瞰時直接定位、不滑動鏡頭：鏡頭移動中接觸陰影會抖動，看起來像物件在閃
 }
 $('startBtn').addEventListener('click', () => show('select'));
 // 選戶型：卡片依 UNITS 產生；換戶型時重建房子、家具與燈

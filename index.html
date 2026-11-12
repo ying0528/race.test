@@ -33,9 +33,10 @@
 
   #hud > * { position: fixed; }
   .card { background: rgba(255, 255, 255, 0.94); border-radius: 16px; box-shadow: 0 8px 26px rgba(25, 30, 40, 0.14); }
-  #title { left: 20px; top: 16px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+  #titleWrap { left: 20px; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  #title { padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
   #title b { font-size: 20px; } #title span { font-size: 13px; color: #5F6672; }
-  #reselectBtn { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #D9D5CE; background: #fff; font-family: inherit; font-size: 14px; font-weight: 700; color: #1D2129; cursor: pointer; }
+  #reselectBtn { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #D9D5CE; background: rgba(255, 255, 255, 0.94); box-shadow: 0 6px 18px rgba(25, 30, 40, 0.12); font-family: inherit; font-size: 14px; font-weight: 700; color: #1D2129; cursor: pointer; }
   #reselectBtn:hover { border-color: #A0673A; color: #A0673A; }
   body[data-mode="tour"] #reselectBtn { display: none; }
   #modeChip { padding: 6px 14px; border-radius: 999px; background: #A0673A; color: #fff; font-size: 14px; font-weight: 700; }
@@ -70,7 +71,7 @@
 </div>
 
 <div id="hud" class="hidden">
-  <div id="title" class="card"><div><b id="unitName"></b><br><span id="unitSpec"></span></div><div id="modeChip">全戶鳥瞰</div><button id="reselectBtn">← 重選戶型</button></div>
+  <div id="titleWrap"><div id="title" class="card"><div><b id="unitName"></b><br><span id="unitSpec"></span></div><div id="modeChip">全戶鳥瞰</div></div><button id="reselectBtn">← 重選戶型</button></div>
   <div id="panel" class="card">
     <div id="qr">產生中…</div>
     <div style="font-size:14px;font-weight:700;text-align:center">手機掃碼加入</div>
@@ -83,6 +84,6 @@
   <div id="tip" class="card">3D 畫面為示意，家具與裝潢非交屋附贈，實際以合約為準。</div>
 </div>
 
-<script type="module" src="./js/host.js?v=20261112c"></script>
+<script type="module" src="./js/host.js?v=20261112e"></script>
 </body>
 </html>

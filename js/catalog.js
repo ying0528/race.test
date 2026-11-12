@@ -190,7 +190,7 @@ export function planColor(it) {
 
 // ---------- 人偶姿勢：在椅子上坐，其餘站著；人偶不能和床重疊 ----------
 function seatOf(s) {
-  if (s.t === 'ochair') return { h: 50, single: true, back: -18 };
+  if (s.t === 'ochair') return { h: Math.min(46, s.h * 0.5) + 4, single: true, back: 2 - s.w * 0.4 + 4 };
   if (s.t === 'chair') {
     if (s.v === 'bench') return { h: s.h, single: false, xr: s.w / 2 - 22, center: true };
     return { h: s.v === 'bar' ? 76 : s.v === 'pad' ? 51 : 47, single: true, back: -s.d / 2 + 4 };
