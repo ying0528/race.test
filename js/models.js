@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112l';
-import * as MT from './mats.js?v=20261112l';
+import { WOODS } from './catalog.js?v=20261112m';
+import * as MT from './mats.js?v=20261112m';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -280,6 +280,74 @@ B.tower = (g, it) => {
   else { const n = Math.max(2, Math.round(w / 50)), dw = (w - 0.6) / n; for (let i = 0; i < n; i++) box(g, dw - 0.8, h - 10, 2, m, -w / 2 + 0.3 + dw * (i + 0.5), 8 + (h - 8) / 2, d / 2 - 2); }
 };
 
+// ---- 裝修櫃與牆上置物架（背面在 z = -d/2，貼牆；寬度可伸縮，門片數跟著變） ----
+const BCOL = ['#C96F4A', '#3F5A54', '#E8E2D4', '#2F3E5C', '#D8B35A', '#8C8F94', '#B5673A', '#EFEAE0'];
+function builtKit(g, it) {
+  const D = it.d, c = it.color && it.color[0] === '#' ? it.color : '#D9C2A3', GL = it.fin === 'glass' || it.fin === 'frost', woodC = { '#D9C2A3': 1, '#C08A52': 1, '#7A5236': 1 }[c];
+  const main = it.fin === 'matte' || (GL && !woodC) ? MT.flat(c, 0.5) : MT.wood(c, { rings: 16, warp: 0.35, vert: true, gloss: 0.1 }), pane = it.fin === 'frost' ? MT.frost() : MT.glass('#CFE3E6'); const inner = MT.flat('#8A8278', 0.9);
+  const dark = c === '#2E2F31' || c === '#5A5E64', hm = dark ? BRASS() : DARK(), white = MT.flat('#F3F0EA', 0.5);
+  // b：x 置中、y0 為底、z0 從背牆算起
+  const b = (w, h, d, mat, x, y0, z0) => box(g, w, h, d, mat, x, y0 + h / 2, -D / 2 + z0 + d / 2);
+  const door = (w, h, mat, x, y0, z0, hs = 0) => {
+    if (GL) {   // 玻璃門：細框（門片原本的顏色）＋玻璃，玻璃後面是比較暗的櫃內
+      const f = Math.min(4, w * 0.12), iw = w - 0.8 - 2 * f, ih = h - 0.8 - 2 * f; for (const s of [-1, 1]) b(f, h - 0.8, 2, mat, x + s * (w / 2 - 0.4 - f / 2), y0 + 0.4, z0); for (const yy of [y0 + 0.4, y0 + h - 0.4 - f]) b(w - 0.8, f, 2, mat, x, yy, z0);
+      b(iw, ih, 0.3, inner, x, y0 + 0.4 + f, z0 + 0.1); b(iw, ih, 0.6, pane, x, y0 + 0.4 + f, z0 + 0.7).castShadow = false;
+    } else b(w - 0.8, h - 0.8, 2, mat, x, y0 + 0.4, z0);
+    if (hs) b(1.2, Math.min(60, h * 0.3), 1.6, hm, x + hs * (w / 2 - 5), y0 + h / 2 - Math.min(30, h * 0.15), z0 + 2); };
+  const drawer = (w, h, mat, x, y0, z0) => { b(w - 0.8, h - 0.8, 2, mat, x, y0 + 0.4, z0); b(Math.min(20, w * 0.35), 1.2, 1.6, hm, x, y0 + h - 7, z0 + 2); };
+  const books = (x, y0, z0, w, n = 8, s = 1) => { let p = x - w / 2 + 2; for (let i = 0; i < n && p < x + w / 2 - 4; i++) { const t = 2.5 + ((i * 7 + s * 3) % 4), h = 18 + ((i * 5 + s) % 9); b(t, h, 14, MT.flat(BCOL[(i + s) % 8], 0.7), p + t / 2, y0, z0 + 3); p += t + 0.4; } };
+  const pot = (x, y0, z0) => { cyl(g, 5, 4, 9, MT.ceramic('#EEEAE2'), x, y0 + 4.5, -D / 2 + z0, 14); const l = new THREE.Mesh(new THREE.SphereGeometry(8, 12, 10), MT.flat('#4F7A45', 0.8)); l.position.set(x, y0 + 15, -D / 2 + z0); l.scale.y = 1.2; l.castShadow = true; g.add(l); };
+  return { D, main, white, hm, b, door, drawer, books, pot };
+}
+B.built = (g, it, P, o) => {
+  const { w: W, h: H, v } = it, K = builtKit(g, it), { D, main, white, b, door, drawer, books, pot } = K, dec = o.decor !== false, fabric = MT.fabric('#B8AC98', 4);
+  if (v === 'ward') { const n = Math.max(2, Math.round(W / 60)), dw = W / n; b(W, H, D - 2, main, 0, 0, 0); b(W - 4, 8, D - 6, DARK(), 0, 0, 0); for (let i = 0; i < n; i++) { const x = -W / 2 + dw * (i + 0.5); door(dw, H - 58, main, x, 8, D - 2, i % 2 ? -1 : 1); door(dw, 50, main, x, H - 50, D - 2); } return; }
+  if (v === 'tvwall') { const R = W - 60, cx = 30, n = Math.max(2, Math.round(R / 80)), dw = R / n;
+    b(R - 4, 210, 3, main, cx, 30, 0); b(60, H, D, white, -W / 2 + 30, 0, 0); door(60, H - 8, white, -W / 2 + 30, 8, D, 1);
+    b(R, 34, D, white, cx, 26, 0); for (let i = 0; i < n; i++) door(dw, 34, white, cx - R / 2 + dw * (i + 0.5), 26, D); b(R, 4, 26, white, cx, 196, 0);
+    b(Math.min(138, R - 30), 80, 4, MT.gloss('#05070A'), cx, 92, 3); if (dec) { books(cx - R * 0.28, 200, 0, 60, 7); pot(cx + R * 0.33, 200, 13); } return; }
+  if (v === 'entry') { const bw = Math.min(80, W * 0.4), cw = W - bw, cx = -W / 2 + cw / 2, bx = W / 2 - bw / 2, n = Math.max(1, Math.round(cw / 60)), dw = cw / n;
+    b(cw, 78, D - 2, white, cx, 20, 0); b(cw, 40, D - 4, main, cx, 98, 0); b(cw - 4, 34, D - 6, MT.flat('#8A6B4A', 0.8), cx, 101, 3); b(cw, H - 138, D - 2, white, cx, 138, 0);
+    for (let i = 0; i < n; i++) { const x = cx - cw / 2 + dw * (i + 0.5), hs = n === 1 ? 1 : i % 2 ? -1 : 1; door(dw, 78, white, x, 20, D - 2, hs); door(dw, H - 138, white, x, 138, D - 2, hs); }
+    b(bw, 40, D - 2, main, bx, 0, 0); b(bw - 4, 6, D - 4, fabric, bx, 40, 1); b(bw, 150, 3, main, bx, 46, 0); for (let i = 0; i < 3; i++) b(3, 3, 8, DARK(), bx - bw * 0.28 + i * bw * 0.28, 160, 3);
+    b(bw, H - 196, D - 2, white, bx, 196, 0); door(bw, H - 196, white, bx, 196, D - 2, -1); if (dec) pot(cx - cw * 0.25, 101, D - 12); return; }
+  if (v === 'books') { const n = Math.max(2, Math.round(W / 60)), cw = (W - 2.5) / n, rows = 5, rh = (H - 78.5 - 2.5) / rows;
+    b(W, H, 2, main, 0, 0, 0); for (let i = 0; i <= n; i++) b(2.5, H, D, main, -W / 2 + 1.25 + cw * i, 0, 0); b(W, 2.5, D, main, 0, 6, 0); for (let j = 0; j <= rows; j++) b(W, 2.5, D, main, 0, 76 + j * rh, 0); b(W - 4, 6, D - 3, DARK(), 0, 0, 0);
+    for (let i = 0; i < n; i++) { const x = -W / 2 + 1.25 + cw * (i + 0.5); door(cw, 67.5, main, x, 8.5, D, i % 2 ? -1 : 1); if (dec) for (let j = 0; j < rows; j++) { const y = 78.5 + j * rh, k = (i * 3 + j * 5) % 7; if (k < 4) books(x - (k % 2 ? 6 : 0), y, 8, cw - 14, 9, i + j); else if (k === 4) pot(x, y, 18); else if (k === 5) b(Math.min(30, cw - 14), 16, 22, MT.flat('#B9B4A8', 0.6), x, y, 6); } } return; }
+  if (v === 'pantry') { const n = Math.max(2, Math.round(W / 60)), dw = W / n, top = MT.marble('#EFEDE8');
+    b(W, 86, D - 2, main, 0, 0, 0); b(W - 4, 8, D - 6, DARK(), 0, 0, 0); for (let i = 0; i < n; i++) { const x = -W / 2 + dw * (i + 0.5); drawer(dw, 26, main, x, 58.4, D - 2); drawer(dw, 48, main, x, 8.4, D - 2); }
+    b(W + 2, 4, D, top, 0, 86, 0); b(W, 60, 3, MT.wood('#D9C2A3', { rings: 16, warp: 0.35, vert: true }), 0, 90, 0); for (const s of [-1, 1]) b(3, 60, D - 2, main, s * (W / 2 - 1.5), 90, 0);
+    b(W, H - 150, 40, main, 0, 150, 0); for (let i = 0; i < n; i++) door(dw, H - 150, main, -W / 2 + dw * (i + 0.5), 150, 40, i % 2 ? -1 : 1);
+    if (dec) { b(46, 30, 36, DARK(), -W * 0.27, 90, 12); b(22, 26, 22, MT.flat('#C9C9C7', 0.3), 0, 90, 18); pot(W * 0.3, 90, 30); } return; }
+  if (v === 'bedwall') { const mid = W - 100, n = Math.max(2, Math.round(mid / 50)), dw = mid / n;
+    for (const s of [-1, 1]) { b(50, H, D, main, s * (W / 2 - 25), 0, 0); door(50, H - 8, main, s * (W / 2 - 25), 8, D, -s); }
+    b(mid, 44, D, main, 0, H - 44, 0); for (let i = 0; i < n; i++) door(dw, 44, main, -mid / 2 + dw * (i + 0.5), H - 44, D);
+    b(mid, 120, 6, fabric, 0, 30, 0); for (let i = 1; i < n; i++) b(0.8, 120, 0.6, MT.flat('#9C927E', 0.8), -mid / 2 + dw * i, 30, 6); b(mid, 4, 18, main, 0, 150, 0); if (dec) { books(-mid * 0.28, 154, 0, 50, 6); pot(mid * 0.3, 154, 9); } return; }
+  if (v === 'desk') { const n = Math.max(2, Math.round(W / 53)), dw = W / n;
+    b(W, 4, D, main, 0, 72, 0); b(40, 72, D - 4, white, W / 2 - 20, 0, 0); for (let i = 0; i < 3; i++) drawer(40, 23.6, white, W / 2 - 20, 0.6 + i * 23.8, D - 4); b(3, 72, D - 4, main, -W / 2 + 1.5, 0, 0);
+    b(W, 60, 35, white, 0, H - 60, 0); for (let i = 0; i < n; i++) door(dw, 60, white, -W / 2 + dw * (i + 0.5), H - 60, 35); b(W, 3, 24, main, 0, H - 100, 0); b(W, H - 136, 2, MT.flat('#DAD4C8', 0.8), 0, 76, 0);
+    if (dec) { books(-W * 0.25, H - 97, 0, 60, 8, 2); pot(W * 0.3, H - 97, 12); } return; }
+  // bench：臥榻＋側邊書櫃
+  { const sw = 40, bw = W - sw, cx = -W / 2 + bw / 2, n = Math.max(1, Math.round(bw / 60)), dw = bw / n, sx = W / 2 - sw / 2, rows = 7, rh = (H - 2.5) / rows;
+    b(bw, 40, D, main, cx, 0, 0); b(bw - 4, 8, 2, DARK(), cx, 0, D - 4); for (let i = 0; i < n; i++) drawer(dw, 30, main, cx - bw / 2 + dw * (i + 0.5), 8, D); b(bw - 4, 7, D - 2, fabric, cx, 40, 1);
+    if (dec) for (const [x, col] of [[cx - bw / 2 + 22, '#3F5A54'], [cx - bw / 2 + 58, '#DDD3C2']]) { const p = b(34, 34, 10, MT.fabric(col, 3), x, 47, 2); p.rotation.x = -0.2; }
+    b(sw, H, 2, main, sx, 0, 0); for (const s of [-1, 1]) b(2.5, H, 35, main, sx + s * (sw / 2 - 1.25), 0, 0); for (let j = 0; j <= rows; j++) b(sw, 2.5, 35, main, sx, j * rh, 0);
+    if (dec) for (let j = 1; j < rows; j++) (j % 3 === 0 ? pot(sx, j * rh + 2.5, 18) : books(sx, j * rh + 2.5, 8, sw - 8, 6, j)); }
+};
+B.wshelf = (g, it, P, o) => {
+  const { w: W, h: H, v } = it, K = builtKit(g, it), { D, main, b, books, pot } = K, dec = o.decor !== false;
+  if (v === 'planks') { [0, 40, 80].forEach((y, j) => { b(W, 4, D, main, 0, y, 0); if (!dec) return; if (j === 0) { books(-W * 0.25, y + 4, 0, W * 0.4, 8, 1); pot(W * 0.33, y + 4, 11); } if (j === 1) { b(Math.min(30, W * 0.25), 16, 16, MT.flat('#B9B4A8', 0.6), -W * 0.3, y + 4, 3); books(W * 0.2, y + 4, 0, W * 0.4, 7, 4); } if (j === 2 && H > 90) { pot(-W * 0.33, y + 4, 11); } }); return; }
+  if (v === 'cubes') { const cube = (x, y) => { b(30, 2, D, main, x, y, 0); b(30, 2, D, main, x, y + 28, 0); b(2, 30, D, main, x - 14, y, 0); b(2, 30, D, main, x + 14, y, 0); };
+    [[100, -1, 1], [50, 1, 2], [0, -1, 3]].forEach(([y, s, k]) => { const cx = s * (W / 2 - 15), px = -s * 15; cube(cx, s < 0 ? y : y + 12); b(W - 30, 3, D, main, px, y + 12, 0); if (dec) { books(px - s * W * 0.12, y + 15, 0, W * 0.3, 7, k); pot(px + s * W * 0.1, y + 15, 10); } }); return; }
+  if (v === 'peg') { const dot = MT.flat('#9C927E', 0.9), wd = MT.wood('#D9C2A3', { rings: 16, warp: 0.35 }); b(W, H, 2, main, 0, 0, 0);
+    const nx = Math.max(3, Math.round((W - 20) / 10)), ny = 11; for (let i = 0; i <= nx; i++) for (let j = 0; j < ny; j += 1) b(1.4, 1.4, 0.4, dot, -W / 2 + 10 + (W - 20) * i / nx, 6 + j * 10.5, 2);
+    b(W * 0.5, 2, 14, wd, -W * 0.2, 80, 2); b(W * 0.34, 2, 14, wd, W * 0.28, 50, 2); b(W * 0.6, 2, 14, wd, W * 0.1, 8, 2); for (let i = 0; i < 4; i++) b(1.5, 1.5, 7, DARK(), i * 10, 22, 2);
+    if (dec) { books(-W * 0.2, 82, 0, W * 0.4, 5, 3); pot(W * 0.28, 52, 9); b(Math.min(30, W * 0.3), 16, 12, MT.flat('#B9B4A8', 0.6), W * 0.1, 10, 2); } return; }
+  // glassc：玻璃門展示櫃
+  { const n = Math.max(1, Math.round(W / 80)), bw = (W - 3) / n, gl = MT.glass('#CFE3E6');
+    b(W, H, 2, main, 0, 0, 0); b(W, 3, D, main, 0, 0, 0); b(W, 3, D, main, 0, H - 3, 0); for (let i = 0; i <= n; i++) b(3, H, D, main, -W / 2 + 1.5 + bw * i, 0, 0); for (const y of [H * 0.34, H * 0.66]) b(W - 4, 2, D - 4, main, 0, y, 2);
+    for (let i = 0; i < n; i++) { const x = -W / 2 + 1.5 + bw * (i + 0.5); b(bw - 4, H - 6, 1, gl, x, 3, D - 1).castShadow = false; b(1.2, 26, 1.6, K.hm, x + (i % 2 ? -1 : 1) * (bw / 2 - 6), H / 2 - 13, D); if (dec) [3, H * 0.34 + 2, H * 0.66 + 2].forEach((y, j) => ((i + j) % 2 ? pot(x, y, D * 0.5) : books(x, y, 4, bw - 16, 6, i + j + 2))); } }
+};
 // ---- 牆面與拉門（寬＝長度，沿 x；厚度沿 z） ----
 const WOODC = { '#D9C2A3': 1, '#C08A52': 1, '#7A5236': 1 };
 const frameMat = (c) => (WOODC[c] ? MT.wood(c, { rings: 14, warp: 0.5, vert: true, gloss: 0.1 }) : MT.flat(c, 0.45));

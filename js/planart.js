@@ -1,6 +1,6 @@
 // 手機平面圖的繪製：有材質的地板、粗黑牆、門弧線，以及每種家具的俯視圖（單位 cm，等比例）
-import { PLAN } from './plan.js?v=20261112l';
-import { STYLES, FLOORS, planColor, wallSegs } from './catalog.js?v=20261112l';
+import { PLAN } from './plan.js?v=20261112m';
+import { STYLES, FLOORS, planColor, wallSegs } from './catalog.js?v=20261112m';
 
 const INK = '#4A4038';
 function tint(hex, f) {   // f > 1 變亮，f < 1 變暗
@@ -85,6 +85,8 @@ export function itemArt(s) {
     }
     case 'shelf': { h = r(x0, y0, w, d, 2, c, S); const cols = ['#B5654A', '#2F3E5C', '#E3DED4', '#7C8471', '#C8A464', '#5E6B7A']; let x = x0 + 3, i = 0; while (x < w / 2 - 6) { const bw = 3 + (i * 7 % 4); h += r(x, y0 + 3, bw, d - 8, 0.5, cols[i % 6]); x += bw + 0.6; i++; } break; }
     case 'tv': h = r(x0, y0, w, d, 1.5, '#17171A'); break;
+    case 'built': { h = r(x0, y0, w, d, 1.5, c, S) + ln(x0 + 2, d / 2 - 2.5, w / 2 - 2, d / 2 - 2.5, INK, 1.4); const n = Math.max(2, Math.round(w / 60)); for (let i = 1; i < n; i++) h += ln(x0 + w * i / n, y0 + 2, x0 + w * i / n, d / 2 - 2, INK, 0.6, 'opacity=".5"'); break; }
+    case 'wshelf': h = r(x0 - 4, y0 - 8, w + 8, d + 16, 0, 'transparent') + r(x0, y0, w, d, 1, c, `stroke="${INK}" stroke-width=".9" stroke-dasharray="5 3" fill-opacity=".7"`); break;
     case 'wall': {   // 新增的牆面／拉門：實心區段畫成牆，開口留空；外面包一圈透明的觸控範圍，手指比較好點
       const fin = s.fin, fill = fin === 'glass' ? '#BFDDE6' : fin === 'frost' ? '#E9F0EF' : v === 'hslat' ? '#C9A77A' : v === 'hglass' ? '#9FB4BA' : '#3B3F46';
       h = r(x0 - 6, -22, w + 12, 44, 0, 'transparent');

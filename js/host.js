@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112l';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, LEN, wallSegs, resolvePeople, keepOffBeds } from './catalog.js?v=20261112l';
-import { buildItem, buildPerson, M } from './models.js?v=20261112l';
-import * as MT from './mats.js?v=20261112l';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112m';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, lenRange, elevRange, wallSegs, resolvePeople, keepOffBeds } from './catalog.js?v=20261112m';
+import { buildItem, buildPerson, M } from './models.js?v=20261112m';
+import * as MT from './mats.js?v=20261112m';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -163,7 +163,7 @@ function buildShell() {
 // ================= 家具 =================
 const furn = new THREE.Group(); scene.add(furn);
 const caps = new THREE.Group(); scene.add(caps);
-const CAP_T = new Set(['cab', 'shelf', 'fridge', 'tower', 'washer']), capGeo = new THREE.BoxGeometry(1, 0.004, 1);
+const CAP_T = new Set(['cab', 'shelf', 'fridge', 'tower', 'washer', 'built']), capGeo = new THREE.BoxGeometry(1, 0.004, 1);
 const capMat = new THREE.MeshStandardMaterial({ color: '#E6E2DA', roughness: 0.9 });
 function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片板子
   if (spec.t === 'wall') {   // 新增的牆：只在實心區段蓋上剖切面，門洞與拉門開口留空
@@ -194,7 +194,7 @@ function proto(sig, make, tall) {
 function sigOf(it, people, used) {
   const sk = it.st || state.style, spec = getItem(it.key, sk, it); if (!spec) return null;
   const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
-  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (spec.t === 'wall' ? '~L' + spec.w : '') };
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (lenRange(spec) ? '~L' + spec.w : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
@@ -467,7 +467,8 @@ function onMsg(entry, m) {
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
       state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
-    case 'len': { const it = find(m.id), s = it && getItem(it.key); if (s && s.t === 'wall') { it.len = Math.max(LEN.min, Math.min(LEN.max, Math.round(num(m.len, LEN.min, LEN.max) / LEN.step) * LEN.step)); syncItems(); } break; }
+    case 'len': { const it = find(m.id), R = it && lenRange(getItem(it.key)); if (R) { it.len = Math.round(num(m.len, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
+    case 'elev': { const it = find(m.id), s = it && getItem(it.key, null, it), R = elevRange(s); if (R) { it.el = Math.round(num(m.el, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;
     case 'add': {

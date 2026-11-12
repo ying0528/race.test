@@ -3,7 +3,7 @@
 // 之後要換成合作品牌的實際商品，只要改這個檔案的名稱與尺寸即可。
 export const WOODS = { oak: '#C9A77C', walnut: '#7A5236', white: '#F1EEE8', black: '#2E2F31', ash: '#DCCBB0', gray: '#8D8D8A', teak: '#A9763F' };
 
-export const GROUPS = ['客廳', '餐廳', '臥室', '書房', '收納', '裝飾', '廚具', '衛浴', '隔間'];
+export const GROUPS = ['客廳', '餐廳', '臥室', '書房', '收納', '裝飾', '廚具', '衛浴', '隔間', '裝修櫃'];
 
 export const CATS = [
   { id: 'sofa', n: '沙發', g: '客廳', t: 'sofa', items: [
@@ -136,6 +136,16 @@ export const CATS = [
   { id: 'washer', n: '洗衣機', g: '衛浴', t: 'washer', items: [
     ['滾筒洗衣機', 60, 60, 85], ['滾筒洗衣機', 60, 65, 85], ['洗脫烘滾筒', 60, 66, 85], ['直立洗衣機', 55, 58, 95, null, 'top'], ['直立洗衣機', 60, 62, 100, null, 'top'],
     ['直立洗衣機', 64, 67, 105, null, 'top'], ['乾衣機', 60, 60, 85], ['洗乾堆疊', 60, 65, 175, null, 'stack'], ['洗衣櫃（含洗衣機）', 80, 62, 90], ['小型洗衣機', 50, 50, 85, null, 'top']] },
+  // 裝修櫃（落地、靠牆）：寬度可伸縮，門片數量會跟著變
+  { id: 'built', n: '裝修櫃', g: '裝修櫃', t: 'built', items: [
+    ['頂天系統衣櫃', 240, 60, 280, '#D9C2A3', 'ward', 'veneer'], ['電視牆收納櫃', 300, 40, 280, '#D9C2A3', 'tvwall', 'veneer'],
+    ['玄關鞋櫃＋穿鞋椅', 200, 40, 280, '#D9C2A3', 'entry', 'veneer'], ['整面開放書牆', 240, 35, 280, '#D9C2A3', 'books', 'veneer'],
+    ['餐邊電器高櫃', 180, 60, 280, '#F1EEE8', 'pantry', 'matte'], ['床頭背牆＋吊櫃', 300, 40, 280, '#D9C2A3', 'bedwall', 'veneer'],
+    ['書桌＋上吊櫃', 160, 60, 250, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer']] },
+  // 牆上置物架：第 8 欄是預設離地高度
+  { id: 'wshelf', n: '牆上置物架', g: '裝修櫃', t: 'wshelf', items: [
+    ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
+    ['洞洞板置物牆', 100, 16, 120, '#CFC2B2', 'peg', 'matte', 90], ['懸吊玻璃展示櫃', 160, 35, 100, '#D9C2A3', 'glassc', 'veneer', 120]] },
   // 牆面與拉門：寬＝長度（可在手機上伸縮）、深＝厚度、高＝到天花板。第 6 欄是形式，第 7 欄是預設材質
   { id: 'wall', n: '牆面／拉門', g: '隔間', t: 'wall', items: [
     ['實牆', 200, 10, 280, '#F1EEE8', 'full', 'solid'], ['實牆＋門洞', 240, 10, 280, '#F1EEE8', 'open', 'solid'],
@@ -184,12 +194,14 @@ export const FINISH = {
   sofa: { mats: [['flannel', '絨布'], ['weave', '編織布'], ['leather', '皮革'], ['linen', '亞麻布']],
     colors: [['#C9C9C7', '淺灰'], ['#B8AC98', '米灰'], ['#DDD3C2', '奶油'], ['#B5673A', '焦糖'], ['#7A4E32', '咖啡'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#2E2F31', '黑']] },
   wall: { mats: [['solid', '實牆'], ['glass', '清玻璃'], ['frost', '霧面玻璃']], colors: WCOL, label: '牆面／外框顏色' },
+  built: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆'], ['glass', '清玻璃門'], ['frost', '霧面玻璃門']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#F1EEE8', '白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']], label: '櫃體顏色' },
+  shelf: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#F1EEE8', '白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']], label: '層板顏色' },
   slat: { mats: [['slat', '木格柵']], colors: WCOL, label: '格柵顏色' },
   gdoor: { mats: [['glass', '清玻璃'], ['frost', '霧面玻璃']], colors: WCOL, label: '外框顏色' },
   ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
-export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : null);
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? 'built' : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
 export function wallSegs(s) {
   const w = s.w;
@@ -198,7 +210,9 @@ export function wallSegs(s) {
   if (s.v === 'slide1') { const lw = (w - 16) / 2 + 4; return [[-w / 2, -w / 2 + 8 + lw], [w / 2 - 8, w / 2]]; }
   return [[-w / 2, w / 2]];
 }
-export const LEN = { min: 40, max: 600, step: 10 };   // 牆面可伸縮的長度（cm）
+// 可以伸縮寬度的種類與範圍（cm）；牆上置物架另外可以調離地高度
+export const lenRange = (s) => (!s ? null : s.t === 'wall' ? { min: 40, max: 600, step: 10 } : s.t === 'built' ? { min: 100, max: 400, step: 10 } : s.t === 'wshelf' ? { min: 60, max: 300, step: 10 } : null);
+export const elevRange = (s) => (s && s.t === 'wshelf' ? { min: 40, max: Math.max(40, 265 - s.h), step: 10 } : null);
 export function getItem(key, styleKey, it) {
   const [cid, i] = String(key).split(':');
   if (cid === 'person') { const p = PEOPLE[i]; return p ? { key, cat: 'person', catName: '人偶', t: 'person', name: `${p.n}（${p.h} cm）`, w: p.w, d: p.d, h: p.h, color: p.color, v: i, elev: 0 } : null; }
@@ -214,8 +228,10 @@ export function getItem(key, styleKey, it) {
   if (cat.t === 'mirror') elev = 105;
   if (r[5] === 'float') elev = 25;
   const s = { key, cat: cat.id, catName: cat.n, t: cat.t, name, w: r[1], d: r[2], h: r[3], color, v: r[5] || null, elev };
-  if (cat.t === 'wall') s.fin = r[6];
-  if (it && it.len && s.t === 'wall') s.w = Math.max(LEN.min, Math.min(LEN.max, it.len));   // 伸縮後的長度
+  if (cat.t === 'wall' || cat.t === 'built' || cat.t === 'wshelf') s.fin = r[6];
+  if (cat.t === 'wshelf') s.elev = r[7];
+  const lr = lenRange(s); if (it && it.len && lr) s.w = Math.max(lr.min, Math.min(lr.max, it.len));   // 伸縮後的寬度
+  const er = elevRange(s); if (it && it.el != null && er) s.elev = Math.max(er.min, Math.min(er.max, it.el));   // 置物架離地高度
   if (it && it.m && it.c && finishOf(s)) { s.fin = it.m; s.color = it.c; }   // 個別指定的材質與顏色
   return s;
 }

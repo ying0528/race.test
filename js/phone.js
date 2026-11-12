@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112l';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, LEN, resolvePeople, keepOffBeds } from './catalog.js?v=20261112l';
-import * as ART from './planart.js?v=20261112l';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112m';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261112m';
+import * as ART from './planart.js?v=20261112m';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -131,8 +131,12 @@ $('main').addEventListener('click', (e) => {
     send({ t: 'cut', i, on: !gone });
   }
   else if (a === 'len') {
-    const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it); if (!s || s.t !== 'wall') return;
-    it.len = Math.max(LEN.min, Math.min(LEN.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len });
+    const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return;
+    it.len = Math.max(R.min, Math.min(R.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len }); snapToWall(it);
+  }
+  else if (a === 'elev') {
+    const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = elevRange(s); if (!R) return;
+    it.el = Math.max(R.min, Math.min(R.max, s.elev + (+b.dataset.d))); send({ t: 'elev', id: it.id, el: it.el });
   }
   else if (a === 'rot' || a === 'del') {
     const it = S.st.items.find((i) => i.id === S.sel); if (!it) return;
@@ -188,16 +192,30 @@ function updateSel() {
   const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it);
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
   else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
-  else if (s.t === 'wall') el.innerHTML = `<b>${esc(s.name)}</b><span>長 ${s.w} cm</span><span class="lenb"><button data-act="len" data-d="-${LEN.step}" ${s.w <= LEN.min ? 'disabled' : ''}>－${LEN.step}</button><button data-act="len" data-d="${LEN.step}" ${s.w >= LEN.max ? 'disabled' : ''}>＋${LEN.step}</button></span>`;
+  else if (lenRange(s)) { const R = lenRange(s), E = elevRange(s), bt = (act, d, txt, off) => `<button data-act="${act}" data-d="${d}" ${off ? 'disabled' : ''}>${txt}</button>`;
+    el.innerHTML = `<b>${esc(s.name)}</b><span>${s.t === 'wall' ? '長' : '寬'} ${s.w}${E ? '・離地 ' + s.elev : ''}</span><span class="lenb">${bt('len', -R.step, '－' + R.step, s.w <= R.min)}${bt('len', R.step, '＋' + R.step, s.w >= R.max)}${E ? bt('elev', -E.step, '↓', s.elev <= E.min) + bt('elev', E.step, '↑', s.elev >= E.max) : ''}</span>`; }
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
+}
+// 裝修櫃與牆上置物架：離牆 70cm 內就自動貼上去、背面靠牆
+function snapToWall(it) {
+  const s = getItem(it.key, it.st || S.st.style, it), r = curRoom(); if (!s || !r || (s.t !== 'built' && s.t !== 'wshelf')) return;
+  const q = r.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || r.r, [x1, y1, x2, y2] = q, hd = s.d / 2, hw = s.w / 2;
+  const opts = [[it.y - y1, 0], [x2 - it.x, 90], [y2 - it.y, 180], [it.x - x1, 270]].sort((a, b) => a[0] - b[0]);
+  if (opts[0][0] > 70 + hd) return;
+  const k = opts[0][1], cl = (v, lo, hi) => (hi < lo ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
+  it.r = k;
+  if (k === 0) { it.y = y1 + hd; it.x = cl(it.x, x1 + hw, x2 - hw); } else if (k === 180) { it.y = y2 - hd; it.x = cl(it.x, x1 + hw, x2 - hw); }
+  else if (k === 90) { it.x = x2 - hd; it.y = cl(it.y, y1 + hw, y2 - hw); } else { it.x = x1 + hd; it.y = cl(it.y, y1 + hw, y2 - hw); }
+  it.x = Math.round(it.x); it.y = Math.round(it.y);
+  send({ t: 'rot', id: it.id, r: it.r }); send({ t: 'move', id: it.id, x: it.x, y: it.y });
 }
 function bindPlan() {
   const svg = $('plan');
   const pt = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); };
   const pts = new Map(); let lastSend = 0, pinch = null;
   const baseVB = () => { const r = curRoom().r; return [r[0] - PAD, r[1] - PAD, r[2] - r[0] + 2 * PAD, r[3] - r[1] + 2 * PAD]; };
-  const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) send({ t: 'move', id: it.id, x: it.x, y: it.y }); S.drag = null; };
+  const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) { send({ t: 'move', id: it.id, x: it.x, y: it.y }); snapToWall(it); } S.drag = null; };
   // 兩指：縮放與平移平面圖（改 viewBox，家具比例不變）
   const two = () => { const [a, b] = [...pts.values()]; return { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
   const startPinch = () => { const t = two(), q = svg.createSVGPoint(); q.x = t.mx; q.y = t.my; const a = q.matrixTransform(svg.getScreenCTM().inverse()); pinch = { d0: t.d, w0: (S.view || baseVB())[2], ax: a.x, ay: a.y }; };
@@ -246,7 +264,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112l'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112m'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -270,7 +288,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112l'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112m'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
