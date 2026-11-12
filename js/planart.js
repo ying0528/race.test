@@ -1,6 +1,6 @@
 // 手機平面圖的繪製：有材質的地板、粗黑牆、門弧線，以及每種家具的俯視圖（單位 cm，等比例）
-import { PLAN } from './plan.js?v=20261112m';
-import { STYLES, FLOORS, planColor, wallSegs } from './catalog.js?v=20261112m';
+import { PLAN } from './plan.js?v=20261112n';
+import { STYLES, FLOORS, planColor, wallSegs, doorGap } from './catalog.js?v=20261112n';
 
 const INK = '#4A4038';
 function tint(hex, f) {   // f > 1 變亮，f < 1 變暗
@@ -93,7 +93,7 @@ export function itemArt(s) {
       for (const [a, b] of wallSegs(s)) h += r(a, y0, b - a, d, 0, fill, `stroke="${INK}" stroke-width="${fin === 'solid' && v !== 'hslat' ? 0 : 1.6}"`);
       if (v === 'hslat') h += ln(x0, 0, w / 2, 0, '#8A6B4A', 2, 'stroke-dasharray="3 5"');
       if (v === 'open') { const dw = Math.min(90, w - 30); for (const sx of [-1, 1]) h += r(sx * dw / 2 - 1.5, y0 - 0.5, 3, d + 1, 0, '#4A3324'); }
-      if (v === 'slide2' || v === 'slide1') h += ln(x0, 0, w / 2, 0, INK, 0.8, 'stroke-dasharray="4 4" opacity=".6"');
+      if (v === 'slide2' || v === 'slide1') { const g = doorGap(s); h += r(g[0], -1.8, g[1] - g[0], 3.6, 0, fin === 'frost' ? '#E9F0EF' : '#BFDDE6', `stroke="${INK}" stroke-width="1.2"`); }
       break; }
     case 'chair': {
       if (v === 'bench') { h = r(x0, y0, w, d, 3, c, S) + grain(w, d, c); break; }

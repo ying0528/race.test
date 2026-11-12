@@ -203,11 +203,17 @@ export const FINISH = {
 };
 export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? 'built' : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
+// 拉門的開口（門關著時這段被門扇擋住，3D 導覽走近才會滑開）。回傳 [x1, x2] 或 null
+export function doorGap(s) {
+  const w = s.w;
+  if (s.v === 'slide2') { const lw = (w - 12) / 2 + 3; return [-w / 2 + 6 + lw, w / 2 - 6]; }   // 雙扇：右扇滑到左扇後面
+  if (s.v === 'slide1') return [-w / 2 + 8 + (w - 16) / 2, w / 2 - 8];   // 單扇：門扇滑到左半邊的固定牆前面
+  return null;
+}
 export function wallSegs(s) {
   const w = s.w;
   if (s.v === 'open') { const dw = Math.min(90, w - 30); return [[-w / 2, -dw / 2], [dw / 2, w / 2]]; }
-  if (s.v === 'slide2') { const lw = (w - 12) / 2 + 3; return [[-w / 2, -w / 2 + 6 + lw * 1.25], [w / 2 - 6, w / 2]]; }
-  if (s.v === 'slide1') { const lw = (w - 16) / 2 + 4; return [[-w / 2, -w / 2 + 8 + lw], [w / 2 - 8, w / 2]]; }
+  const g = doorGap(s); if (g) return [[-w / 2, g[0]], [g[1], w / 2]];
   return [[-w / 2, w / 2]];
 }
 // 可以伸縮寬度的種類與範圍（cm）；牆上置物架另外可以調離地高度

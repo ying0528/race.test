@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112m';
-import * as MT from './mats.js?v=20261112m';
+import { WOODS } from './catalog.js?v=20261112n';
+import * as MT from './mats.js?v=20261112n';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -376,16 +376,24 @@ B.wall = (g, it) => {
     return;
   }
   const pm = paneMat(fin), top = MT.wallPaint(WHITE_WALL);
-  if (v === 'slide2') {   // 雙扇對開：一扇關著、一扇拉開一半，中間可以走過去
+  // 門扇放在自己的群組裡，userData.leaf = { x0: 關著的位置, dx: 打開要移動的距離 }，3D 導覽時由大螢幕推動
+  const leaf = (x, dx) => { const q = new THREE.Group(); q.position.x = x; q.userData.leaf = { x0: x, dx }; g.add(q); return q; };
+  const still = (q) => { q.traverse((n) => { if (n.isMesh) n.castShadow = false; }); return q; };
+  if (v === 'slide2') {   // 雙扇：左扇固定、右扇關著；走近時右扇滑到左扇後面
     box(g, w, h - 230, d - 2, top, 0, 230 + (h - 230) / 2, 0); box(g, w, 6, d, fm, 0, 227, 0); for (const s of [-1, 1]) box(g, 6, 224, d, fm, s * (w / 2 - 3), 112, 0);
-    const lw = (w - 12) / 2 + 3;
-    for (const [x, z] of [[-w / 2 + 6 + lw / 2, -2.2], [-w / 2 + 6 + lw * 0.75, 2.2]]) { for (const s of [-1, 1]) box(g, 5, 222, 3.5, fm, x + s * (lw / 2 - 2.5), 113, z); box(g, lw, 5, 3.5, fm, x, 4.5, z); box(g, lw, 5, 3.5, fm, x, 221.5, z); box(g, lw - 10, 212, 1, pm, x, 113, z).castShadow = false; }
+    const lw = (w - 12) / 2 + 3, xa = -w / 2 + 6 + lw / 2, xb = w / 2 - 6 - lw / 2;
+    const panel = (q, z) => { for (const s of [-1, 1]) box(q, 5, 222, 3.5, fm, s * (lw / 2 - 2.5), 113, z); box(q, lw, 5, 3.5, fm, 0, 4.5, z); box(q, lw, 5, 3.5, fm, 0, 221.5, z); box(q, lw - 10, 212, 1, pm, 0, 113, z).castShadow = false; box(q, 1.6, 24, 2, STEEL(), -(lw / 2 - 8), 105, z + 2.6 * Math.sign(z)); };
+    const a = new THREE.Group(); a.position.x = xa; g.add(a); panel(a, -2.2);
+    const qb = leaf(xb, xa - xb); panel(qb, 2.2); still(qb);
     return;
   }
-  // slide1：單扇懸吊式，門扇停在左半邊
+  // slide1：單扇懸吊式。左半邊是固定的白牆，門扇關著時擋住右半邊，走近時滑到白牆前面
   box(g, w, h - 238, d, top, 0, 238 + (h - 238) / 2, 0); box(g, w, 6, d - 2, fm, 0, 235, 0); for (const s of [-1, 1]) box(g, 8, 232, d, top, s * (w / 2 - 4), 116, 0);
-  const lw = (w - 16) / 2 + 4, x = -w / 2 + 8 + lw / 2, z = d / 2 + 1.5;
-  for (const s of [-1, 1]) box(g, 2.5, 230, 3, fm, x + s * (lw / 2 - 1.25), 117, z); for (const y of [3.2, 117, 230.8]) box(g, lw, 2.5, 3, fm, x, y, z); box(g, lw - 5, 226, 1, pm, x, 117, z).castShadow = false;
+  const iw = w - 16, lw = iw / 2 + 4, xc = w / 2 - 8 - lw / 2, xo = -w / 2 + 8 + lw / 2, z = d / 2 + 1.5;
+  box(g, iw / 2, 232, d, top, -w / 2 + 8 + iw / 4, 116, 0); box(g, iw / 2, 8, d + 1, MT.flat('#E4E1DB', 0.5), -w / 2 + 8 + iw / 4, 4, 0);
+  const q = still(leaf(xc, xo - xc));
+  for (const s of [-1, 1]) box(q, 2.5, 230, 3, fm, s * (lw / 2 - 1.25), 117, z); for (const y of [3.2, 117, 230.8]) box(q, lw, 2.5, 3, fm, 0, y, z); box(q, lw - 5, 226, 1, pm, 0, 117, z).castShadow = false; box(q, 1.6, 26, 2, STEEL(), -(lw / 2 - 7), 105, z + 2.4);
+  still(q);
 };
 // ---- 衛浴 ----
 B.toilet = (g, it) => {

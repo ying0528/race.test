@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112m';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, lenRange, elevRange, wallSegs, resolvePeople, keepOffBeds } from './catalog.js?v=20261112m';
-import { buildItem, buildPerson, M } from './models.js?v=20261112m';
-import * as MT from './mats.js?v=20261112m';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112n';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261112n';
+import { buildItem, buildPerson, M } from './models.js?v=20261112n';
+import * as MT from './mats.js?v=20261112n';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -263,7 +263,7 @@ function applyMode() {
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
   bulbs.children.forEach((p) => { p.intensity = t && p.userData.on ? BULB : 0; });
   caps.visible = !t;
-  renderer.localClippingEnabled = !t; setScreens(t);
+  renderer.localClippingEnabled = !t; setScreens(t); if (!t) updateDoors(0, false);
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
@@ -281,17 +281,38 @@ function buildColliders() {
     const s = getItem(it.key, null, it); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp' || s.t === 'person') continue;
     if (s.t === 'wall') {   // 牆：每個實心區段一個碰撞盒，門洞與拉門開口可以走過去
       const k = it.r % 360, ax = k === 0 ? [1, 0] : k === 90 ? [0, 1] : k === 180 ? [-1, 0] : [0, -1], t = s.d / 2;
-      for (const [a, b] of wallSegs(s)) { const p1 = [it.x + ax[0] * a, it.y + ax[1] * a], p2 = [it.x + ax[0] * b, it.y + ax[1] * b];
-        colliders.push([(Math.min(p1[0], p2[0]) - (ax[0] ? 0 : t)) * cm, (Math.min(p1[1], p2[1]) - (ax[1] ? 0 : t)) * cm, (Math.max(p1[0], p2[0]) + (ax[0] ? 0 : t)) * cm, (Math.max(p1[1], p2[1]) + (ax[1] ? 0 : t)) * cm]); }
+      const g = doorGap(s), seg = (a, b, ref) => { const p1 = [it.x + ax[0] * a, it.y + ax[1] * a], p2 = [it.x + ax[0] * b, it.y + ax[1] * b];
+        colliders.push([(Math.min(p1[0], p2[0]) - (ax[0] ? 0 : t)) * cm, (Math.min(p1[1], p2[1]) - (ax[1] ? 0 : t)) * cm, (Math.max(p1[0], p2[0]) + (ax[0] ? 0 : t)) * cm, (Math.max(p1[1], p2[1]) + (ax[1] ? 0 : t)) * cm, ref]); };
+      for (const [a, b] of wallSegs(s)) seg(a, b);
+      if (g) seg(g[0], g[1], doorOf(it.id));   // 拉門開口：門開到八成以上才能走過去
       continue;
     }
     const rot = it.r % 180 !== 0, hw = (rot ? s.d : s.w) / 2 - 8, hd = (rot ? s.w : s.d) / 2 - 8;
     if (hw > 2 && hd > 2) colliders.push([(it.x - hw) * cm, (it.y - hd) * cm, (it.x + hw) * cm, (it.y + hd) * cm]);
   }
 }
+// ---- 拉門：3D 導覽時走到 1 公尺內，門扇用 1 秒滑開；走遠就關上。鳥瞰時一律關著 ----
+const doorState = new Map(), DOOR_NEAR = 1.0, DOOR_SECS = 1.0;
+function doorOf(id) { let d = doorState.get(id); if (!d) doorState.set(id, (d = { t: 0 })); return d; }
+function leavesOf(e) { if (e.leafOf !== e.o) { e.leafOf = e.o; e.leaves = []; e.o.traverse((n) => { if (n.userData.leaf) e.leaves.push(n); }); } return e.leaves; }
+function updateDoors(dt, on) {
+  for (const it of state.items) {
+    const e = objs.get(it.id); if (!e || !leavesOf(e).length) continue;
+    const s = getItem(it.key, null, it), g = s && doorGap(s), d = doorOf(it.id); if (!g) continue;
+    let want = 0;
+    if (on) { const k = it.r % 360, ax = k === 0 ? [1, 0] : k === 90 ? [0, 1] : k === 180 ? [-1, 0] : [0, -1];
+      const ax1 = (it.x + ax[0] * g[0]) * cm, az1 = (it.y + ax[1] * g[0]) * cm, ax2 = (it.x + ax[0] * g[1]) * cm, az2 = (it.y + ax[1] * g[1]) * cm;
+      const vx = ax2 - ax1, vz = az2 - az1, u = Math.max(0, Math.min(1, ((tour.x - ax1) * vx + (tour.z - az1) * vz) / (vx * vx + vz * vz || 1)));
+      want = Math.hypot(tour.x - (ax1 + vx * u), tour.z - (az1 + vz * u)) < DOOR_NEAR ? 1 : 0; }
+    const nt = on ? (want ? Math.min(1, d.t + dt / DOOR_SECS) : Math.max(0, d.t - dt / DOOR_SECS)) : 0;
+    if (nt === d.t && e.leafT === nt) continue; d.t = e.leafT = nt;
+    const k2 = nt * nt * (3 - 2 * nt); for (const l of e.leaves) l.position.x = l.userData.leaf.x0 + l.userData.leaf.dx * k2;
+  }
+}
 function collide(p) {
   const R = 0.2;
-  for (let k = 0; k < 2; k++) for (const [x1, z1, x2, z2] of colliders) {
+  for (let k = 0; k < 2; k++) for (const [x1, z1, x2, z2, door] of colliders) {
+    if (door && door.t > 0.8) continue;
     const nx = Math.max(x1, Math.min(p.x, x2)), nz = Math.max(z1, Math.min(p.z, z2));
     let dx = p.x - nx, dz = p.z - nz; const d2 = dx * dx + dz * dz;
     if (d2 >= R * R) continue;
@@ -344,7 +365,7 @@ function frame(now) {
     tour.yaw += t * 1.7 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.9 * dt));
     const dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.5 * dt;
     const np = { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
-    collide(np); tour.x = np.x; tour.z = np.z;
+    updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z;
     camera.position.set(tour.x, 1.5, tour.z);
     camera.lookAt(tour.x + dx * Math.cos(tour.pitch), 1.5 + Math.sin(tour.pitch), tour.z + dz * Math.cos(tour.pitch));
     if (Q0 === null) tuneQuality(dt);
@@ -499,4 +520,4 @@ wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera
 if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders };   // 給測試用
