@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS } from './catalog.js?v=20261112g';
-import * as MT from './mats.js?v=20261112g';
+import { WOODS } from './catalog.js?v=20261112h';
+import * as MT from './mats.js?v=20261112h';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -93,14 +93,15 @@ B.table = (g, it, P) => {
 
 B.cab = (g, it, P) => {
   const { w, d, h, v } = it;
-  const f = it.styled ? (it.cat === 'ward' || it.cat === 'shoe' ? 'white' : P.wood) : it.color, m = finish(f);
+  const f = it.styled ? (it.cat === 'ward' || it.cat === 'shoe' ? 'white' : P.wood) : it.color, fc = it.fin && it.color[0] === '#' ? it.color : null;
+  const m = !fc ? finish(f) : it.fin === 'matte' ? MT.flat(fc, 0.5) : it.fin === 'stone' ? MT.marble(fc) : MT.wood(fc, it.fin === 'veneer' ? { rings: 16, gloss: 0.1, warp: 0.35, vert: true } : { rings: 10, warp: 0.8, vert: true });
   const tall = h >= 120, float = v === 'float';
   const lh = float ? 0 : tall ? 6 : (it.cat === 'shoe' || h > 70) ? 8 : 12;
   if (!float) { if (tall || lh <= 8) box(g, w - 6, lh, d - 8, DARK(), 0, lh / 2, -1); else legs4(g, w, d, lh, f === 'black' ? DARK() : m, 3, 3.5, true); }
   const bh = h - lh;
   box(g, w, bh, d - 2, m, 0, lh + bh / 2, -1);
   if (!tall) box(g, w + 1, 2, d + 0.5, m, 0, h - 1, 0);
-  const hm = f === 'black' ? BRASS() : STEEL();
+  const hm = f === 'black' || fc === '#2E2F31' ? BRASS() : it.fin === 'veneer' || it.fin === 'stone' ? DARK() : STEEL();
   if (v === 'drawer') {
     const rows = Math.max(2, Math.round(bh / 24)), rh = (bh - 3) / rows;
     for (let i = 0; i < rows; i++) { const y = lh + 1 + rh * (i + 0.5); box(g, w - 1.6, rh - 1, 2, m, 0, y, d / 2 - 1); box(g, Math.min(16, w * 0.3), 1.2, 1.6, hm, 0, y + rh * 0.2, d / 2 + 0.7); }
@@ -110,6 +111,7 @@ B.cab = (g, it, P) => {
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + 0.5 + dw * (i + 0.5);
     const out = v === 'slide' && i % 2 ? 1.6 : 0; box(g, dw - 0.8, ph, 2 + out, m, x, lh + 0.8 + ph / 2, d / 2 - 1 + out / 2);
+    if (it.fin === 'frame') { const y0 = lh + 0.8, fw = Math.min(8, dw * 0.16), zf = d / 2 + out + 0.2; for (const sx of [-1, 1]) box(g, fw, ph, 1, m, x + sx * (dw / 2 - 0.4 - fw / 2), y0 + ph / 2, zf); for (const yy of tall ? [fw / 2, ph * 0.42, ph - fw / 2] : [fw / 2, ph - fw / 2]) box(g, dw - 0.8, fw, 1, m, x, y0 + yy, zf); }
     const hx = n === 1 ? x + dw * 0.32 : x + (i % 2 ? -1 : 1) * (dw / 2 - 4);
     if (tall) box(g, 1.2, 22, 2, hm, hx, lh + bh * 0.48, d / 2 + 0.9 + out);
     else box(g, 1.2, 8, 1.6, hm, hx, lh + bh * 0.62, d / 2 + 0.7);
@@ -385,7 +387,7 @@ const BRASSY = () => MT.metal('#B8955A', 0.3);
 const OLD = { table: B.table, chair: B.chair, bed: B.bed, cab: B.cab };
 
 B.sofa = (g, it, P, o) => {
-  const { w, d, h, v } = it, lea = v === 'leather', f = lea ? MT.leather(P.fabric) : MT.fabric(P.fabric, 5), fc = lea ? f : MT.fabric(P.fabric, 3), wm = woodOf(P.wood);
+  const { w, d, h, v } = it, fin = it.fin || (v === 'leather' ? 'leather' : 'linen'), lea = fin === 'leather', kind = fin === 'flannel' ? 'flannel' : fin === 'weave' ? 'herring' : 'linen', f = lea ? MT.leather(P.fabric) : MT.fabric(P.fabric, 5, kind), fc = lea ? f : MT.fabric(P.fabric, 3, kind), wm = woodOf(P.wood);
   if (v === 'stool') { for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 12, 2.4, 1.4, wm, sx * (w / 2 - 7), sz * (d / 2 - 7), 0.1, BRASSY()); cushion(g, w, h - 11, d, fc, 0, 11 + (h - 11) / 2, 0, { r: 6, bulge: 0.12 }); return; }
   const isL = v === 'L' || v === 'Lr', dm = isL ? 95 : d, arm = Math.max(12, Math.min(20, w * 0.09)), s = new THREE.Group(); s.position.z = -(d - dm) / 2; g.add(s);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(s, 14, 2.8, 1.5, wm, sx * (w / 2 - 11), sz * (dm / 2 - 10), 0.12, BRASSY());
@@ -481,7 +483,7 @@ B.rug = (g, it) => {
   rbox(g, w, 1.2, d, m, 0, 0.6, 0, 0.5, 2).castShadow = false;
 };
 
-B.tv = (g, it) => { const { w, h } = it; rbox(g, w, h, 2.2, MT.flat('#0C0D0F', 0.3), 0, h / 2, 0, 0.7); mesh(g, new THREE.PlaneGeometry(w - 1.6, h - 1.6), MT.gloss('#05070A'), 0, h / 2, 1.15); };
+B.tv = (g, it) => { const { w, h } = it; rbox(g, w, h, 2.2, MT.flat('#0C0D0F', 0.3), 0, h / 2, 0, 0.7); mesh(g, new THREE.PlaneGeometry(w - 3.6, h - 3.6), MT.gloss('#05070A'), 0, h / 2, 1.15).userData.screen = true; };   // 四周留 1.8cm 黑框；screen 標記給導覽播影片用
 
 B.cab = (g, it, P, o) => {
   if (it.cat !== 'tvcab' || it.v === 'float') { OLD.cab(g, it, P); if (o.decor && it.cat === 'chest' && it.h < 110) { vase(g, -it.w * 0.22, it.h, 0, 0.55, '#3F5A54'); books(g, it.w * 0.2, it.h, 0, 2, -0.1); } return; }

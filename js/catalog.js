@@ -172,7 +172,15 @@ export const PEOPLE = {
 };
 
 // 'sofa:5' -> 規格。styleKey 決定這一款在該風格下的木色／布料色
-export function getItem(key, styleKey) {
+// 可以換材質、換顏色的家具：沙發（含單椅）、衣櫃
+export const FINISH = {
+  sofa: { mats: [['flannel', '絨布'], ['weave', '編織布'], ['leather', '皮革'], ['linen', '亞麻布']],
+    colors: [['#C9C9C7', '淺灰'], ['#B8AC98', '米灰'], ['#DDD3C2', '奶油'], ['#B5673A', '焦糖'], ['#7A4E32', '咖啡'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#2E2F31', '黑']] },
+  ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
+    colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
+};
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : null);
+export function getItem(key, styleKey, it) {
   const [cid, i] = String(key).split(':');
   if (cid === 'person') { const p = PEOPLE[i]; return p ? { key, cat: 'person', catName: '人偶', t: 'person', name: `${p.n}（${p.h} cm）`, w: p.w, d: p.d, h: p.h, color: p.color, v: i, elev: 0 } : null; }
   const cat = BY[cid]; if (!cat) return null;
@@ -186,7 +194,9 @@ export function getItem(key, styleKey) {
   if (cat.t === 'hood') elev = 160;
   if (cat.t === 'mirror') elev = 105;
   if (r[5] === 'float') elev = 25;
-  return { key, cat: cat.id, catName: cat.n, t: cat.t, name, w: r[1], d: r[2], h: r[3], color, v: r[5] || null, elev };
+  const s = { key, cat: cat.id, catName: cat.n, t: cat.t, name, w: r[1], d: r[2], h: r[3], color, v: r[5] || null, elev };
+  if (it && it.m && it.c && finishOf(s)) { s.fin = it.m; s.color = it.c; }   // 個別指定的材質與顏色
+  return s;
 }
 
 // 平面圖上的顏色

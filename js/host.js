@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112g';
-import { getItem, STYLES, FLOORS, resolvePeople, keepOffBeds } from './catalog.js?v=20261112g';
-import { buildItem, buildPerson, M } from './models.js?v=20261112g';
-import * as MT from './mats.js?v=20261112g';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112h';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112h';
+import { buildItem, buildPerson, M } from './models.js?v=20261112h';
+import * as MT from './mats.js?v=20261112h';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -152,6 +152,14 @@ function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片
   const g = new THREE.Group(); g.add(m); return g;
 }
 const objs = new Map();
+// 電視影片：只在 3D 導覽時播放（靜音循環），鳥瞰時電視是黑的
+const tvVideo = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none' }); tvVideo.setAttribute('playsinline', ''); tvVideo.src = './media/tv.mp4?v=1';
+const tvTex = new THREE.VideoTexture(tvVideo); tvTex.colorSpace = THREE.SRGBColorSpace;
+const tvMat = new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false });
+function setScreens(on) {
+  furn.traverse((n) => { if (n.isMesh && n.userData.screen) { if (!n.userData.off) n.userData.off = n.material; n.material = on ? tvMat : n.userData.off; } });
+  if (on) tvVideo.play().catch(() => { tvVideo.muted = true; tvVideo.play().catch(() => {}); }); else tvVideo.pause();   // 瀏覽器不准出聲時退回靜音播放
+}
 // 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
 const protos = new Map(), dblCache = new Map();
 const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; c.clippingPlanes = [CLIP]; dblCache.set(m, c); } return dblCache.get(m); };
@@ -160,9 +168,9 @@ function proto(sig, make, tall) {
   return protos.get(sig).clone();
 }
 function sigOf(it, people, used) {
-  const sk = it.st || state.style, spec = getItem(it.key, sk); if (!spec) return null;
+  const sk = it.st || state.style, spec = getItem(it.key, sk, it); if (!spec) return null;
   const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
-  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') };
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 function syncItems() {
@@ -231,7 +239,7 @@ function applyMode() {
   if (wallsFull) { wallsFull.visible = t; wallsCut.visible = !t; ceiling.visible = t; }
   bulbs.children.forEach((p) => { p.intensity = t && p.userData.on ? BULB : 0; });
   caps.visible = !t;
-  renderer.localClippingEnabled = !t;
+  renderer.localClippingEnabled = !t; setScreens(t);
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
@@ -336,7 +344,7 @@ function show(name) {
   applyOffset(); setGoal(); updateHud();
   if (name === 'play') Object.assign(view, goal);   // 進鳥瞰時直接定位、不滑動鏡頭：鏡頭移動中接觸陰影會抖動，看起來像物件在閃
 }
-$('startBtn').addEventListener('click', () => show('select'));
+$('startBtn').addEventListener('click', () => { tvVideo.muted = false; tvVideo.play().then(() => { if (state.mode !== 'tour') tvVideo.pause(); }).catch(() => {}); show('select'); });   // 這一下點擊讓瀏覽器允許影片出聲
 // 選戶型：卡片依 UNITS 產生；換戶型時重建房子、家具與燈
 $('units').innerHTML = UNITS.map((u) => `<button class="unit" data-unit="${u.id}"><b>${u.name}</b><span>${u.spec}</span><span>${u.note}</span><em>進入佈置</em></button>`).join('');
 function useUnit(id) {
@@ -420,6 +428,8 @@ function onMsg(entry, m) {
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
     case 'floor': { const k = FLOORS[m.k] ? m.k : null; if (k !== state.floor) { state.floor = k; applyStyle(); } break; }
+    case 'fin': { const it = find(m.id), f = it && FINISH[finishOf(getItem(it.key))];
+      if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) { it.m = m.m; it.c = m.c; syncItems(); } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
@@ -452,4 +462,4 @@ wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera
 if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo };   // 給測試用

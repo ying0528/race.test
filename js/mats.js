@@ -27,9 +27,11 @@ const FAB = {
   linen: (x, y) => { const cx = Math.floor(x / P), cy = Math.floor(y / P), u = (x % P) / P, v = (y % P) / P, over = (cx + cy) % 2, thick = 0.75 + 0.5 * vnoise(over ? x * 0.024 : cx * 3.1, over ? cy * 3.1 : y * 0.024);
     const h = (over ? Math.sin(Math.PI * v) * (0.75 + 0.25 * Math.sin(Math.PI * u)) : Math.sin(Math.PI * u) * (0.75 + 0.25 * Math.sin(Math.PI * v))) * thick; return [h, 0.86 + 0.16 * h + (fbm(x * 0.012, y * 0.012, 3) - 0.5) * 0.08]; },
   knit: (x, y) => { const u = (x % 16) / 16, row = Math.floor(x / 16), v = ((y + (row % 2) * 8) % 16) / 16, h = Math.sin(Math.PI * u) * (0.55 + 0.45 * Math.abs(Math.sin(Math.PI * (v + u * 0.5)))); return [h, 0.82 + 0.2 * h]; },
+  flannel: (x, y) => { const h = fbm(x * 0.5, y * 0.5, 3); return [h, 0.93 + 0.12 * h + (fbm(x * 0.03, y * 0.03, 2) - 0.5) * 0.06]; },
+  herring: (x, y) => { const c = 16, col = Math.floor(x / c), u = (((col % 2 ? y + x : y - x) % 8) + 8) % 8 / 8, e = Math.min(x % c, c - (x % c)) / 2, h = Math.sin(Math.PI * u) * Math.min(1, e); return [h, 0.8 + 0.26 * h]; },
   boucle: (x, y) => { const h = fbm(x * 0.18, y * 0.18, 3) * 0.6 + 0.4 * vnoise(x * 0.5, y * 0.5); return [h, 0.8 + 0.28 * h]; },
 };
-const woodFn = (rings, seed) => (x, y, S) => { const k = 1024 / S, X = x * k, Y = y * k, v = Y / 1024 * rings + fbm(X * 0.0022 + seed, Y * 0.011 + seed, 4) * 2.4, late = Math.pow(v - Math.floor(v), 4);
+const woodFn = (rings, seed, warp = 2.4) => (x, y, S) => { const k = 1024 / S, X = x * k, Y = y * k, v = Y / 1024 * rings + fbm(X * 0.0022 + seed, Y * 0.011 + seed, 4) * warp, late = Math.pow(v - Math.floor(v), 4);
   const fiber = vnoise(X * 0.012 + seed, Y * 0.75), pore = vnoise(X * 0.05, Y * 1.9 + seed) > 0.78 ? 1 : 0; return [0.6 - 0.35 * late - 0.4 * pore * (0.4 + late), 1 - 0.2 * late + (fiber - 0.5) * 0.1 - 0.07 * pore, 0.03 * late]; };
 const floorFn = (x, y, S) => { const pw = S / 8, pl = S / 2, row = Math.floor(y / pw), off = hash(row, 9) * pl, col = Math.floor((x + off) / pl), sd = hash(row, col) * 40, w = woodFn(2.4, sd)(x + sd * 31, (y % pw) * 3.2 + sd * 17, S);
   const xx = (x + off) % pl, ex = Math.min(xx, pl - xx), ey = Math.min(y % pw, pw - (y % pw)), groove = Math.min(1, Math.min(ex, ey) / (S / 460)); return [w[0] * 0.45 + 0.55 * groove, w[1] * (0.9 + 0.2 * hash(col, row)) * (0.72 + 0.28 * groove), w[2]]; };
@@ -52,7 +54,8 @@ const grainy = (x, y) => { const h = fbm(x * 0.35, y * 0.35, 3); return [h, 0.95
 const V2 = (a) => new THREE.Vector2(a, a);
 export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + color + rep, () => new THREE.MeshStandardMaterial(Object.assign(maps(kind, color, FAB[kind], kind === 'linen' ? 4.4 : 6, rep), { roughness: 0.9, normalScale: V2(0.9) })));
 export const leather = (color) => memo('l' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('leather', color, grainy, 3, 4), { roughness: 0.38, normalScale: V2(0.35) })));
-export const wood = (color, { rings = 9, gloss = 0.25 } = {}) => memo('w' + color + rings + gloss, () => new THREE.MeshStandardMaterial(Object.assign(maps('wood' + rings, color, woodFn(rings, new THREE.Color(color).r * 50), 2.2), { roughness: 0.5 - gloss * 0.35, normalScale: V2(0.5) })));
+const vertical = (v, m) => { if (v) for (const t of [m.map, m.normalMap]) { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; } return m; };
+export const wood = (color, { rings = 9, gloss = 0.25, warp = 2.4, vert = false } = {}) => memo('w' + color + rings + gloss + warp + vert, () => vertical(vert, new THREE.MeshStandardMaterial(Object.assign(maps('wood' + rings + warp, color, woodFn(rings, new THREE.Color(color).r * 50, warp), 2.2), { roughness: 0.5 - gloss * 0.35, normalScale: V2(0.5) }))));
 export const marble = (color) => memo('mb' + color, () => new THREE.MeshStandardMaterial({ map: maps('marble', color, marbleFn, 0).map, roughness: 0.14 }));
 export const floorWood = (color) => memo('fw' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('floor', color, floorFn, 2.5, 1, Math.max(SIZE, 1024)), { roughness: 0.36 })));
 export const tiles = (color, nx = 2, soft = false, rough = 0.3) => memo('tl' + color + nx + soft, () => new THREE.MeshStandardMaterial(Object.assign(maps('tile' + nx + soft, color, tilesFn(nx, soft), 2.2), { roughness: soft ? Math.min(rough, 0.16) : rough * 0.8 })));

@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112g';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, resolvePeople, keepOffBeds } from './catalog.js?v=20261112g';
-import * as ART from './planart.js?v=20261112g';
+import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112h';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112h';
+import * as ART from './planart.js?v=20261112h';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -82,7 +82,7 @@ function renderMain() {
     if (!r) {
       const vb = [-20, -20, PLAN.W + 40, PLAN.D + 40];
       let h = planBase(vb);
-      for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
+      for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style, it); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
       PLAN.rooms.forEach((q, i) => { for (const [a, b, c, d] of q.rs) h += `<rect data-act="room" data-room="${q.id}" x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${ROOM_COLORS[i]}" fill-opacity="0.5"/>`; });
       h += planWalls();
       PLAN.rooms.forEach((q) => { const [a, b, c, d] = q.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m)); const fs = Math.min(46, (c - a - 14) / q.n.length);
@@ -93,7 +93,7 @@ function renderMain() {
       el.innerHTML = `<div class="rowb" style="align-items:center;flex:none"><button class="second" data-act="room" data-room="" style="flex:0 0 92px">← 區域</button><div style="min-width:0"><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 依實際比例</div></div></div>
         <div class="planBox"><svg id="plan" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div id="sel"></div>
-        <div class="rowb"><button class="second" id="rotBtn" data-act="rot">旋轉 90°</button><button class="second" id="delBtn" data-act="del">刪除</button></div>
+        <div class="rowb"><button class="second" id="rotBtn" data-act="rot">旋轉 90°</button><button class="second" id="finBtn" data-act="fin">材質顏色</button><button class="second" id="delBtn" data-act="del">刪除</button></div>
         <div class="rowb"><button class="primary" data-act="open">＋ 家具</button><button class="primary alt" data-act="person">＋ 模擬人偶</button></div>`;
       bindPlan();
     }
@@ -120,6 +120,7 @@ $('main').addEventListener('click', (e) => {
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
   else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
   else if (a === 'open') openSheet('furn');
+  else if (a === 'fin') openSheet('fin');
   else if (a === 'person') openSheet('person');
   else if (a === 'rot' || a === 'del') {
     const it = S.st.items.find((i) => i.id === S.sel); if (!it) return;
@@ -139,7 +140,7 @@ function drawPlan() {
   h += planWalls();
   const poses = resolvePeople(S.st.items);
   const order = (s) => (s.t === 'rug' ? 0 : s.t === 'person' ? 3 : s.elev > 0 ? 2 : 1);
-  const list = S.st.items.map((it) => ({ it, s: getItem(it.key, it.st || S.st.style) })).filter((q) => q.s && q.it.x > vb[0] - 80 && q.it.x < vb[0] + vb[2] + 80 && q.it.y > vb[1] - 80 && q.it.y < vb[1] + vb[3] + 80)
+  const list = S.st.items.map((it) => ({ it, s: getItem(it.key, it.st || S.st.style, it) })).filter((q) => q.s && q.it.x > vb[0] - 80 && q.it.x < vb[0] + vb[2] + 80 && q.it.y > vb[1] - 80 && q.it.y < vb[1] + vb[3] + 80)
     .sort((p, q) => order(p.s) - order(q.s) || (p.it.id === S.sel) - (q.it.id === S.sel));
   for (const { it, s } of list) {
     const mine = inRoom(r, it), sel = it.id === S.sel, attr = mine ? `data-id="${esc(it.id)}"` : 'pointer-events="none" opacity="0.35"';
@@ -162,11 +163,11 @@ function drawPlan() {
 }
 function updateSel() {
   const el = $('sel'); if (!el) return;
-  const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style);
+  const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it);
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
   else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
-  $('rotBtn').disabled = $('delBtn').disabled = !s;
+  $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
 }
 function bindPlan() {
   const svg = $('plan');
@@ -221,7 +222,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112g'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112h'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -245,7 +246,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112g'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112h'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
@@ -260,6 +261,14 @@ function row(s, sk, extra = '') {
 }
 function renderSheet() {
   const sk = S.st.style, r = curRoom();
+  if (S.sheet === 'fin') {
+    const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || sk, it), f = FINISH[finishOf(s)]; if (!f) return closeSheet();
+    const cm = it.m || (s.v === 'leather' ? 'leather' : null), cc = it.c;
+    $('sheetTitle').textContent = '材質與顏色・' + s.name; $('groups').innerHTML = ''; $('cats').innerHTML = '';
+    $('list').innerHTML = '<h2 style="font-size:17px">材質</h2><div class="grid2">' + f.mats.map(([k, n]) => `<button class="card finm ${k === cm ? 'on' : ''}" data-fm="${k}"><i class="fm-${k}" style="--c:${cc || s.color && s.color[0] === '#' ? cc || s.color : f.colors[0][0]}"></i><b>${n}</b></button>`).join('') + '</div>' +
+      '<h2 style="font-size:17px;margin-top:6px">顏色</h2><div class="fgrid" style="flex:none;overflow:visible">' + f.colors.map(([c, n]) => `<button class="fsw ${c === cc ? 'on' : ''}" data-fc="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>';
+    return;
+  }
   if (S.sheet === 'person') {
     const n = r ? peopleIn(r) : 0, full = n >= 3;
     $('sheetTitle').textContent = '新增模擬人偶';
@@ -280,6 +289,10 @@ $('sheetClose').addEventListener('click', closeSheet);
 $('groups').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.group = b.dataset.g; S.cat = null; renderSheet(); } });
 $('cats').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.cat = b.dataset.c; renderSheet(); } });
 $('list').addEventListener('click', (e) => {
+  const fb = e.target.closest('[data-fm],[data-fc]');
+  if (fb && S.st) { const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), f = FINISH[finishOf(s)]; if (!f) return;
+    it.m = fb.dataset.fm || it.m || (s.v === 'leather' ? 'leather' : f.mats[0][0]); it.c = fb.dataset.fc || it.c || (f.colors.find((x) => x[0] === s.color) || f.colors[0])[0];
+    send({ t: 'fin', id: it.id, m: it.m, c: it.c }); renderSheet(); update(); return; }
   const b = e.target.closest('[data-key]'), r = curRoom(); if (!b || b.disabled || !r || !S.st) return;
   const person = b.dataset.key.startsWith('person:'); if (person && peopleIn(r) >= 3) return;
   const big = r.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m));
