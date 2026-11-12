@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112h';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112h';
-import * as ART from './planart.js?v=20261112h';
+import { PLAN, UNIT, setUnit, roomAt } from './plan.js?v=20261112i';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112i';
+import * as ART from './planart.js?v=20261112i';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -222,7 +222,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112h'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112i'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -246,7 +246,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112h'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112i'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);

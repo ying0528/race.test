@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112h';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112h';
-import { buildItem, buildPerson, M } from './models.js?v=20261112h';
-import * as MT from './mats.js?v=20261112h';
+import { PLAN, UNIT, UNITS, setUnit, roomAt } from './plan.js?v=20261112i';
+import { getItem, STYLES, FLOORS, FINISH, finishOf, resolvePeople, keepOffBeds } from './catalog.js?v=20261112i';
+import { buildItem, buildPerson, M } from './models.js?v=20261112i';
+import * as MT from './mats.js?v=20261112i';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -153,7 +153,7 @@ function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片
 }
 const objs = new Map();
 // 電視影片：只在 3D 導覽時播放（靜音循環），鳥瞰時電視是黑的
-const tvVideo = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none' }); tvVideo.setAttribute('playsinline', ''); tvVideo.src = './media/tv.mp4?v=1';
+const tvVideo = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none' }); tvVideo.setAttribute('playsinline', ''); tvVideo.src = './media/tv.mp4?v=2';
 const tvTex = new THREE.VideoTexture(tvVideo); tvTex.colorSpace = THREE.SRGBColorSpace;
 const tvMat = new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false });
 function setScreens(on) {
