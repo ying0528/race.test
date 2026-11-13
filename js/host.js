@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113c';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113c';
-import { buildItem, buildPerson, M } from './models.js?v=20261113c';
-import * as MT from './mats.js?v=20261113c';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114a';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114a';
+import { buildItem, buildPerson, M } from './models.js?v=20261114a';
+import * as MT from './mats.js?v=20261114a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -462,6 +462,132 @@ function sendPos(now) {   // 告訴導覽中的手機：目前位置、面向、
   const m = { t: 'pos', x: Math.round(tour.x / cm), y: Math.round(tour.z / cm), yaw: Math.round(tour.yaw * 100) / 100, go: auto ? auto.tgt : 0 }, k = JSON.stringify(m);
   if (k !== lastPos || now - (sendPos.full || 0) > 1000) { lastPos = k; sendPos.full = now; send(e.conn, m); }
 }
+// ================= 下載我的設計：大螢幕拍兩張橫式圖（全戶鳥瞰／客廳・客餐廳・主臥），傳給手機 =================
+const QR_IMG = new Image(); QR_IMG.src = './media/qr.png?v=1';
+const FONT = '"Noto Sans TC","Microsoft JhengHei","PingFang TC","Heiti TC",sans-serif', DARKC = '#2F2B27', GOLDC = '#D8C3A5';
+const DISC = '3D 畫面為示意，家具與裝潢非交屋附贈，實際以合約為準。', SHOT_HFOV = 108, EYE = 1.5;
+// --- 自動挑拍攝位置：鏡頭水平、站在房間一端往深處拍、主要家具在畫面中間、看得到窗戶、靠近鏡頭的東西不要落在畫面邊緣 ---
+function rayRect(x, z, dx, dz, r) {   // 射線打到矩形的距離（公尺），打不到回傳 Infinity
+  let t0 = 0, t1 = Infinity;
+  for (const [o, d, lo, hi] of [[x, dx, r[0], r[2]], [z, dz, r[1], r[3]]]) {
+    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return Infinity; continue; }
+    let a = (lo - o) / d, b = (hi - o) / d; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b); if (t0 > t1) return Infinity;
+  }
+  return t0;
+}
+const rayHit = (x, z, ang, list, max = 12) => { const dx = Math.cos(ang), dz = Math.sin(ang); let best = max; for (const r of list) { const t = rayRect(x, z, dx, dz, r); if (t < best) best = t; } return best; };
+const angDiff = (a, b) => ((a - b + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+function itemRects(minH) {   // 家具的平面範圍（公尺）
+  const out = [];
+  for (const it of state.items) {
+    const s = getItem(it.key, null, it); if (!s || s.t === 'rug' || s.t === 'person' || s.h + s.elev < minH) continue;
+    if (s.t === 'wall') { if (s.h < 150) { /* 矮隔間 */ } }
+    const rot = it.r % 180 !== 0, hw = (rot ? s.d : s.w) / 2, hd = (rot ? s.w : s.d) / 2;
+    out.push({ r: [(it.x - hw) * cm, (it.y - hd) * cm, (it.x + hw) * cm, (it.y + hd) * cm], s, it });
+  }
+  return out;
+}
+function pickShots() {
+  const area = (q) => q.rs.reduce((s, [a, b, c, d]) => s + (c - a) * (d - b), 0), inRoom = (q, x, y) => q.rs.some(([a, b, c, d]) => x >= a && x <= c && y >= b && y <= d);
+  const live = PLAN.rooms.find((q) => q.n.includes('客')) || [...PLAN.rooms].sort((a, b) => area(b) - area(a))[0];
+  const beds = PLAN.rooms.filter((q) => q.n.includes('主臥') && !q.n.includes('衛')), master = [...(beds.length ? beds : PLAN.rooms.filter((q) => q.n.includes('臥') && !q.n.includes('衛')))].sort((a, b) => area(b) - area(a))[0];
+  const block = [...PLAN.walls.filter((w) => w[4] <= EYE * 100 && w[5] >= EYE * 100).map((w) => [w[0] * cm, w[1] * cm, w[2] * cm, w[3] * cm]), ...itemRects(EYE * 100 + 5).map((o) => o.r)];   // 擋住視線的：牆、比眼睛高的家具
+  const glass = PLAN.wins.map((w) => [Math.min(w[0], w[2]) * cm - 0.06, Math.min(w[1], w[3]) * cm - 0.06, Math.max(w[0], w[2]) * cm + 0.06, Math.max(w[1], w[3]) * cm + 0.06]);
+  const sight = [...block, ...glass];   // 看出窗外不算「有深度」
+  const near = [...sight, ...itemRects(40).map((o) => o.r)];   // 會在畫面邊緣被拉長的：上面那些＋矮家具
+  const tall = itemRects(40);
+  const find = (q, kinds) => { const c = tall.filter((o) => kinds.includes(o.s.t) || kinds.includes(o.s.cat)).filter((o) => inRoom(q, o.it.x, o.it.y)); return c.sort((a, b) => b.s.w * b.s.d - a.s.w * a.s.d)[0]; };
+  const half = SHOT_HFOV / 2 * Math.PI / 180;
+  function best(q, subj, avoid) {
+    let top = null;
+    const sx = subj ? subj.it.x * cm : null, sz = subj ? subj.it.y * cm : null;
+    const wins = PLAN.wins.map((w) => [(w[0] + w[2]) / 2 * cm, (w[1] + w[3]) / 2 * cm]).filter(([wx, wz]) => q.rs.some(([a, b, c, d]) => wx >= a * cm - 1.2 && wx <= c * cm + 1.2 && wz >= b * cm - 1.2 && wz <= d * cm + 1.2));
+    for (const [a, b, c, d] of q.rs) for (let x = a + 40; x <= c - 40; x += 25) for (let y = b + 40; y <= d - 40; y += 25) {
+      const X = x * cm, Z = y * cm; if (near.some((r) => X > r[0] - 0.15 && X < r[2] + 0.15 && Z > r[1] - 0.15 && Z < r[3] + 0.15)) continue;   // 不站在家具裡
+      for (let k = 0; k < 36; k++) {
+        const yaw = k * Math.PI / 18; let depth = 0, edge = 0, n = 0, close = 0;
+        for (let i = -9; i <= 9; i++) { const ang = yaw + i * half / 9;
+          if (Math.abs(i) <= 6) { depth += Math.min(9, rayHit(X, Z, ang, sight)); n++; }
+          const dn = rayHit(X, Z, ang, near, 3); if (Math.abs(i) >= 7) edge += Math.max(0, 1.4 - dn); if (dn < 0.6) close += 0.6 - dn; }
+        let s = depth / n * 0.6 - edge * 3 - close * 4;
+        if (subj) { const ds = Math.hypot(sx - X, sz - Z), off = Math.abs(angDiff(Math.atan2(sz - Z, sx - X), yaw)), vis = rayHit(X, Z, Math.atan2(sz - Z, sx - X), block) >= ds - 0.4;
+          s += vis ? Math.max(0, 1 - off / 0.6) * 4 : -2; s += ds >= 2 && ds <= 6 ? 1 : -Math.min(2, Math.abs(ds - 4) / 2); }
+        for (const [wx, wz] of wins) { const dw = Math.hypot(wx - X, wz - Z), aw = Math.atan2(wz - Z, wx - X); if (Math.abs(angDiff(aw, yaw)) < half * 0.85 && rayHit(X, Z, aw, block) >= dw - 0.25) { s += 1.5; break; } }
+        if (avoid && Math.abs(angDiff(yaw, avoid.yaw)) < 0.7 && Math.hypot(X - avoid.x, Z - avoid.z) < 1.8) s -= 3;   // 第二張不要和第一張太像
+        if (!top || s > top.s) top = { s, x: X, z: Z, yaw };
+      }
+    }
+    return top || { x: q.r ? (q.r[0] + q.r[2]) / 2 * cm : CX, z: q.r ? (q.r[1] + q.r[3]) / 2 * cm : CZ, yaw: 0 };
+  }
+  const a = best(live, find(live, ['sofa'])), b = best(live, find(live, ['dtable', 'table']), a), c = best(master, find(master, ['bed']));
+  return [{ ...a, label: '客廳' }, { ...b, label: '客餐廳' }, { ...c, label: master.n.includes('主臥') ? '主臥' : master.n }];
+}
+// --- 2D 畫圖小工具 ---
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function photo(g, src, x, y, w, h, r, sx = 0, sy = 0, sw = src.width, sh = src.height) {
+  const k = Math.max(w / sw, h / sh), cw = w / k, ch = h / k; g.save(); rr(g, x, y, w, h, r); g.clip(); g.drawImage(src, sx + (sw - cw) / 2, sy + (sh - ch) / 2, cw, ch, x, y, w, h); g.restore();
+}
+function tag(g, x, y, t, s = 26) { g.font = `700 ${s}px ${FONT}`; const w = g.measureText(t).width + 36; g.fillStyle = '#fff'; rr(g, x, y, w, s + 22, 17); g.fill(); g.fillStyle = DARKC; g.textBaseline = 'middle'; g.fillText(t, x + 18, y + 11 + s / 2 + 1); }
+function txt(g, t, x, y, size, color, weight = 700, align = 'left') { g.font = `${weight} ${size}px ${FONT}`; g.fillStyle = color; g.textAlign = align; g.textBaseline = 'top'; g.fillText(t, x, y); g.textAlign = 'left'; }
+const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
+function composeBird(src) {   // 第 1 張：鳥瞰放大，左上角是標題＋QR 的合併區塊
+  const W = 1920, H = 1080, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data, bg = [d[8], d[9], d[10]]; let x0 = src.width, y0 = src.height, x1 = 0, y1 = 0;
+  for (let y = 0; y < src.height; y += 2) for (let x = 0; x < src.width; x += 2) { const i = (y * src.width + x) * 4; if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 30) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+  const p = 20; x0 = Math.max(0, x0 - p); y0 = Math.max(0, y0 - p); x1 = Math.min(src.width, x1 + p); y1 = Math.min(src.height, y1 + p);
+  g.fillStyle = `rgb(${bg})`; g.fillRect(0, 0, W, H);
+  const BX = 540, k = Math.min((W - BX - 40) / (x1 - x0), (H - 60) / (y1 - y0)), bw = (x1 - x0) * k, bh = (y1 - y0) * k;
+  g.drawImage(src, x0, y0, x1 - x0, y1 - y0, BX + (W - BX - 40 - bw) / 2, (H - bh) / 2, bw, bh);
+  g.fillStyle = DARKC; rr(g, 40, 40, 460, 470, 26); g.fill();
+  txt(g, UNIT.name + ' 戶', 72, 70, 26, GOLDC); txt(g, '我的家・設計成果', 72, 108, 46, '#fff'); txt(g, '全戶鳥瞰・' + today(), 72, 172, 22, '#BFB3A3', 400);
+  g.fillStyle = '#fff'; rr(g, 72, 232, 190, 190, 14); g.fill(); if (QR_IMG.complete && QR_IMG.naturalWidth) g.drawImage(QR_IMG, 79, 239, 176, 176);
+  txt(g, '掃描加入', 284, 262, 28, '#fff'); txt(g, 'LINE 預約賞屋', 284, 302, 28, '#fff'); txt(g, '專人為你介紹', 284, 352, 20, GOLDC, 400);
+  txt(g, '3D 畫面為示意，家具與裝潢非交屋附贈，', 72, 444, 15, '#9E958A', 400); txt(g, '實際以合約為準。', 72, 466, 15, '#9E958A', 400);
+  return c.toDataURL('image/jpeg', 0.9);
+}
+function composeRooms(ph, shots) {   // 第 2 張：客廳大圖＋客餐廳、主臥，下方一長條標題＋QR
+  const W = 1920, H = 1080, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#F5F2ED'; g.fillRect(0, 0, W, H);
+  photo(g, ph[0], 40, 40, 1220, 686, 24); tag(g, 60, 60, shots[0].label);
+  photo(g, ph[1], 1280, 40, 600, 333, 22); tag(g, 1298, 58, shots[1].label, 24);
+  photo(g, ph[2], 1280, 393, 600, 333, 22); tag(g, 1298, 411, shots[2].label, 24);
+  const y = 746; g.fillStyle = DARKC; rr(g, 40, y, 1840, 294, 26); g.fill();
+  txt(g, UNIT.name + ' 戶', 80, y + 52, 28, GOLDC); txt(g, '我的家・設計成果', 80, y + 94, 56, '#fff'); txt(g, shots.map((s) => s.label).join('・') + '・' + today(), 80, y + 172, 24, '#BFB3A3', 400);
+  txt(g, DISC, 80, y + 236, 18, '#9E958A', 400);
+  g.fillStyle = '#fff'; rr(g, 1610, y + 24, 246, 246, 16); g.fill(); if (QR_IMG.complete && QR_IMG.naturalWidth) g.drawImage(QR_IMG, 1618, y + 32, 230, 230);
+  txt(g, '掃描加入', 1580, y + 84, 34, '#fff', 700, 'right'); txt(g, 'LINE 預約賞屋', 1580, y + 132, 34, '#fff', 700, 'right'); txt(g, '專人為你介紹', 1580, y + 188, 22, GOLDC, 400, 'right');
+  return c.toDataURL('image/jpeg', 0.9);
+}
+let shooting = false, lastShots = null;   // 最近一次拍好的圖，手機重新連線後可以再來拿
+function makeShots(entry, tok) {   // 拍照時暫時把畫布改成固定大小，一次拍完再還原（整個過程在同一個步驟內，大螢幕不會看到切換）
+  if (shooting) return; shooting = true;
+  const keep = { mode: state.mode, pos: camera.position.clone(), quat: camera.quaternion.clone(), fov: camera.fov, aspect: camera.aspect, pr: renderer.getPixelRatio() };
+  const t0 = performance.now();
+  try {
+    const shots = pickShots();
+    const grab = (w, h, setup, useComposer) => {
+      renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.clearViewOffset(); setup(); camera.updateProjectionMatrix(); renderer.shadowMap.needsUpdate = true;
+      if (useComposer && quality === 2) { if (!composer) setupComposer(); composer.setSize(w, h); composer.render(); } else renderer.render(scene, camera);
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(renderer.domElement, 0, 0); return c;
+    };
+    state.mode = 'tour'; applyMode();
+    const ph = shots.map((s) => grab(1600, 900, () => { camera.fov = 2 * Math.atan(Math.tan(SHOT_HFOV * Math.PI / 360) / camera.aspect) * 180 / Math.PI; camera.position.set(s.x, EYE, s.z); camera.lookAt(s.x + Math.cos(s.yaw), EYE, s.z + Math.sin(s.yaw)); }));
+    state.mode = 'overview'; applyMode();
+    const bird = grab(2400, 1350, () => {
+      camera.fov = 34; const el = 1.22, v = camera.fov * Math.PI / 360, hh = Math.atan(Math.tan(v) * camera.aspect), Wm = PLAN.W * cm, Dm = PLAN.D * cm;
+      const dist = Math.max((Dm * Math.sin(el) + 1.9 * Math.cos(el)) / 2 / Math.tan(v), Wm / 2 / Math.tan(hh)) * 1.08 + 1.5;
+      camera.position.set(CX, Math.sin(el) * dist, CZ + Math.cos(el) * dist); camera.lookAt(CX, 0.4, CZ);
+    }, true);
+    const imgs = [composeBird(bird), composeRooms(ph, shots)];
+    const now = Date.now(); for (const q of conns) q.seen = now;   // 拍照時畫面停住，不要因此把手機當成斷線
+    lastShots = { tok, imgs }; for (const q of conns) imgs.forEach((img, i) => send(q.conn, { t: 'shot', tok, i, n: imgs.length, img }));   // 手機拍照期間可能重新連線，所以每支手機都送，手機只收自己要的那一份
+    console.info('design shots', Math.round(performance.now() - t0), 'ms', imgs.map((u) => Math.round(u.length / 1024) + 'KB').join(' '));
+  } catch (e) { console.error(e); for (const q of conns) send(q.conn, { t: 'shot', tok, err: String(e && e.message || e) }); }
+  finally {
+    state.mode = keep.mode; renderer.setPixelRatio(keep.pr); renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); if (composer) composer.setSize(canvas.width, canvas.height);
+    camera.aspect = keep.aspect; camera.fov = keep.fov; camera.position.copy(keep.pos); camera.quaternion.copy(keep.quat); applyMode(); renderer.shadowMap.needsUpdate = true; invalidate(6); shooting = false;
+  }
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -579,6 +705,8 @@ function onMsg(entry, m) {
   if (m.t === 'ping' || screen !== 'play') return;
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
+  if (m.t === 'shotget') { if (lastShots && lastShots.tok === m.tok) lastShots.imgs.forEach((img, i) => send(entry.conn, { t: 'shot', tok: m.tok, i, n: lastShots.imgs.length, img })); return; }
+  if (m.t === 'shot') { const tok = String(m.tok || '').slice(0, 20); if (screen === 'play') setTimeout(() => makeShots(entry, tok), 30); else send(entry.conn, { t: 'shot', tok, err: 'not-ready' }); return; }
   if (m.t === 'goto') { if (state.mode === 'tour' && state.tourBy === entry.id) startAuto(num(m.x, 0, PLAN.W), num(m.y, 0, PLAN.D)); return; }
   if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { lastTurn = performance.now(); tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
   if (m.t === 'tour') {
@@ -636,4 +764,4 @@ wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera
 if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders, pickShots };   // 給測試用

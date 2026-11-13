@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113c';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261113c';
-import * as ART from './planart.js?v=20261113c';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114a';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114a';
+import * as ART from './planart.js?v=20261114a';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,7 +35,12 @@ function connect() {
   setInterval(() => send({ t: 'ping' }), 2000);
 }
 function onData(m) {
-  if (m && m.t === 'pos') { S.pos = m; moveMe(); return; }   // 導覽中：大螢幕回報目前位置
+  if (m && m.t === 'pos') { S.pos = m; moveMe(); return; }
+  if (m && m.t === 'shot') {   // 大螢幕拍好的設計圖（只收自己要的那一份）
+    if (!S.shotTok || m.tok !== S.shotTok) return;
+    if (m.err) S.shots = { err: true }; else { S.shots = S.shots && S.shots.imgs ? S.shots : { imgs: [] }; S.shots.imgs[m.i] = m.img; S.shots.n = m.n; if (S.shots.imgs.filter(Boolean).length >= m.n) delete S.shots.busy; }
+    update(); return;
+  }   // 導覽中：大螢幕回報目前位置
   if (!m || m.t !== 'state') return;
   const keep = S.drag && S.st ? S.st.items.find((i) => i.id === S.drag.id) : null;
   S.st = m;
@@ -56,7 +61,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
+  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -124,7 +129,15 @@ function renderMain() {
       bindPlan();
     }
   } else {
-    if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>';
+    const sh = S.shots, got = sh && sh.imgs ? sh.imgs.filter(Boolean).length : 0;
+    if (!touring && sh && (sh.busy || sh.err || got < (sh.n || 2))) el.innerHTML = sh.err
+      ? '<h2>設計圖沒有做成功</h2><div class="muted">請再試一次；如果大螢幕還在選戶型，先選好戶型。</div><button class="primary" data-act="shot">再試一次</button><button class="second" data-act="shotclose" style="flex:0 0 auto">返回</button>'
+      : '<div class="shotWait"><div class="spin"></div><h2>正在製作設計圖…</h2><div class="muted">大螢幕正在拍攝全戶鳥瞰、客廳、客餐廳、主臥，約 5～10 秒。</div></div>';
+    else if (!touring && sh && got) el.innerHTML = '<div class="rowb" style="align-items:center"><h2>設計圖完成了！</h2><button class="second" data-act="shotclose" style="flex:0 0 84px">完成</button></div>' +
+      '<div class="shotList">' + sh.imgs.map((u, i) => `<img src="${u}" alt="設計圖 ${i + 1}">`).join('') + '</div>' +
+      '<button class="primary" data-act="shotsave">⬇ 儲存／分享這 2 張圖</button><div class="muted" style="text-align:center;font-size:12.5px">iPhone 也可以長按圖片 →「加入照片」</div>';
+    else if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>' +
+      '<div style="height:10px"></div><div><h2>帶走我的設計</h2><div class="muted">把這次的佈置做成 2 張圖（全戶鳥瞰＋室內），存到手機或分享給家人。</div></div><button class="second dl" data-act="shot">⬇ 下載我的設計</button>';
     else if (!mine) el.innerHTML = '<h2>3D 導覽中</h2><div class="muted">另一支手機正在操作導覽，請看大螢幕。</div>';
     else if (innerWidth <= innerHeight) {   // 導覽時要橫拿
       el.innerHTML = '<div class="rotate"><div class="rot">📱</div><h2>請把手機轉橫</h2><div class="muted">轉橫後就會出現操作畫面。<br>手機有鎖住旋轉的話，請先解除。</div><button class="second" data-act="tour" data-on="" style="flex:0 0 auto;padding:0 22px">結束導覽</button></div>';
@@ -162,6 +175,9 @@ $('main').addEventListener('click', (e) => {
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
   else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
+  else if (a === 'shot') { S.shots = { busy: true, imgs: [] }; S.shotTok = Math.random().toString(36).slice(2, 10); const tk = S.shotTok; send({ t: 'shot', tok: tk }); setTimeout(() => { if (S.shotTok === tk && S.shots && S.shots.busy && !(S.shots.imgs || []).some(Boolean)) { S.shots = { err: true }; update(); } }, 45000); update(); return; }
+  else if (a === 'shotclose') { S.shots = null; update(); return; }
+  else if (a === 'shotsave') { saveShots(); return; }
   else if (a === 'open') openSheet('furn');
   else if (a === 'fin') openSheet('fin');
   else if (a === 'person') openSheet('person');
@@ -303,7 +319,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114a'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -327,7 +343,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114a'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
@@ -413,6 +429,18 @@ function moveMe() {
   if (go) { tg.setAttribute('transform', `translate(${go[0]} ${go[1]})`); const r = roomAt(go[0], go[1], 0); chip.textContent = r ? `前往${r.n}中…` : '前往中…'; }
 }
 addEventListener('resize', () => update());
+setInterval(() => {   // 等設計圖時，每 4 秒問一次大螢幕（拍照時大螢幕畫面會停住，手機可能因此重新連線而錯過）
+  const sh = S.shots; if (sh && S.shotTok && !sh.err && (sh.imgs || []).filter(Boolean).length < (sh.n || 2) && S.net === 'ok') send({ t: 'shotget', tok: S.shotTok });
+}, 4000);
+async function saveShots() {   // 手機支援分享檔案就打開分享選單（可存到相簿、傳 LINE），不支援就直接下載
+  const imgs = (S.shots && S.shots.imgs || []).filter(Boolean); if (!imgs.length) return;
+  const name = (i) => `我的家設計_${UNIT.name.replace(/\s+/g, '')}_${i + 1}.jpg`;
+  try {
+    const files = await Promise.all(imgs.map(async (u, i) => new File([await (await fetch(u)).blob()], name(i), { type: 'image/jpeg' })));
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: '我的家・設計成果' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  imgs.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = name(i); document.body.appendChild(a); a.click(); a.remove(); });
+}
 const myTour = () => S.st && S.st.mode === 'tour' && S.st.tourBy === S.st.you;
 let lastJoy = 0;
 function flushInput() {   // 手指一動就送（最快每 25 毫秒一次），不等固定的時鐘

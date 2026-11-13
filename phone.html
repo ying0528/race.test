@@ -79,6 +79,12 @@
   .zone .stick.rest { left: 50%; top: 58%; opacity: .55; }
   .rotate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
   .rotate .rot { font-size: 64px; transform: rotate(-90deg); }
+  /* 下載我的設計 */
+  .second.dl { flex: 0 0 auto; height: 54px; border: 2px solid #A0673A; color: #A0673A; font-size: 17px; }
+  .shotWait { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+  .spin { width: 54px; height: 54px; border-radius: 50%; border: 6px solid #EADFD3; border-top-color: #A0673A; animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+  .shotList { flex: 1 1 0; min-height: 0; overflow-y: auto; touch-action: pan-y; display: flex; flex-direction: column; gap: 10px; -webkit-touch-callout: default; user-select: auto; }
+  .shotList img { width: 100%; border-radius: 12px; box-shadow: 0 3px 12px rgba(0,0,0,.12); -webkit-touch-callout: default; }
   .primary.alt { background: #3C4047; }
   .primary { height: 50px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
   .second { height: 44px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
@@ -129,6 +135,6 @@
   <div class="chips" id="cats"></div>
   <div id="list"></div>
 </div>
-<script type="module" src="./js/phone.js?v=20261113c"></script>
+<script type="module" src="./js/phone.js?v=20261114a"></script>
 </body>
 </html>
