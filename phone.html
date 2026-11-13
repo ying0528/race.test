@@ -63,6 +63,22 @@
   .wk-travertine { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 4px), linear-gradient(rgba(0,0,0,.18) 1px, transparent 1px); background-size: 100% 100%, 100% 50%; }
   .wk-concrete { background-image: radial-gradient(rgba(0,0,0,.45) 1.2px, transparent 1.6px), linear-gradient(rgba(0,0,0,.12) 1px, transparent 1px); background-size: 50% 50%, 100% 50%; background-position: 25% 25%, 0 0; }
   .fk-strip { background-image: linear-gradient(rgba(255,255,255,.75) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.75) 1px, transparent 1px), repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 5px, rgba(255,255,255,.06) 5px 10px); background-size: 100% 5px, 50% 100%, 100% 100%; }
+  /* 3D 導覽：手機橫拿 */
+  body.tourL header, body.tourL nav { display: none; }
+  body.tourL main { padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); }
+  .tl { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .tlTop { display: flex; align-items: center; gap: 10px; } .tlTop .second { flex: 0 0 auto; height: 34px; padding: 0 16px; margin-left: auto; font-size: 14px; }
+  .tlPill { background: #E3F2E7; color: #2E7D4F; border-radius: 20px; padding: 4px 12px; font-weight: 800; font-size: 13px; }
+  .goChip { background: #2E7D4F; color: #fff; border-radius: 20px; padding: 4px 12px; font-weight: 800; font-size: 13px; }
+  .tlBody { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; }
+  .tlBody .zone { flex: 0 0 29%; }
+  .tlPlan { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; background: #fff; border-radius: 18px; border: 2px solid #E2DBD1; padding: 4px; }
+  .tlPlan svg { flex: 1 1 0; min-height: 0; width: 100%; touch-action: none; }
+  .tlCap { text-align: center; font-size: 11px; color: #8a8f99; font-weight: 700; }
+  body.tourL .zone b { font-size: 28px; position: absolute; top: 12px; letter-spacing: 2px; }
+  .zone .stick.rest { left: 50%; top: 58%; opacity: .55; }
+  .rotate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+  .rotate .rot { font-size: 64px; transform: rotate(-90deg); }
   .primary.alt { background: #3C4047; }
   .primary { height: 50px; border: none; border-radius: 14px; background: #A0673A; color: #fff; font-size: 16px; font-weight: 900; }
   .second { height: 44px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
@@ -113,6 +129,6 @@
   <div class="chips" id="cats"></div>
   <div id="list"></div>
 </div>
-<script type="module" src="./js/phone.js?v=20261113a"></script>
+<script type="module" src="./js/phone.js?v=20261113b"></script>
 </body>
 </html>

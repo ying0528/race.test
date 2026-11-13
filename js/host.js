@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113a';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113a';
-import { buildItem, buildPerson, M } from './models.js?v=20261113a';
-import * as MT from './mats.js?v=20261113a';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113b';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113b';
+import { buildItem, buildPerson, M } from './models.js?v=20261113b';
+import * as MT from './mats.js?v=20261113b';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -314,7 +314,7 @@ function applyMode() {
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
-  camera.fov = t ? 72 : 34; applyOffset();
+  camera.fov = t ? 77 : 34; applyOffset();
   const pr = t || lowRes ? 1 : BASE_PR; if (renderer.getPixelRatio() !== pr) { renderer.setPixelRatio(pr); resize(); }   // 導覽時用 1 倍解析度換流暢
   setGoal(); updateHud();
 }
@@ -326,6 +326,7 @@ function buildColliders() {
   const d = PLAN.door; colliders.push([d[0] * cm, d[1] * cm, d[2] * cm, d[3] * cm]);
   for (const it of state.items) {
     const s = getItem(it.key, null, it); if (!s || s.h < 35 || s.elev > 0 || s.t === 'rug' || s.t === 'lamp' || s.t === 'person') continue;
+    if (s.t !== 'wall' && s.h < 120) continue;   // 矮家具（沙發、床、桌椅、檯面）不擋路，鏡頭從上方經過；高櫃、牆、隔間才會擋
     if (s.t === 'wall') {   // 牆：每個實心區段一個碰撞盒，門洞與拉門開口可以走過去
       const k = it.r % 360, ax = k === 0 ? [1, 0] : k === 90 ? [0, 1] : k === 180 ? [-1, 0] : [0, -1], t = s.d / 2;
       const g = doorGap(s), seg = (a, b, ref) => { const p1 = [it.x + ax[0] * a, it.y + ax[1] * a], p2 = [it.x + ax[0] * b, it.y + ax[1] * b];
@@ -357,7 +358,7 @@ function updateDoors(dt, on) {
   }
 }
 function collide(p) {
-  const R = 0.2;
+  const R = 0.14;   // 身體半徑：小一點，比較窄的空隙也過得去
   for (let k = 0; k < 2; k++) for (const [x1, z1, x2, z2, door] of colliders) {
     if (door && door.t > 0.8) continue;
     const nx = Math.max(x1, Math.min(p.x, x2)), nz = Math.max(z1, Math.min(p.z, z2));
@@ -401,6 +402,64 @@ function tuneQuality(dt) {   // 導覽時如果跑不順，就降低解析度與
   if (slow > 45) { lowRes = true; sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.needsUpdate = true; resize(); }
   slow = fast = 0;
 }
+// ---- 點平面圖快速走過去：在 10 cm 的格子上找一條繞過牆和高家具的路，用 3 倍速走過去；手機搖桿一動就取消 ----
+const GRID = 10, AUTO_SPEED = 4.5; let auto = null, lastTurn = 0, posT = 0, lastPos = '';
+function walkGrid() {   // 每格能不能站（在室內、離牆和高家具 16 cm 以上）
+  const W = Math.ceil(PLAN.W / GRID), H = Math.ceil(PLAN.D / GRID), ok = new Uint8Array(W * H), R = 0.16;
+  const floors = [...PLAN.floors.map((f) => f.slice(0, 4)), ...state.cut.flatMap((i) => cutRects(i))];
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const xc = (i + 0.5) * GRID, yc = (j + 0.5) * GRID; if (!floors.some(([a, b, c, d]) => xc >= a && xc <= c && yc >= b && yc <= d)) continue;
+    const x = xc * cm, z = yc * cm; let free = true;
+    for (const [x1, z1, x2, z2, door] of colliders) { if (door) continue; const nx = Math.max(x1, Math.min(x, x2)), nz = Math.max(z1, Math.min(z, z2)); if ((x - nx) ** 2 + (z - nz) ** 2 < R * R) { free = false; break; } }
+    ok[j * W + i] = free ? 1 : 0;
+  }
+  return { W, H, ok };
+}
+function nearestFree(G, i0) {   // 從某一格往外找最近可以站的格子
+  if (G.ok[i0]) return i0; const seen = new Uint8Array(G.W * G.H), q = [i0]; seen[i0] = 1;
+  for (let k = 0; k < q.length; k++) { const i = q[k], x = i % G.W, y = (i / G.W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= G.W || ny >= G.H) continue; const n = ny * G.W + nx; if (seen[n]) continue; if (G.ok[n]) return n; seen[n] = 1; q.push(n); } }
+  return -1;
+}
+function findPath(sx, sz, tx, tz) {   // A*（八方向、不切牆角），再把看得到的點拉直
+  const G = walkGrid(), cellOf = (x, z) => Math.min(G.H - 1, Math.max(0, Math.floor(z / cm / GRID))) * G.W + Math.min(G.W - 1, Math.max(0, Math.floor(x / cm / GRID)));
+  const s = nearestFree(G, cellOf(sx, sz)), t = nearestFree(G, cellOf(tx, tz)); if (s < 0 || t < 0) return null;
+  const N = G.W * G.H, gs = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), done = new Uint8Array(N), heap = [];
+  const hx = (i) => { const dx = Math.abs(i % G.W - t % G.W), dy = Math.abs(((i / G.W) | 0) - ((t / G.W) | 0)); return Math.max(dx, dy) + 0.414 * Math.min(dx, dy); };
+  const push = (i, f) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+  const pop = () => { const top = heap[0], end = heap.pop(); if (heap.length) { heap[0] = end; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+  gs[s] = 0; push(s, hx(s));
+  while (heap.length) { const [, i] = pop(); if (done[i]) continue; done[i] = 1; if (i === t) break; const x = i % G.W, y = (i / G.W) | 0;
+    for (const [dx, dy, c] of [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]]) {
+      const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= G.W || ny >= G.H) continue; const n = ny * G.W + nx; if (!G.ok[n] || done[n]) continue;
+      if (dx && dy && (!G.ok[y * G.W + nx] || !G.ok[ny * G.W + x])) continue;
+      const g2 = gs[i] + c; if (g2 < gs[n]) { gs[n] = g2; from[n] = i; push(n, g2 + hx(n)); } } }
+  if (!done[t]) return null;
+  const cells = []; for (let i = t; i >= 0; i = from[i]) cells.push(i); cells.reverse();
+  const P = cells.map((i) => [((i % G.W) + 0.5) * GRID * cm, (((i / G.W) | 0) + 0.5) * GRID * cm]); P[0] = [sx, sz];
+  const see = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.ceil(L / 0.05); for (let k = 1; k < n; k++) { const x = a[0] + (b[0] - a[0]) * k / n, z = a[1] + (b[1] - a[1]) * k / n; if (!G.ok[cellOf(x, z)]) return false; } return true; };
+  const out = [P[0]]; let k = 0; while (k < P.length - 1) { let j = P.length - 1; while (j > k + 1 && !see(P[k], P[j])) j--; out.push(P[j]); k = j; }
+  return out;
+}
+function startAuto(x, y) {
+  const pts = findPath(tour.x, tour.z, x * cm, y * cm); if (!pts || pts.length < 2) { auto = null; return; }
+  auto = { pts, i: 1, tgt: [Math.round(pts[pts.length - 1][0] / cm), Math.round(pts[pts.length - 1][1] / cm)], best: Infinity, stuck: 0 }; posT = 0;
+}
+function stepAuto(dt, now) {   // 回傳這一格要走到的位置
+  const wp = auto.pts[auto.i], dx = wp[0] - tour.x, dz = wp[1] - tour.z, d = Math.hypot(dx, dz);
+  if (d < 0.06) { auto.i++; if (auto.i >= auto.pts.length) { auto = null; posT = 0; } return { x: tour.x, z: tour.z }; }
+  const step = Math.min(d, AUTO_SPEED * dt);
+  if (now - lastTurn > 700) { const want = Math.atan2(dz, dx); let dy = ((want - tour.yaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; tour.yaw += Math.max(-7 * dt, Math.min(7 * dt, dy)); }
+  const rest = d + auto.pts.slice(auto.i + 1).reduce((s, p, k, a) => s + Math.hypot(p[0] - (k ? a[k - 1][0] : wp[0]), p[1] - (k ? a[k - 1][1] : wp[1])), 0);
+  if (rest < auto.best - 0.01) { auto.best = rest; auto.stuck = 0; } else if ((auto.stuck += dt) > 1.5) auto = null;   // 卡住超過 1.5 秒就停
+  return { x: tour.x + dx / d * step, z: tour.z + dz / d * step };
+}
+function sendPos(now) {   // 告訴導覽中的手機：目前位置、面向、是否正在自動走
+  if (now - posT < 120) return; posT = now;
+  const e = [...conns].find((q) => q.id === state.tourBy); if (!e) return;
+  const m = { t: 'pos', x: Math.round(tour.x / cm), y: Math.round(tour.z / cm), yaw: Math.round(tour.yaw * 100) / 100, go: auto ? auto.tgt : 0 }, k = JSON.stringify(m);
+  if (k !== lastPos || now - (sendPos.full || 0) > 1000) { lastPos = k; sendPos.full = now; send(e.conn, m); }
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -409,10 +468,13 @@ function frame(now) {
     let f = 0, s = 0, t = 0, p = 0;
     for (const j of joy.values()) { f += j.f; s += j.s; t += j.t; p += j.p; }
     const cl = (v) => Math.max(-1, Math.min(1, v)); f = cl(f); s = cl(s); t = cl(t); p = cl(p);
+    if (Math.abs(t) > 0.05) lastTurn = now;
+    if (auto && Math.abs(f) + Math.abs(s) > 0.15) { auto = null; posT = 0; }   // 自己動搖桿就取消自動走
     tour.yaw += t * 1.7 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.9 * dt));
-    const dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.5 * dt;
-    const np = { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
-    updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z;
+    let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.5 * dt;
+    const np = auto ? stepAuto(dt, now) : { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
+    dx = Math.cos(tour.yaw); dz = Math.sin(tour.yaw);
+    updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z; sendPos(now);
     camera.position.set(tour.x, 1.5, tour.z);
     camera.lookAt(tour.x + dx * Math.cos(tour.pitch), 1.5 + Math.sin(tour.pitch), tour.z + dz * Math.cos(tour.pitch));
     if (Q0 === null) tuneQuality(dt);
@@ -504,7 +566,7 @@ function startPeer() {
     if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) setNet('連不上配對伺服器（' + err.type + '），可能被網路擋住', false);
   });
 }
-function endTour() { state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
+function endTour() { auto = null; state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
 function drop(entry) { if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ } if (state.tourBy === entry.id) endTour(); broadcast(); }
 setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 30000) drop(e); }, 1000);
 
@@ -515,7 +577,8 @@ function onMsg(entry, m) {
   if (m.t === 'ping' || screen !== 'play') return;
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
-  if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
+  if (m.t === 'goto') { if (state.mode === 'tour' && state.tourBy === entry.id) startAuto(num(m.x, 0, PLAN.W), num(m.y, 0, PLAN.D)); return; }
+  if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { lastTurn = performance.now(); tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
       state.mode = 'tour'; state.tourBy = entry.id;

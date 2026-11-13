@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113a';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261113a';
-import * as ART from './planart.js?v=20261113a';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113b';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261113b';
+import * as ART from './planart.js?v=20261113b';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,6 +35,7 @@ function connect() {
   setInterval(() => send({ t: 'ping' }), 2000);
 }
 function onData(m) {
+  if (m && m.t === 'pos') { S.pos = m; moveMe(); return; }   // 導覽中：大螢幕回報目前位置
   if (!m || m.t !== 'state') return;
   const keep = S.drag && S.st ? S.st.items.find((i) => i.id === S.drag.id) : null;
   S.st = m;
@@ -55,7 +56,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
+  const st = S.st, key = [innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -89,6 +90,7 @@ function renderMain() {
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
   if (!st.ready) { el.innerHTML = '<h2>已連上大螢幕</h2><div class="muted">請先在大螢幕上按「開始遊戲」，再選擇戶型。</div>'; return; }
   const touring = st.mode === 'tour', mine = st.tourBy === st.you;
+  document.body.classList.toggle('tourL', S.tab === 'tour' && touring && mine && innerWidth > innerHeight);
   if (touring && S.tab !== 'tour') {
     el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;
   }
@@ -124,11 +126,19 @@ function renderMain() {
   } else {
     if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>';
     else if (!mine) el.innerHTML = '<h2>3D 導覽中</h2><div class="muted">另一支手機正在操作導覽，請看大螢幕。</div>';
-    else {
-      el.innerHTML = '<div class="rowb" style="align-items:center"><h2>3D 導覽中</h2><button class="second" data-act="tour" data-on="" style="flex:0 0 104px">結束導覽</button></div>' +
-        '<div class="zone look" id="lookZone"><b>轉頭</b><span>在這一區任何地方滑動</span></div>' +
-        '<div class="zone move" id="moveZone"><b>走動</b><span>按住任何地方，往想走的方向拖</span><div class="stick hidden" id="stick"><i></i></div></div>';
-      bindPads();
+    else if (innerWidth <= innerHeight) {   // 導覽時要橫拿
+      el.innerHTML = '<div class="rotate"><div class="rot">📱</div><h2>請把手機轉橫</h2><div class="muted">轉橫後就會出現操作畫面。<br>手機有鎖住旋轉的話，請先解除。</div><button class="second" data-act="tour" data-on="" style="flex:0 0 auto;padding:0 22px">結束導覽</button></div>';
+    } else {   // 橫拿：左邊走路搖桿、中間平面圖（點一下就快速走過去）、右邊轉頭搖桿
+      const vb = [-20, -20, PLAN.W + 40, PLAN.D + 40];
+      let h = planBase(vb);
+      for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style, it); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
+      h += planWalls() + '<g id="tgt" style="display:none"><circle r="46" fill="rgba(46,125,79,.18)" stroke="#2E7D4F" stroke-width="10"/><circle r="12" fill="#2E7D4F"/></g>' +
+        '<g id="me"><path d="M0 0 L190 -95 A212 212 0 0 1 190 95 Z" fill="rgba(160,103,58,.24)"/><circle r="30" fill="#A0673A" stroke="#fff" stroke-width="10"/></g>';
+      el.innerHTML = '<div class="tl"><div class="tlTop"><span class="tlPill">● 3D 導覽中</span><span class="goChip" id="goChip" style="display:none"></span><button class="second" data-act="tour" data-on="">結束導覽</button></div>' +
+        '<div class="tlBody"><div class="zone move" id="moveZone"><b>走路</b><div class="stick rest" id="stick"><i></i></div></div>' +
+        `<div class="tlPlan"><svg id="tplan" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${h}</svg><div class="tlCap">點平面圖任一處，快速走過去</div></div>` +
+        '<div class="zone look" id="lookZone"><b>轉頭</b><div class="stick rest" id="lstick"><i></i></div></div></div></div>';
+      bindPads(); bindTourPlan(); moveMe();
     }
   }
 }
@@ -293,7 +303,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113a'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113b'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -317,7 +327,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113a'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113b'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
@@ -377,20 +387,32 @@ $('list').addEventListener('click', (e) => {
 // ================= 導覽搖桿 =================
 const J = { f: 0, s: 0, tn: 0, p: 0 }, LOOK = { dx: 0, dy: 0 }; let jDirty = false;
 function bindPads() {
-  // 上半部：整塊都是轉頭觸控板，手指滑多少就轉多少，不必對準按鈕
-  const look = $('lookZone'); let lp = null, lx = 0, ly = 0;
-  look.addEventListener('pointerdown', (e) => { e.preventDefault(); lp = e.pointerId; lx = e.clientX; ly = e.clientY; look.setPointerCapture(lp); look.classList.add('on'); });
-  look.addEventListener('pointermove', (e) => { if (e.pointerId !== lp) return; const b = look.getBoundingClientRect(); LOOK.dx += (e.clientX - lx) / b.width * 3.0; LOOK.dy -= (e.clientY - ly) / b.height * 1.1; lx = e.clientX; ly = e.clientY; flushInput(); });
-  const lup = (e) => { if (e.pointerId === lp) { lp = null; look.classList.remove('on'); } };
-  look.addEventListener('pointerup', lup); look.addEventListener('pointercancel', lup);
-  // 下半部：按在哪裡，搖桿就出現在哪裡
-  const move = $('moveZone'), stick = $('stick'), knob = stick.firstElementChild, R = 56; let mp = null, ox = 0, oy = 0;
-  const set = (x, y) => { knob.style.transform = `translate(${x * R}px, ${y * R}px)`; J.f = -y; J.s = x; jDirty = true; flushInput(); };
-  move.addEventListener('pointerdown', (e) => { e.preventDefault(); mp = e.pointerId; move.setPointerCapture(mp); const b = move.getBoundingClientRect(); ox = e.clientX; oy = e.clientY; stick.style.left = (ox - b.left) + 'px'; stick.style.top = (oy - b.top) + 'px'; stick.classList.remove('hidden'); set(0, 0); });
-  move.addEventListener('pointermove', (e) => { if (e.pointerId !== mp) return; let x = (e.clientX - ox) / R, y = (e.clientY - oy) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } set(x, y); });
-  const mup = (e) => { if (e.pointerId === mp) { mp = null; stick.classList.add('hidden'); set(0, 0); lastJoy = 0; jDirty = true; flushInput(); send({ t: 'joy', n: ++jn, f: 0, s: 0, tn: 0, p: 0 }); } };   // 放開時再用可靠通道送一次「停」
-  move.addEventListener('pointerup', mup); move.addEventListener('pointercancel', mup);
+  // 左右兩塊都是「按在哪裡，搖桿就出現在哪裡」：左邊走路、右邊轉頭（推得越遠轉得越快），放開就回到中間
+  const pad = (zone, stick, onSet, onStop) => {
+    const knob = stick.firstElementChild, R = 56; let id = null, ox = 0, oy = 0;
+    const set = (x, y) => { knob.style.transform = `translate(${x * R}px, ${y * R}px)`; onSet(x, y); jDirty = true; flushInput(); };
+    zone.addEventListener('pointerdown', (e) => { e.preventDefault(); id = e.pointerId; zone.setPointerCapture(id); const b = zone.getBoundingClientRect(); ox = e.clientX; oy = e.clientY; stick.style.left = (ox - b.left) + 'px'; stick.style.top = (oy - b.top) + 'px'; stick.classList.remove('rest'); zone.classList.add('on'); });
+    zone.addEventListener('pointermove', (e) => { if (e.pointerId !== id) return; let x = (e.clientX - ox) / R, y = (e.clientY - oy) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } set(x, y); });
+    const up = (e) => { if (e.pointerId !== id) return; id = null; stick.classList.add('rest'); stick.style.left = stick.style.top = ''; zone.classList.remove('on'); set(0, 0); lastJoy = 0; flushInput(); onStop(); };
+    zone.addEventListener('pointerup', up); zone.addEventListener('pointercancel', up);
+  };
+  // 放開時再用可靠通道送一次「停」（只停自己這一邊，另一手還按著的話不受影響）
+  pad($('moveZone'), $('stick'), (x, y) => { J.f = -y; J.s = x; }, () => send({ t: 'joy', n: ++jn, f: 0, s: 0, tn: J.tn, p: J.p }));
+  pad($('lookZone'), $('lstick'), (x, y) => { J.tn = x; J.p = -y; }, () => send({ t: 'joy', n: ++jn, f: J.f, s: J.s, tn: 0, p: 0 }));
 }
+// 平面圖：點一下就請大螢幕快速走過去；大螢幕每 0.1 秒回報位置，畫成圓點＋面向的扇形
+function bindTourPlan() {
+  const svg = $('tplan'); if (!svg) return;
+  svg.addEventListener('pointerdown', (e) => { e.preventDefault(); const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const x = Math.round(Math.max(0, Math.min(PLAN.W, q.x))), y = Math.round(Math.max(0, Math.min(PLAN.D, q.y))); send({ t: 'goto', x, y }); S.pos = Object.assign({}, S.pos || {}, { go: [x, y] }); moveMe(); });
+}
+function moveMe() {
+  const me = document.getElementById('me'), tg = document.getElementById('tgt'), chip = document.getElementById('goChip'), p = S.pos; if (!me || !p) return;
+  if (p.x != null) me.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${(p.yaw * 180 / Math.PI).toFixed(1)})`);
+  const go = p.go && p.go.length ? p.go : null; tg.style.display = go ? '' : 'none'; chip.style.display = go ? '' : 'none';
+  if (go) { tg.setAttribute('transform', `translate(${go[0]} ${go[1]})`); const r = roomAt(go[0], go[1], 0); chip.textContent = r ? `前往${r.n}中…` : '前往中…'; }
+}
+addEventListener('resize', () => update());
 const myTour = () => S.st && S.st.mode === 'tour' && S.st.tourBy === S.st.you;
 let lastJoy = 0;
 function flushInput() {   // 手指一動就送（最快每 25 毫秒一次），不等固定的時鐘
