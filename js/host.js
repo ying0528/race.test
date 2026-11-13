@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114a';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114a';
-import { buildItem, buildPerson, M } from './models.js?v=20261114a';
-import * as MT from './mats.js?v=20261114a';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114b';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114b';
+import { buildItem, buildPerson, M } from './models.js?v=20261114b';
+import * as MT from './mats.js?v=20261114b';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -141,6 +141,12 @@ function applyWallFinishes() {
   }
   renderer.shadowMap.needsUpdate = true; invalidate(4);
 }
+function applyFloors() {   // 只換地板，不重做牆面
+  invalidate(6); const fm = mainFloorMat(); for (const m of mainFloors) m.material = fm; applyRoomFloors();
+}
+// 手機連續點好幾個材質時，只套用最後一次（避免大螢幕連續重做而卡住）
+const pendFx = new Set(); let pendT = 0;
+function later(fn) { pendFx.add(fn); if (!pendT) pendT = setTimeout(() => { pendT = 0; const a = [...pendFx]; pendFx.clear(); for (const f of a) f(); }, 40); }
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
   invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
@@ -233,9 +239,9 @@ function setScreens(on) {
 }
 // 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
 const protos = new Map(), dblCache = new Map();
-const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; c.clippingPlanes = [CLIP]; dblCache.set(m, c); } return dblCache.get(m); };
+const dbl = (m) => { if (!dblCache.has(m)) { const c = m.clone(); c.side = THREE.DoubleSide; c.clippingPlanes = [CLIP]; c.clipShadows = true; dblCache.set(m, c); } return dblCache.get(m); };   // 影子也跟著切
 function proto(sig, make, tall) {
-  if (!protos.has(sig)) { const o = make(); if (tall) o.traverse((n) => { if (n.isMesh && n.material.side !== THREE.DoubleSide) n.material = dbl(n.material); }); protos.set(sig, o); }
+  if (!protos.has(sig)) { const o = make(); if (tall) o.traverse((n) => { if (n.isMesh) n.material = Array.isArray(n.material) ? n.material.map(dbl) : dbl(n.material); }); protos.set(sig, o); }   // 玻璃、格柵這類本來就雙面的材質也要切
   return protos.get(sig).clone();
 }
 function sigOf(it, people, used) {
@@ -268,7 +274,12 @@ function warmProto(key, sk) {   // 先把家具模型建好，並在背景編譯
 }
 let lastInput = 0;
 for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
+function texJobs() {   // 所有地板、牆面材質的貼圖，閒置時分小段先畫好；手機點選時就能立刻換上
+  const makers = [...Object.keys(FLOORS).map((k) => () => floorMatOf(k)), ...WALL_GROUPS.flatMap((g) => [g.k, ...(g.alt ? [g.alt[0]] : [])].flatMap((kind) => g.colors.map(([c]) => () => MT.wallFinish(kind, c, false))))];
+  return makers.map((make) => () => { const job = MT.prepJob(make); if (!job) return null; return (function* () { yield* job; const m = make(); for (const t of [m.map, m.normalMap]) if (t) renderer.initTexture(t); })(); });
+}
 function queueWarm() {
+  warm.unshift(...texJobs());
   for (const u of UNITS) if (u.plan !== PLAN) for (const d of u.plan.defaults) warm.push(() => warmProto(d.key, state.style));
   for (const sk of Object.keys(STYLES)) {
     if (sk === state.style) continue;
@@ -278,7 +289,16 @@ function queueWarm() {
   }
   if (warming) return; warming = true;
   const busy = () => state.mode === 'tour' || camMoving || performance.now() - lastInput < 1200;
-  const step = () => { if (busy()) return setTimeout(step, 400); const f = warm.shift(); if (!f) { warming = false; return; } try { f(); } catch (e) { /* 忽略 */ } setTimeout(step, 60); };
+  let gen = null;
+  const step = () => {
+    if (gen) {   // 分段畫貼圖：每次最多 12 ms，手機傳來的操作不用等
+      if (state.mode === 'tour' || camMoving) return setTimeout(step, 300);
+      const t0 = performance.now(); try { while (performance.now() - t0 < 12) if (gen.next().done) { gen = null; break; } } catch (e) { gen = null; }
+      return setTimeout(step, 16);
+    }
+    if (busy()) return setTimeout(step, 400); const f = warm.shift(); if (!f) { warming = false; return; }
+    try { const r = f(); if (r && typeof r.next === 'function') gen = r; } catch (e) { /* 忽略 */ } setTimeout(step, gen ? 0 : 60);
+  };
   setTimeout(step, 800);
 }
 
@@ -389,6 +409,7 @@ function setupComposer() {
   composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }));
   composer.addPass(new RenderPass(scene, camera));
   aoPass = new GTAOPass(scene, camera, w, h); aoPass.updateGtaoMaterial({ radius: 0.3, distanceExponent: 1.2, thickness: 1.2, scale: 1.2, samples: 12 }); aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+  aoPass.normalMaterial.clippingPlanes = [CLIP];   // 接觸陰影也照切過的高度算，不然切掉的高牆還會留下一圈暗影
   composer.addPass(aoPass); composer.addPass(new OutputPass());
 }
 let ovSlow = 0, ovN = 0;
@@ -497,8 +518,8 @@ function pickShots() {
   const near = [...sight, ...itemRects(40).map((o) => o.r)];   // 會在畫面邊緣被拉長的：上面那些＋矮家具
   const tall = itemRects(40);
   const find = (q, kinds) => { const c = tall.filter((o) => kinds.includes(o.s.t) || kinds.includes(o.s.cat)).filter((o) => inRoom(q, o.it.x, o.it.y)); return c.sort((a, b) => b.s.w * b.s.d - a.s.w * a.s.d)[0]; };
-  const half = SHOT_HFOV / 2 * Math.PI / 180;
-  function best(q, subj, avoid) {
+  function best(q, subj, avoid, hfov = SHOT_HFOV, back = null) {
+    const half = hfov / 2 * Math.PI / 180;
     let top = null;
     const sx = subj ? subj.it.x * cm : null, sz = subj ? subj.it.y * cm : null;
     const wins = PLAN.wins.map((w) => [(w[0] + w[2]) / 2 * cm, (w[1] + w[3]) / 2 * cm]).filter(([wx, wz]) => q.rs.some(([a, b, c, d]) => wx >= a * cm - 1.2 && wx <= c * cm + 1.2 && wz >= b * cm - 1.2 && wz <= d * cm + 1.2));
@@ -514,13 +535,17 @@ function pickShots() {
           s += vis ? Math.max(0, 1 - off / 0.6) * 4 : -2; s += ds >= 2 && ds <= 6 ? 1 : -Math.min(2, Math.abs(ds - 4) / 2); }
         for (const [wx, wz] of wins) { const dw = Math.hypot(wx - X, wz - Z), aw = Math.atan2(wz - Z, wx - X); if (Math.abs(angDiff(aw, yaw)) < half * 0.85 && rayHit(X, Z, aw, block) >= dw - 0.25) { s += 1.5; break; } }
         if (avoid && Math.abs(angDiff(yaw, avoid.yaw)) < 0.7 && Math.hypot(X - avoid.x, Z - avoid.z) < 1.8) s -= 3;   // 第二張不要和第一張太像
+        if (back) {   // 對角線反拍：站得離第一張遠、朝第一張的方向看，把第一張背後沒拍到的那半邊拍進來
+          const db = Math.hypot(back.x - X, back.z - Z), ob = Math.abs(angDiff(Math.atan2(back.z - Z, back.x - X), yaw));
+          s += Math.max(0, 1 - ob / 0.7) * 4 + Math.min(4, db) * 1.5 - Math.max(0, 2.5 - db) * 4;   // 至少離第一張 2.5 公尺 if (Math.abs(angDiff(yaw, back.yaw)) < Math.PI / 2) s -= 5;
+        }
         if (!top || s > top.s) top = { s, x: X, z: Z, yaw };
       }
     }
     return top || { x: q.r ? (q.r[0] + q.r[2]) / 2 * cm : CX, z: q.r ? (q.r[1] + q.r[3]) / 2 * cm : CZ, yaw: 0 };
   }
-  const a = best(live, find(live, ['sofa'])), b = best(live, find(live, ['dtable', 'table']), a), c = best(master, find(master, ['bed']));
-  return [{ ...a, label: '客廳' }, { ...b, label: '客餐廳' }, { ...c, label: master.n.includes('主臥') ? '主臥' : master.n }];
+  const a = best(live, find(live, ['sofa'])), b = best(live, null, null, SHOT_HFOV, a), c = best(master, find(master, ['bed']), null, SHOT_HFOV + 3);
+  return [{ ...a, label: '客廳' }, { ...b, label: '客餐廳' }, { ...c, label: master.n.includes('主臥') ? '主臥' : master.n, hfov: SHOT_HFOV + 3 }];
 }
 // --- 2D 畫圖小工具 ---
 function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
@@ -571,7 +596,7 @@ function makeShots(entry, tok) {   // 拍照時暫時把畫布改成固定大小
       const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(renderer.domElement, 0, 0); return c;
     };
     state.mode = 'tour'; applyMode();
-    const ph = shots.map((s) => grab(1600, 900, () => { camera.fov = 2 * Math.atan(Math.tan(SHOT_HFOV * Math.PI / 360) / camera.aspect) * 180 / Math.PI; camera.position.set(s.x, EYE, s.z); camera.lookAt(s.x + Math.cos(s.yaw), EYE, s.z + Math.sin(s.yaw)); }));
+    const ph = shots.map((s) => grab(1600, 900, () => { camera.fov = 2 * Math.atan(Math.tan((s.hfov || SHOT_HFOV) * Math.PI / 360) / camera.aspect) * 180 / Math.PI; camera.position.set(s.x, EYE, s.z); camera.lookAt(s.x + Math.cos(s.yaw), EYE, s.z + Math.sin(s.yaw)); }));
     state.mode = 'overview'; applyMode();
     const bird = grab(2400, 1350, () => {
       camera.fov = 34; const el = 1.22, v = camera.fov * Math.PI / 360, hh = Math.atan(Math.tan(v) * camera.aspect), Wm = PLAN.W * cm, Dm = PLAN.D * cm;
@@ -598,7 +623,7 @@ function frame(now) {
     const cl = (v) => Math.max(-1, Math.min(1, v)); f = cl(f); s = cl(s); t = cl(t); p = cl(p);
     if (Math.abs(t) > 0.05) lastTurn = now;
     if (auto && Math.abs(f) + Math.abs(s) > 0.15) { auto = null; posT = 0; }   // 自己動搖桿就取消自動走
-    tour.yaw += t * 1.45 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.75 * dt));   // 轉頭、抬頭低頭、走路都比之前慢約 15%
+    tour.yaw += t * 1.25 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.75 * dt));   // 轉頭、抬頭低頭、走路都比之前慢約 15%
     let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.25 * dt;
     const np = auto ? stepAuto(dt, now) : { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
     dx = Math.cos(tour.yaw); dz = Math.sin(tour.yaw);
@@ -703,6 +728,7 @@ function onMsg(entry, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'hello') return send(entry.conn, snapshot(entry));
   if (m.t === 'ping' || screen !== 'play') return;
+  if (m.t !== 'joy' && m.t !== 'look') lastInput = performance.now();   // 有人在操作時，背景的模型準備先暫停
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
   if (m.t === 'shotget') { if (lastShots && lastShots.tok === m.tok) lastShots.imgs.forEach((img, i) => send(entry.conn, { t: 'shot', tok: m.tok, i, n: lastShots.imgs.length, img })); return; }
@@ -721,11 +747,11 @@ function onMsg(entry, m) {
     case 'wallf': { const k = parseWall(m.k) ? m.k : null;   // 牆面材質（全戶或單一區域）
       if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.walls[m.room] = k; else delete state.walls[m.room]; }
       else { state.wall = k; state.walls = {}; }
-      applyWallFinishes(); break; }
+      later(applyWallFinishes); break; }
     case 'floor': { const k = FLOORS[m.k] ? m.k : null;
       if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.floors[m.room] = k; else delete state.floors[m.room]; }
       else { state.floor = k; state.floors = {}; }   // 選「全戶」會蓋掉各區域的設定
-      applyStyle(); break; }
+      later(applyFloors); break; }
     case 'fin': { const it = find(m.id), f = it && FINISH[finishOf(getItem(it.key))];
       if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) { it.m = m.m; it.c = m.c; syncItems(); } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;

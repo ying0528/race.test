@@ -8,16 +8,27 @@ function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - x
 export function fbm(x, y, o = 4) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vnoise(x * f, y * f); a *= 0.5; f *= 2.03; } return s; }
 const gcache = new Map(), mc = new Map(), memo = (k, f) => (mc.has(k) ? mc.get(k) : (mc.set(k, f()), mc.get(k)));
 // fn(x, y, S) -> [高度 0..1, 明暗倍率, 暖色偏移]
+function* genMaps(k, base, fn, nStrength, S) {   // 一次畫幾十行就停一下（yield），背景預先準備時才不會卡住畫面
+  const H = new Float32Array(S * S), cv = document.createElement('canvas'), nv = document.createElement('canvas'); cv.width = cv.height = nv.width = nv.height = S;
+  const g = cv.getContext('2d'), im = g.createImageData(S, S), d = im.data, c = new THREE.Color(base), b = [c.r, c.g, c.b].map((v) => Math.pow(v, 1 / 2.2));
+  for (let y = 0; y < S; y++) { for (let x = 0; x < S; x++) { const r = fn(x, y, S), t = r[1], warm = r[2] || 0, i = (y * S + x) * 4; H[y * S + x] = r[0]; if (r[3] !== undefined) { d[i] = d[i + 1] = d[i + 2] = 255 * r[3]; d[i + 3] = 255; continue; } d[i] = 255 * Math.min(1, b[0] * t * (1 + warm)); d[i + 1] = 255 * Math.min(1, b[1] * t); d[i + 2] = 255 * Math.min(1, b[2] * t * (1 - warm)); d[i + 3] = 255; }
+    if (y % 24 === 23) yield; }
+  g.putImageData(im, 0, 0);
+  const ng = nv.getContext('2d'), nm = ng.createImageData(S, S), n = nm.data, at = (x, y) => H[((y + S) % S) * S + ((x + S) % S)], ns = nStrength * S / 1024;
+  for (let y = 0; y < S; y++) { for (let x = 0; x < S; x++) { const dx = (at(x + 1, y) - at(x - 1, y)) * ns, dy = (at(x, y + 1) - at(x, y - 1)) * ns, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4; n[i] = 255 * (0.5 - dx / l / 2); n[i + 1] = 255 * (0.5 + dy / l / 2); n[i + 2] = 255 * (0.5 + 1 / l / 2); n[i + 3] = 255; }
+    if (y % 96 === 95) yield; }
+  ng.putImageData(nm, 0, 0); gcache.set(k, [cv, nv]);
+}
+const CAPTURE = {}; let capture = null;
+// 背景預先準備：回傳「把這個材質的貼圖畫好」的分段工作（已經畫好就回傳 null）
+export function prepJob(make) {
+  capture = []; try { make(); } catch (e) { if (e !== CAPTURE) { capture = null; throw e; } } const j = capture[0] || null; capture = null; return j;
+}
 function maps(key, base, fn, nStrength, rep = 1, size = SIZE) {
   const k = key + base;
   if (!gcache.has(k)) {
-    const S = size, H = new Float32Array(S * S), cv = document.createElement('canvas'), nv = document.createElement('canvas'); cv.width = cv.height = nv.width = nv.height = S;
-    const g = cv.getContext('2d'), im = g.createImageData(S, S), d = im.data, c = new THREE.Color(base), b = [c.r, c.g, c.b].map((v) => Math.pow(v, 1 / 2.2));
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const r = fn(x, y, S), t = r[1], warm = r[2] || 0, i = (y * S + x) * 4; H[y * S + x] = r[0]; if (r[3] !== undefined) { d[i] = d[i + 1] = d[i + 2] = 255 * r[3]; d[i + 3] = 255; continue; } d[i] = 255 * Math.min(1, b[0] * t * (1 + warm)); d[i + 1] = 255 * Math.min(1, b[1] * t); d[i + 2] = 255 * Math.min(1, b[2] * t * (1 - warm)); d[i + 3] = 255; }
-    g.putImageData(im, 0, 0);
-    const ng = nv.getContext('2d'), nm = ng.createImageData(S, S), n = nm.data, at = (x, y) => H[((y + S) % S) * S + ((x + S) % S)], ns = nStrength * S / 1024;
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const dx = (at(x + 1, y) - at(x - 1, y)) * ns, dy = (at(x, y + 1) - at(x, y - 1)) * ns, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4; n[i] = 255 * (0.5 - dx / l / 2); n[i + 1] = 255 * (0.5 + dy / l / 2); n[i + 2] = 255 * (0.5 + 1 / l / 2); n[i + 3] = 255; }
-    ng.putImageData(nm, 0, 0); gcache.set(k, [cv, nv]);
+    if (capture) { capture.push(genMaps(k, base, fn, nStrength, size)); throw CAPTURE; }
+    for (const _ of genMaps(k, base, fn, nStrength, size)) { /* 一次畫完 */ }
   }
   const [cv, nv] = gcache.get(k), mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
   return { map: mk(cv, true), normalMap: mk(nv, false) };
