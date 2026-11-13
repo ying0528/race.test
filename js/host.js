@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112n';
-import { getItem, STYLES, FLOORS, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261112n';
-import { buildItem, buildPerson, M } from './models.js?v=20261112n';
-import * as MT from './mats.js?v=20261112n';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113a';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113a';
+import { buildItem, buildPerson, M } from './models.js?v=20261113a';
+import * as MT from './mats.js?v=20261113a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', floor: null, floors: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { style: 'nordic', floor: null, floors: {}, wall: null, walls: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -93,12 +93,58 @@ function applyRoomFloors() {   // 個別區域的地板：疊一層薄薄的在�
 function floorMatOf(key) {
   const f = FLOORS[key], st = STYLES[state.style];
   if (!f) return st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
+  if (f.k === 'strip') return MT.stripTile(f.c);
   return f.k === 'terrazzo' ? MT.terrazzo(f.c) : f.k === 'tile' ? MT.tiles(f.c, 2, false, 0.35) : f.k === 'stone' ? MT.stoneTile(f.c, 4) : f.k === 'carpet' ? MT.carpet(f.c) : MT.floorWood(f.c);
+}
+// ---- 牆面材質：跟地板一樣，可以「全戶」或每個區域分開選。做法是在牆面朝向該區域的那一面，貼一層薄薄的面材 ----
+// 全戶的設定不套到浴室和陽台；區域單獨設定的話，浴室陽台也可以換
+const UP = new THREE.Vector3(0, 1, 0), linings = [];
+function wallKeyAt(x, y) {
+  const q = roomAt(x, y, 4);
+  if (q && state.walls[q.id]) return state.walls[q.id];
+  if (!state.wall) return null;
+  if (q) return q.id.startsWith('bath') || q.id.startsWith('balc') ? null : state.wall;
+  const f = PLAN.floors.find(([a, b, c, d]) => x >= a && x <= c && y >= b && y <= d);   // 不屬於任何區域、但在室內（走道）
+  return f && f[4] !== 'bath' && f[4] !== 'balc' ? state.wall : null;
+}
+function applyWallFinishes() {
+  for (const m of linings) { m.removeFromParent(); m.geometry.dispose(); } linings.length = 0;
+  if (!wallsFull || (!state.wall && !Object.keys(state.walls).length)) return;
+  const quads = new Map();   // 材質鍵 → { full: [], cut: [] }
+  const add = (key, N, P0, s0, s1, z0, z1) => { const e = quads.get(key) || { full: [], cut: [] }; quads.set(key, e); e.full.push([N, P0, s0, s1, z0, z1]); if (z0 < CUT) e.cut.push([N, P0, s0, s1, z0, Math.min(z1, CUT)]); };
+  for (const [x1, y1, x2, y2, z1, z2] of PLAN.walls) {
+    // 四個面：法線方向、面上的固定座標、沿著面的範圍
+    for (const [nx, ny, fx, fy, a0, a1, alongX] of [[0, -1, 0, y1, x1, x2, true], [0, 1, 0, y2, x1, x2, true], [-1, 0, x1, 0, y1, y2, false], [1, 0, x2, 0, y1, y2, false]]) {
+      if (a1 - a0 < 25) continue;   // 牆的端面（門洞兩側）不貼
+      let cur = null, start = a0;
+      const flush = (end) => { if (cur) add(cur, [nx, ny], alongX ? fy : fx, start, end, z1, z2); };
+      const steps = Math.ceil((a1 - a0) / 5);
+      for (let i = 0; i <= steps; i++) { const t = Math.min(a0 + i * 5, a1), px = alongX ? t : fx + nx * 6, py = alongX ? fy + ny * 6 : t, k = t >= a1 ? null : wallKeyAt(px, py);
+        if (k !== cur || t >= a1) { flush(t); cur = k; start = t; } }
+    }
+  }
+  for (const [key, e] of quads) {
+    const w = parseWall(key); if (!w) continue; const mat = MT.wallFinish(w.kind, w.color, w.matte), rep = mat.userData.repCm || 100;
+    for (const [grp, list] of [[wallsFull, e.full], [wallsCut, e.cut]]) {
+      if (!list.length) continue; const P = [], Nn = [], U = [];
+      for (const [[nx, ny], f, s0, s1, z0, z1] of list) {   // 面在 x=f（或 y=f）往外 0.25 cm；T＝上 × 法線，讓三角形面向房間
+        const N = new THREE.Vector3(nx, 0, ny), T = new THREE.Vector3().crossVectors(UP, N), off = f + (nx || ny) * 0.25;
+        const pt = (a, z) => { const X = nx ? off : a, Y = nx ? a : off; return [X * cm, z * cm, Y * cm]; };
+        const sgn = T.x + T.z, u = (a) => (a * sgn) / rep, v = (z) => z / rep;
+        const A = sgn > 0 ? s0 : s1, B = sgn > 0 ? s1 : s0;   // 沿 T 方向由小到大
+        const q = [[A, z0], [B, z0], [B, z1], [A, z0], [B, z1], [A, z1]];
+        for (const [a, z] of q) { P.push(...pt(a, z)); Nn.push(nx, 0, ny); U.push(u(a), v(z)); }
+      }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+      const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true; grp.add(mesh); linings.push(mesh);
+    }
+  }
+  renderer.shadowMap.needsUpdate = true; invalidate(4);
 }
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
   invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
-  for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm; applyRoomFloors();
+  for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm; applyRoomFloors(); applyWallFinishes();
 }
 function buildShell() {
   setCuts(state.cut);   // 被拆掉的牆不蓋
@@ -157,7 +203,7 @@ function buildShell() {
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(ceiling, x1, y1, x2, y2, PLAN.H, PLAN.H + 12, ceilMat);
   const dl = M('emit', '#FFF4E0');
   bulbs.children.forEach((p) => { if (!p.userData.on) return; const d = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), dl); d.position.set(p.position.x, PLAN.H * cm - 0.004, p.position.z); ceiling.add(d); });
-  applyRoomFloors(); applyMode();
+  applyRoomFloors(); applyWallFinishes(); applyMode();
 }
 
 // ================= 家具 =================
@@ -172,7 +218,8 @@ function capFor(spec) {   // 高過剖切線的櫃類，在剖切高度蓋一片
     return g;
   }
   if (!CAP_T.has(spec.t) || spec.elev + spec.h <= CUT) return null;
-  const m = new THREE.Mesh(capGeo, capMat); m.scale.set(spec.w * cm, 1, spec.d * cm); m.position.y = CUT * cm + 0.008; m.receiveShadow = true;
+  const m = new THREE.Mesh(capGeo, capMat); m.scale.set(spec.w * cm, 1, spec.d * cm); m.position.y = CUT * cm + 0.008;
+  if (spec.v === 'dress') { m.scale.z = 6 * cm; m.position.z = (-spec.d / 2 + 3) * cm; }   // 化妝台與更衣區是開放的，只在背板蓋剖切面 m.receiveShadow = true;
   const g = new THREE.Group(); g.add(m); return g;
 }
 const objs = new Map();
@@ -403,7 +450,7 @@ function useUnit(id) {
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
-  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {}; state.cut = [];
+  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {}; state.walls = {}; state.cut = [];
   buildShell(); syncItems(); warm.length = 0; queueWarm();
   try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ }
 }
@@ -431,7 +478,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -478,6 +525,10 @@ function onMsg(entry, m) {
   }
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
+    case 'wallf': { const k = parseWall(m.k) ? m.k : null;   // 牆面材質（全戶或單一區域）
+      if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.walls[m.room] = k; else delete state.walls[m.room]; }
+      else { state.wall = k; state.walls = {}; }
+      applyWallFinishes(); break; }
     case 'floor': { const k = FLOORS[m.k] ? m.k : null;
       if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.floors[m.room] = k; else delete state.floors[m.room]; }
       else { state.floor = k; state.floors = {}; }   // 選「全戶」會蓋掉各區域的設定

@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261112n';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261112n';
-import * as ART from './planart.js?v=20261112n';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113a';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261113a';
+import * as ART from './planart.js?v=20261113a';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -55,7 +55,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), S.fg, S.fr, S.resetArm].join('|');
+  const st = S.st, key = [S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -63,6 +63,27 @@ function update() {
 const ROOM_COLORS = ['#E6B89C', '#9CC5E6', '#B7D9A8', '#E6D49C', '#C9B3E6', '#9CE0D6', '#E6A8C4', '#C8C8C8', '#D9C2A0'];
 const cutPatch = () => (S.st.cut || []).flatMap((i) => cutRects(i)).map(([a, b, c, d]) => `<rect x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="url(#f-main)"/>`).join('');   // 拆掉的牆底下補地板
 const planBase = (vb) => (setCuts(S.st.cut), ART.defs(S.st.style, S.st.floor, S.st.floors) + ART.floors(vb, S.st.floors) + cutPatch()), planWalls = () => ART.walls();
+// 牆面材質選單：先選種類，石材再選亮面／霧面、木紋再選木皮／格柵，最後選顏色
+function wallOpts(cur) {
+  const pw = parseWall(cur), wg = S.wg ?? Math.max(0, WALL_GROUPS.findIndex((g) => pw && g === pw.group)), G = WALL_GROUPS[wg], same = pw && pw.group === G;
+  const matte = S.wo ?? (same ? pw.matte : !!G.matte), kind = S.walt ?? (same ? pw.kind : G.k);
+  return { pw, wg, G, matte: !!G.sheen && matte, kind: G.alt ? kind : G.k, same };
+}
+function setWall(k) {
+  const fr = S.fr || ''; S.st.walls = S.st.walls || {};
+  if (fr) { if (k) S.st.walls[fr] = k; else delete S.st.walls[fr]; } else { S.st.wall = k; S.st.walls = {}; }
+  send({ t: 'wallf', k, room: fr || undefined });
+}
+const wallKey = (kind, c, matte) => `${kind}|${c}|${matte ? 'm' : ''}`;
+function wallPicker(cur) {
+  const { wg, G, matte, kind } = wallOpts(cur);
+  let opt = '';
+  if (G.sheen) opt = [['g', '亮面'], ['m', '霧面']].map(([k, n]) => `<button class="${(k === 'm') === matte ? 'on' : ''}" data-act="wo" data-k="${k}">${n}</button>`).join('');
+  if (G.alt) opt = [[G.k, '木皮平板'], [G.alt[0], G.alt[1]]].map(([k, n]) => `<button class="${k === kind ? 'on' : ''}" data-act="walt" data-k="${k}">${n}</button>`).join('');
+  return '<div class="chips">' + WALL_GROUPS.map((g, i) => `<button class="${i === wg ? 'on' : ''}" data-act="wg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
+    (opt ? `<div class="chips sub">${opt}</div>` : '') +
+    '<div class="fgrid">' + G.colors.map(([c, n]) => { const k = wallKey(kind, c, matte); return `<button class="fsw ${k === cur ? 'on' : ''}" data-act="wallf" data-k="${k}"><i class="wk-${kind}" style="--c:${c}"></i><span>${n}</span></button>`; }).join('') + '</div>';
+}
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
@@ -72,14 +93,14 @@ function renderMain() {
     el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;
   }
   if (S.tab === 'style') {
-    const fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', cur = fr ? (st.floors || {})[fr] : st.floor;
+    const fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', W = S.fk === 'wall', cur = W ? (fr ? (st.walls || {})[fr] : st.wall) : fr ? (st.floors || {})[fr] : st.floor, over = (W ? st.walls : st.floors) || {};
     const fg = S.fg ?? Math.max(0, FLOOR_GROUPS.findIndex((g) => g.items.some((f) => f[0] === cur))), sw = (f) => { const [id, n, c, k = 'wood'] = f; return `<button class="fsw ${id === cur ? 'on' : ''}" data-act="floor" data-k="${id}"><i class="fk-${k}" style="--c:${c}"></i><span>${n}</span></button>`; };
     el.innerHTML = '<h2>選擇風格</h2><div class="grid2 styles">' +
       Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b></button>`).join('') + '</div>' +
-      `<div class="rowb" style="align-items:center"><h2>地板材質</h2><button class="second ${cur ? '' : 'on'}" data-act="floor" data-k="" style="flex:0 0 108px;height:36px">${fr ? '跟著全戶' : '跟著風格'}</button></div>` +
-      '<div class="chips">' + [['', '全戶'], ...PLAN.rooms.map((q) => [q.id, q.n])].map(([id, n]) => `<button class="${id === fr ? 'on' : ''}" data-act="fr" data-k="${id}">${n}${id && (st.floors || {})[id] ? ' ●' : ''}</button>`).join('') + '</div>' +
-      '<div class="chips">' + FLOOR_GROUPS.map((g, i) => `<button class="${i === fg ? 'on' : ''}" data-act="fg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
-      '<div class="fgrid">' + FLOOR_GROUPS[fg].items.map(sw).join('') + '</div>';
+      `<div class="rowb" style="align-items:center"><div class="seg"><button class="${W ? '' : 'on'}" data-act="fk" data-k="floor">地板</button><button class="${W ? 'on' : ''}" data-act="fk" data-k="wall">牆面</button></div><button class="second ${cur ? '' : 'on'}" data-act="${W ? 'wallf' : 'floor'}" data-k="" style="flex:0 0 108px;height:36px">${fr ? '跟著全戶' : '跟著風格'}</button></div>` +
+      '<div class="chips">' + [['', '全戶'], ...PLAN.rooms.map((q) => [q.id, q.n])].map(([id, n]) => `<button class="${id === fr ? 'on' : ''}" data-act="fr" data-k="${id}">${n}${id && over[id] ? ' ●' : ''}</button>`).join('') + '</div>' +
+      (W ? wallPicker(cur) : '<div class="chips">' + FLOOR_GROUPS.map((g, i) => `<button class="${i === fg ? 'on' : ''}" data-act="fg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
+      '<div class="fgrid">' + FLOOR_GROUPS[fg].items.map(sw).join('') + '</div>');
   } else if (S.tab === 'edit') {
     const r = curRoom();
     if (!r) {
@@ -117,7 +138,15 @@ $('main').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !S.st) return;
   const a = b.dataset.act;
   if (a === 'floor') { const k = b.dataset.k || null, fr = S.fr || ''; S.st.floors = S.st.floors || {}; if (fr) { if (k) S.st.floors[fr] = k; else delete S.st.floors[fr]; } else { S.st.floor = k; S.st.floors = {}; } send({ t: 'floor', k, room: fr || undefined }); }
-  if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; }
+  if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; S.wg = S.wo = S.walt = undefined; }
+  if (a === 'fk') { S.fk = b.dataset.k; S.wg = S.wo = S.walt = undefined; }
+  if (a === 'wg') { S.wg = +b.dataset.i; S.wo = S.walt = undefined; }
+  if (a === 'wo' || a === 'walt') {   // 換亮面／霧面或木皮／格柵：目前這一區已經是這種材質的話，直接套用到同一個顏色
+    const fr = S.fr || '', cur = fr ? (S.st.walls || {})[fr] : S.st.wall, o0 = wallOpts(cur);
+    if (a === 'wo') S.wo = b.dataset.k === 'm'; else S.walt = b.dataset.k;
+    const o = wallOpts(cur); if (o0.same) setWall(wallKey(o.kind, o0.pw.color, o.matte));
+  }
+  if (a === 'wallf') setWall(b.dataset.k || null);
   if (a === 'fg') S.fg = +b.dataset.i;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
@@ -264,7 +293,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112n'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113a'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -288,7 +317,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261112n'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261113a'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
@@ -307,8 +336,9 @@ function renderSheet() {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || sk, it), f = FINISH[finishOf(s)]; if (!f) return closeSheet();
     const cm = it.m || (s.v === 'leather' ? 'leather' : null), cc = it.c;
     $('sheetTitle').textContent = '材質與顏色・' + s.name; $('groups').innerHTML = ''; $('cats').innerHTML = '';
-    $('list').innerHTML = '<h2 style="font-size:17px">材質</h2><div class="grid2">' + f.mats.map(([k, n]) => `<button class="card finm ${k === cm ? 'on' : ''}" data-fm="${k}"><i class="fm-${k}" style="--c:${cc || s.color && s.color[0] === '#' ? cc || s.color : f.colors[0][0]}"></i><b>${n}</b></button>`).join('') + '</div>' +
-      '<h2 style="font-size:17px;margin-top:6px">顏色</h2><div class="fgrid" style="flex:none;overflow:visible">' + f.colors.map(([c, n]) => `<button class="fsw ${c === cc ? 'on' : ''}" data-fc="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>';
+    const cm2 = cm || s.fin;
+    $('list').innerHTML = `<h2 style="font-size:17px">${f.mlabel || '材質'}</h2><div class="grid2">` + f.mats.map(([k, n]) => `<button class="card finm ${k === cm2 ? 'on' : ''}" data-fm="${k}"><i class="fm-${k}" style="--c:${f.mcol ? f.mcol[k] : cc || s.color && s.color[0] === '#' ? cc || s.color : f.colors[0][0]}"></i><b>${n}</b></button>`).join('') + '</div>' +
+      `<h2 style="font-size:17px;margin-top:6px">${f.label && f.mcol ? f.label : '顏色'}</h2><div class="fgrid" style="flex:none;overflow:visible">` + f.colors.map(([c, n]) => `<button class="fsw ${c === cc ? 'on' : ''}" data-fc="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>';
     return;
   }
   if (S.sheet === 'person') {

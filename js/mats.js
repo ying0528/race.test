@@ -13,7 +13,7 @@ function maps(key, base, fn, nStrength, rep = 1, size = SIZE) {
   if (!gcache.has(k)) {
     const S = size, H = new Float32Array(S * S), cv = document.createElement('canvas'), nv = document.createElement('canvas'); cv.width = cv.height = nv.width = nv.height = S;
     const g = cv.getContext('2d'), im = g.createImageData(S, S), d = im.data, c = new THREE.Color(base), b = [c.r, c.g, c.b].map((v) => Math.pow(v, 1 / 2.2));
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const r = fn(x, y, S), t = r[1], warm = r[2] || 0, i = (y * S + x) * 4; H[y * S + x] = r[0]; d[i] = 255 * Math.min(1, b[0] * t * (1 + warm)); d[i + 1] = 255 * Math.min(1, b[1] * t); d[i + 2] = 255 * Math.min(1, b[2] * t * (1 - warm)); d[i + 3] = 255; }
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const r = fn(x, y, S), t = r[1], warm = r[2] || 0, i = (y * S + x) * 4; H[y * S + x] = r[0]; if (r[3] !== undefined) { d[i] = d[i + 1] = d[i + 2] = 255 * r[3]; d[i + 3] = 255; continue; } d[i] = 255 * Math.min(1, b[0] * t * (1 + warm)); d[i + 1] = 255 * Math.min(1, b[1] * t); d[i + 2] = 255 * Math.min(1, b[2] * t * (1 - warm)); d[i + 3] = 255; }
     g.putImageData(im, 0, 0);
     const ng = nv.getContext('2d'), nm = ng.createImageData(S, S), n = nm.data, at = (x, y) => H[((y + S) % S) * S + ((x + S) % S)], ns = nStrength * S / 1024;
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const dx = (at(x + 1, y) - at(x - 1, y)) * ns, dy = (at(x, y + 1) - at(x, y - 1)) * ns, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4; n[i] = 255 * (0.5 - dx / l / 2); n[i + 1] = 255 * (0.5 + dy / l / 2); n[i + 2] = 255 * (0.5 + 1 / l / 2); n[i + 3] = 255; }
@@ -50,6 +50,57 @@ const loopFn = (x, y, S) => { const p = S / 96, u = (x % p) / p, row = Math.floo
 const plaster = (x, y) => { const h = fbm(x * 0.04, y * 0.04, 4); return [h, 0.97 + 0.05 * h]; };
 const pile = (x, y, S) => { const h = vnoise(x * 0.9, y * 0.9) * 0.6 + fbm(x * 0.06, y * 0.06, 3) * 0.4, e = Math.min(x, S - x, y, S - y) / S, bx = e < 0.045 && e > 0.03; return [h, (0.84 + 0.24 * h) * (bx ? 0.8 : 1)]; };
 const grainy = (x, y) => { const h = fbm(x * 0.35, y * 0.35, 3); return [h, 0.95 + 0.1 * h]; };
+
+// ---- 牆面材質與長條磚（可無縫重複；有磚縫的材質，接縫剛好落在磚縫上） ----
+const cl = (v) => Math.max(0, Math.min(1, v));
+function pnoise(x, y, Px, Py) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), m = (a, P) => ((a % P) + P) % P;
+  const a = hash(m(xi, Px), m(yi, Py)), b = hash(m(xi + 1, Px), m(yi, Py)), c = hash(m(xi, Px), m(yi + 1, Py)), d = hash(m(xi + 1, Px), m(yi + 1, Py)); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+// 週期性 fbm：u、v 是 0~1 的貼圖座標，P 是格數，結果左右上下可以無縫接起來
+function pfbm(u, v, o, Px, Py = Px) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * pnoise(u * Px * f, v * Py * f, Px * f, Py * f); a *= 0.5; f *= 2; } return s; }
+const grout = (x, y, tw, th, S, w = 1.4) => { const ex = Math.min(x % tw, tw - (x % tw)), ey = Math.min(y % th, th - (y % th)); return Math.min(1, Math.min(ex, ey) / (S / 1024 * w)); };
+const WALL = {
+  // 潘朵拉白大板磚：貼圖＝240×240 cm，磚 120×60；白底、黑色裂紋、深色團塊
+  pandora: (x, y, S) => { const u = x / S, v = y / S, g = grout(x, y, S / 2, S / 4, S), id = hash(Math.floor(x / (S / 2)), Math.floor(y / (S / 4)));
+    const w1 = pfbm(u, v, 5, 2), w2 = pfbm(u + 0.37, v + 0.21, 5, 3), line = (f, p) => Math.pow(1 - Math.abs(Math.sin(f * Math.PI)), p);   // 線條：沿固定方向、被雜訊扭曲的裂紋
+    const c1 = line(u * 2 + v * 3 + w1 * 2.6, 70), c2 = line(u * 4 - v * 2 + w2 * 3.2, 90), c3 = line(-u * 3 + v * 6 + w1 * 4, 160), grain = pfbm(u, v, 3, 64);
+    const blob = cl((pfbm(u + 0.5, v + 0.13, 5, 2) - 0.57) * 6) * (0.75 + 0.5 * pfbm(u, v + 0.3, 4, 12)), mid = cl((pfbm(u + 0.2, v + 0.7, 4, 3) - 0.5) * 3);
+    const t = (1 - 0.06 * grain - 0.12 * mid - 0.78 * c1 - 0.6 * c2 - 0.35 * c3) * (1 - 0.8 * cl(blob));
+    return g < 1 ? [0.2, 0, 0, 0.62] : [0.55 - 0.2 * (c1 + c2), cl(t), 0.18 * c1 * id]; },
+  gold: (x, y, S) => { const u = x / S, v = y / S, j = Math.min(x % (S / 2), S / 2 - (x % (S / 2))) < S / 1024 * 0.8, cloud = pfbm(u, v, 5, 3), w = pfbm(u + 0.2, v, 4, 2), line = (f, p) => Math.pow(1 - Math.abs(Math.sin(f * Math.PI)), p);
+    const band = Math.abs(((v - 0.55 + u * 0.42 + (w - 0.5) * 0.25) % 1 + 1) % 1 - 0.5) * 2, bw = 0.045 + 0.06 * pfbm(u, v + 0.4, 3, 4), core = cl((1 - band / bw) * 2.5), halo = cl(1 - band / (bw * 2.4)) - core;
+    const fine = line(u * 1 + v * 2 + w * 2.2, 90), fine2 = line(u * 3 - v * 1 + w * 3, 140), mott = pfbm(u, v, 3, 32);
+    const t = 1.02 - 0.06 * cloud - 0.32 * fine - 0.22 * fine2 - core * (0.42 + 0.18 * mott) - 0.1 * halo;
+    return j ? [0.3, 0.86] : [0.5, cl(t), core * (0.5 + 0.2 * mott) + halo * 0.12 + fine * 0.05]; },
+  // 礦物塗料（仿清水模／威尼斯灰泥）：雲狀深淺＋鏝刀刷痕
+  stucco: (x, y, S) => { const u = x / S, v = y / S, cloud = pfbm(u, v, 5, 4), mask = cl((pfbm(u + 0.3, v, 3, 3) - 0.45) * 5);
+    const sh = pnoise(u * 12, v * 90, 12, 90) * 0.6 + pnoise(u * 24, v * 180, 24, 180) * 0.4, sv = pnoise(u * 90, v * 12, 90, 12) * 0.6 + pnoise(u * 180, v * 24, 180, 24) * 0.4, sp = pnoise(u * 300, v * 300, 300, 300);
+    const t = 0.9 + 0.2 * (cloud - 0.5) + 0.07 * ((sh - 0.5) * mask + (sv - 0.5) * (1 - mask)) + (sp > 0.82 ? 0.05 : 0); return [0.5 + 0.2 * (cloud - 0.5) + 0.1 * (sh * mask + sv * (1 - mask)), t]; },
+  // 直紋木皮平板：貼圖＝120×120 cm，每片 60 寬，V 溝
+  veneer: (x, y, S) => { const pw = S / 2, col = Math.floor(x / pw), sd = 7 + col * 13, xx = x % pw, ex = Math.min(xx, pw - xx), g = Math.min(1, ex / (S / 1024 * 1.6)), w = woodFn(16, sd, 0.3)(y, xx * 0.6 + sd * 40, S); return [w[0] * 0.5 + 0.5 * g, w[1] * (0.96 + 0.06 * hash(col, 3)) * (0.55 + 0.45 * g), w[2]]; },
+  // 木格柵：貼圖＝120×120 cm，4.5 cm 寬的木條、間隔 2 cm 黑縫
+  slat: (x, y, S) => { const pw = S / 18.46, col = Math.floor(x / pw), xx = x % pw, inGap = xx > pw * 0.69, sd = 3 + col * 7, w = woodFn(3, sd, 0.4)(y, xx * 1.4 + sd * 50, S), e = Math.min(xx, pw * 0.69 - xx) / (pw * 0.69), sh = Math.min(1, e * 6);
+    return inGap ? [0, 0.18] : [0.35 + 0.65 * sh, w[1] * (0.93 + 0.1 * hash(col, 1)) * (0.75 + 0.25 * sh), w[2]]; },
+  // 洞石：貼圖＝240×240 cm，磚 120×60；水平層理＋細長孔洞
+  travertine: (x, y, S) => { const u = x / S, v = y / S, g = grout(x, y, S / 2, S / 4, S, 1.2), id = hash(Math.floor(x / (S / 2)), Math.floor(y / (S / 4))), w = pfbm(u, v, 4, 2);
+    const band = Math.sin((v * 34 + w * 3 + id * 5) * Math.PI) * 0.5 + 0.5, pore = pnoise(u * 160, v * 900, 160, 900) > 0.88, n = pfbm(u, v, 3, 48);
+    return g < 1 ? [0.2, 0, 0, 0.7] : [pore ? 0.2 : 0.55, cl((0.93 + 0.06 * band + 0.05 * (n - 0.5)) * (pore ? 0.72 : 1) * (0.96 + 0.06 * id)), 0.04 * band]; },
+  // 清水模板：貼圖＝240×240 cm，板 120×60，淡淡板縫、每片兩個螺桿孔、水漬
+  concrete: (x, y, S) => { const u = x / S, v = y / S, tw = S / 2, th = S / 4, ex = Math.min(x % tw, tw - (x % tw)), ey = Math.min(y % th, th - (y % th)), seam = Math.min(ex, ey) < S / 1024 * 0.9;
+    const lx = (x % tw) / tw, ly = (y % th) / th, hole = Math.min(Math.hypot((lx - 0.25) * 2, (ly - 0.5)), Math.hypot((lx - 0.75) * 2, (ly - 0.5))) * th, hr = S / 1024 * 6;
+    const cloud = pfbm(u, v, 5, 4), stain = cl((pfbm(u + 0.1, v * 0.5, 4, 3, 2) - 0.55) * 4), pin = pnoise(u * 400, v * 400, 400, 400) > 0.9;
+    let t = 0.95 + 0.14 * (cloud - 0.5) - 0.08 * stain - (pin ? 0.08 : 0); if (seam) t *= 0.88; if (hole < hr) t *= 0.45; else if (hole < hr * 1.6) t *= 1.06;
+    return [hole < hr ? 0.1 : seam ? 0.35 : 0.5 + 0.1 * (cloud - 0.5), cl(t)]; },
+};
+const WALL_REP = { pandora: 240, gold: 320, stucco: 300, veneer: 120, slat: 120, travertine: 240, concrete: 240 };   // 一張貼圖代表幾公分
+const WALL_ROUGH = { pandora: 0.16, gold: 0.12, stucco: 0.8, veneer: 0.55, slat: 0.6, travertine: 0.24, concrete: 0.85 };
+// kind：上面七種；color：底色；matte：石材改霧面
+export const wallFinish = (kind, color, matte = false) => memo('wf' + kind + color + matte, () => {
+  const m = new THREE.MeshStandardMaterial(Object.assign(maps('wf-' + kind, color, WALL[kind], kind === 'slat' ? 6 : kind === 'veneer' ? 2.4 : 1.6, 1, Math.max(SIZE, 1024)), { roughness: matte && WALL_ROUGH[kind] < 0.5 ? 0.6 : WALL_ROUGH[kind] }));
+  m.userData.repCm = WALL_REP[kind]; return m; });
+// 長條磚地板：貼圖＝120×120 cm，60×7.5 cm 長條、直排；每塊深淺不一、白色磚縫
+const stripFn = (x, y, S) => { const tw = S / 2, th = S / 16, col = Math.floor(x / tw), off = col % 2 ? th * 0.18 : 0, row = Math.floor((y + off) / th), g = grout(x, y + off, tw, th, S, 1.6), id = hash(col * 31 + row, row);
+  const u = x / S, v = y / S, n = pfbm(u, v, 4, 6), m = pfbm(u + id, v, 3, 24); return g < 1 ? [0.15, 0, 0, 0.8] : [0.55 + 0.1 * (m - 0.5), cl((0.78 + 0.4 * id) * (0.94 + 0.12 * (n - 0.5)) * (0.97 + 0.06 * m)), (id - 0.5) * 0.12]; };
+export const stripTile = (color) => memo('sb' + color, () => { const m = new THREE.MeshStandardMaterial(Object.assign(maps('strip', color, stripFn, 1.8, 160 / 120, Math.max(SIZE, 1024)), { roughness: 0.7 })); m.userData.repCm = 160; return m; });
 
 const V2 = (a) => new THREE.Vector2(a, a);
 export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + color + rep, () => new THREE.MeshStandardMaterial(Object.assign(maps(kind, color, FAB[kind], kind === 'linen' ? 4.4 : 6, rep), { roughness: 0.9, normalScale: V2(0.9) })));

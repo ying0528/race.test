@@ -141,7 +141,8 @@ export const CATS = [
     ['頂天系統衣櫃', 240, 60, 280, '#D9C2A3', 'ward', 'veneer'], ['電視牆收納櫃', 300, 40, 280, '#D9C2A3', 'tvwall', 'veneer'],
     ['玄關鞋櫃＋穿鞋椅', 200, 40, 280, '#D9C2A3', 'entry', 'veneer'], ['整面開放書牆', 240, 35, 280, '#D9C2A3', 'books', 'veneer'],
     ['餐邊電器高櫃', 180, 60, 280, '#F1EEE8', 'pantry', 'matte'], ['床頭背牆＋吊櫃', 300, 40, 280, '#D9C2A3', 'bedwall', 'veneer'],
-    ['書桌＋上吊櫃', 160, 60, 250, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer']] },
+    ['書桌＋上吊櫃', 160, 60, 250, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer'],
+    ['化妝台＋開放更衣牆', 300, 50, 280, '#EFEBE3', 'dress', 'leather']] },
   // 牆上置物架：第 8 欄是預設離地高度
   { id: 'wshelf', n: '牆上置物架', g: '裝修櫃', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
@@ -151,7 +152,8 @@ export const CATS = [
     ['實牆', 200, 10, 280, '#F1EEE8', 'full', 'solid'], ['實牆＋門洞', 240, 10, 280, '#F1EEE8', 'open', 'solid'],
     ['清玻璃隔間', 200, 8, 280, '#1E1F22', 'full', 'glass'], ['霧面玻璃隔間', 200, 8, 280, '#1E1F22', 'full', 'frost'],
     ['半牆＋木格柵', 200, 10, 280, '#D9C2A3', 'hslat', 'slat'], ['半牆＋玻璃', 200, 10, 280, '#1E1F22', 'hglass', 'glass'],
-    ['黑框玻璃拉門', 200, 12, 280, '#1E1F22', 'slide2', 'glass'], ['白框懸吊玻璃拉門', 200, 10, 280, '#F1EEE8', 'slide1', 'glass']] },
+    ['黑框玻璃拉門', 200, 12, 280, '#1E1F22', 'slide2', 'glass'], ['白框懸吊玻璃拉門', 200, 10, 280, '#F1EEE8', 'slide1', 'glass'],
+    ['花格磚牆', 240, 14, 280, '#A3A897', 'lattice', 'solid'], ['雙面展示櫃隔間', 200, 45, 170, '#C9C8BC', 'showcase', 'd1']] },
 ];
 
 const BY = Object.fromEntries(CATS.map(c => [c.id, c]));
@@ -176,8 +178,23 @@ export const FLOOR_GROUPS = [
   { n: '中色木地板', items: [['w07', '櫻桃木', '#AB6B42'], ['w09', '柚木', '#99673A'], ['w03', '拼色胡桃', '#866247'], ['w18', '復古橡木', '#7B623C'], ['w12', '灰木紋', '#978879'], ['w20', '灰褐木', '#68584A']] },
   { n: '深色木地板', items: [['w10', '深橡木', '#694D29'], ['w17', '深胡桃', '#5D3822'], ['w02', '咖啡胡桃', '#573B28'], ['w21', '深胡桃・霧', '#4E3B2D'], ['w06', '紅木', '#722813'], ['w05', '黑胡桃', '#2D1E18'], ['w13', '碳黑木', '#313132']] },
   { n: '彩色石紋', items: [['t0131', '0131 白', '#F4EFE4', 'terrazzo'], ['t0136', '0136 米白', '#DDCDBD', 'terrazzo'], ['t0138', '0138 粉米', '#D7BBA4', 'terrazzo'], ['t0139', '0139 米黃', '#C9A881', 'terrazzo'], ['t0133', '0133 灰藍', '#B3B6BF', 'terrazzo'], ['t0134', '0134 藍紫', '#8D8C9C', 'terrazzo']] },
+  { n: '長條磚', items: [['s1', '磚紅', '#7C4B47', 'strip'], ['s2', '深咖啡', '#5E4A45', 'strip'], ['s3', '石板灰', '#8E8A84', 'strip'], ['s4', '米黃', '#C9B49A', 'strip'], ['s5', '灰綠', '#6E7A6A', 'strip']] },
   { n: '磁磚・地毯', items: [['c1', '米白磁磚', '#DBCFC0', 'tile'], ['c2', '米色磁磚', '#BCA382', 'tile'], ['c3', '米色粗面磚', '#B59B7D', 'stone'], ['c4', '鏽色磚', '#916C45', 'stone'], ['c5', '灰色石紋磚', '#646560', 'stone'], ['c6', '棕色地毯', '#5F4C3A', 'carpet']] },
 ];
+// 牆面材質：每種有幾個顏色；sheen＝石材可選亮面／霧面；alt＝木紋可換成木格柵。
+// 選擇存成字串 "種類|顏色|m"（m＝霧面），例如 "pandora|#EFEEEA|"、"slat|#C08A52|"
+export const WALL_GROUPS = [
+  { k: 'pandora', n: '潘朵拉白', sheen: true, colors: [['#EFEEEA', '白'], ['#D9D4CB', '米灰'], ['#B5B4B1', '灰'], ['#7E7D7B', '深灰']] },
+  { k: 'gold', n: '金脈大理石', sheen: true, colors: [['#F3F0EA', '白底金脈'], ['#EAE3D6', '米白金脈'], ['#E6E6E4', '灰白'], ['#3A3836', '黑金']] },
+  { k: 'stucco', n: '礦物塗料', colors: [['#A9A79F', '水泥灰'], ['#CFC6B8', '米灰'], ['#E7E1D6', '暖白'], ['#9FA593', '灰綠'], ['#B9866A', '赤陶']] },
+  { k: 'veneer', n: '木紋牆板', alt: ['slat', '木格柵'], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#5A4A3E', '煙燻']] },
+  { k: 'travertine', n: '洞石', sheen: true, matte: true, colors: [['#E2D6C1', '米白'], ['#D6C19C', '米黃'], ['#BDB6AB', '灰']] },
+  { k: 'concrete', n: '清水模', colors: [['#B9B7B1', '淺灰'], ['#8F8D88', '深灰'], ['#BDB3A6', '暖灰']] },
+];
+export function parseWall(key) {   // 不合法就回傳 null
+  if (typeof key !== 'string') return null; const [k, c, m] = key.split('|'), g = WALL_GROUPS.find((x) => x.k === k || (x.alt && x.alt[0] === k));
+  if (!g || !g.colors.some((x) => x[0] === c)) return null; return { kind: k, color: c, matte: m === 'm', group: g };
+}
 export const FLOORS = {}; for (const g of FLOOR_GROUPS) for (const [id, n, c, k = 'wood'] of g.items) FLOORS[id] = { id, n, c, k };
 
 // 模擬人偶（等比例）
@@ -198,10 +215,16 @@ export const FINISH = {
   shelf: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#F1EEE8', '白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']], label: '層板顏色' },
   slat: { mats: [['slat', '木格柵']], colors: WCOL, label: '格柵顏色' },
   gdoor: { mats: [['glass', '清玻璃'], ['frost', '霧面玻璃']], colors: WCOL, label: '外框顏色' },
+  lattice: { mats: [['solid', '花格磚']], colors: [['#A3A897', '灰綠'], ['#EFEDE8', '白'], ['#9C9890', '水泥灰'], ['#B9866A', '赤陶'], ['#C9A57A', '木色']], label: '顏色' },
+  // mats 是抽屜／檯面的選項：mcol 給手機上的色塊，mlabel 是標題
+  showcase: { mats: [['d1', '焦糖'], ['d2', '咖啡'], ['d3', '墨綠'], ['d4', '奶茶']], mcol: { d1: '#8A4B33', d2: '#5D3A2A', d3: '#3F5A54', d4: '#C9B49A' }, mlabel: '抽屜',
+    colors: [['#C9C8BC', '灰綠'], ['#EFEDE8', '白'], ['#D9C2A3', '淺橡'], ['#5A5E64', '深灰']], label: '櫃體' },
+  dress: { mats: [['leather', '咖啡皮革'], ['walnut', '胡桃木'], ['white', '白色']], mcol: { leather: '#6E4630', walnut: '#6B4A33', white: '#F1EEE8' }, mlabel: '檯面',
+    colors: [['#EFEBE3', '白'], ['#D9C2A3', '淺橡'], ['#CFC2B2', '奶茶'], ['#9FA593', '灰綠']], label: '櫃體' },
   ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
-export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? 'built' : s.t === 'wshelf' ? 'shelf' : null);
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
 // 拉門的開口（門關著時這段被門扇擋住，3D 導覽走近才會滑開）。回傳 [x1, x2] 或 null
 export function doorGap(s) {
@@ -217,7 +240,7 @@ export function wallSegs(s) {
   return [[-w / 2, w / 2]];
 }
 // 可以伸縮寬度的種類與範圍（cm）；牆上置物架另外可以調離地高度
-export const lenRange = (s) => (!s ? null : s.t === 'wall' ? { min: 40, max: 600, step: 10 } : s.t === 'built' ? { min: 100, max: 400, step: 10 } : s.t === 'wshelf' ? { min: 60, max: 300, step: 10 } : null);
+export const lenRange = (s) => (!s ? null : s.v === 'showcase' ? { min: 120, max: 300, step: 10 } : s.v === 'dress' ? { min: 200, max: 400, step: 10 } : s.t === 'wall' ? { min: 40, max: 600, step: 10 } : s.t === 'built' ? { min: 100, max: 400, step: 10 } : s.t === 'wshelf' ? { min: 60, max: 300, step: 10 } : null);
 export const elevRange = (s) => (s && s.t === 'wshelf' ? { min: 40, max: Math.max(40, 265 - s.h), step: 10 } : null);
 export function getItem(key, styleKey, it) {
   const [cid, i] = String(key).split(':');
