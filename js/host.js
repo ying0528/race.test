@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113b';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113b';
-import { buildItem, buildPerson, M } from './models.js?v=20261113b';
-import * as MT from './mats.js?v=20261113b';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261113c';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261113c';
+import { buildItem, buildPerson, M } from './models.js?v=20261113c';
+import * as MT from './mats.js?v=20261113c';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -314,7 +314,7 @@ function applyMode() {
   scene.background.copy(t ? BG_TOUR : BG_OVER);
   hemi.intensity = t ? 0.5 : 0.38; sun.intensity = t ? 5 : 2.5; scene.environmentIntensity = t ? 0.38 : 0.4;
   if (t) sun.position.set(CX - 1.5, 7, CZ - 13); else sun.position.set(CX - 5, 14, CZ + 6);
-  camera.fov = t ? 77 : 34; applyOffset();
+  camera.fov = t ? tourFov() : 34; applyOffset();
   const pr = t || lowRes ? 1 : BASE_PR; if (renderer.getPixelRatio() !== pr) { renderer.setPixelRatio(pr); resize(); }   // 導覽時用 1 倍解析度換流暢
   setGoal(); updateHud();
 }
@@ -373,10 +373,12 @@ function collide(p) {
 }
 
 // ================= 主迴圈 =================
+// 3D 導覽固定左右視角 105°，上下視角依螢幕比例換算（16:9 約 72°）
+const TOUR_HFOV = 105, tourFov = () => 2 * Math.atan(Math.tan(TOUR_HFOV * Math.PI / 360) / Math.max(0.5, camera.aspect)) * 180 / Math.PI;
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
-    renderer.setSize(w, h, false); if (composer) composer.setSize(canvas.width, canvas.height); camera.aspect = w / h; applyOffset(); setGoal(); invalidate(4);
+    renderer.setSize(w, h, false); if (composer) composer.setSize(canvas.width, canvas.height); camera.aspect = w / h; if (state.mode === 'tour') camera.fov = tourFov(); applyOffset(); setGoal(); invalidate(4);
   }
 }
 // 後製：接觸陰影（AO）。電腦跑不動時會自動關閉，再不行就降低解析度
@@ -403,7 +405,7 @@ function tuneQuality(dt) {   // 導覽時如果跑不順，就降低解析度與
   slow = fast = 0;
 }
 // ---- 點平面圖快速走過去：在 10 cm 的格子上找一條繞過牆和高家具的路，用 3 倍速走過去；手機搖桿一動就取消 ----
-const GRID = 10, AUTO_SPEED = 4.5; let auto = null, lastTurn = 0, posT = 0, lastPos = '';
+const GRID = 10, AUTO_SPEED = 3.75; let auto = null, lastTurn = 0, posT = 0, lastPos = '';
 function walkGrid() {   // 每格能不能站（在室內、離牆和高家具 16 cm 以上）
   const W = Math.ceil(PLAN.W / GRID), H = Math.ceil(PLAN.D / GRID), ok = new Uint8Array(W * H), R = 0.16;
   const floors = [...PLAN.floors.map((f) => f.slice(0, 4)), ...state.cut.flatMap((i) => cutRects(i))];
@@ -470,8 +472,8 @@ function frame(now) {
     const cl = (v) => Math.max(-1, Math.min(1, v)); f = cl(f); s = cl(s); t = cl(t); p = cl(p);
     if (Math.abs(t) > 0.05) lastTurn = now;
     if (auto && Math.abs(f) + Math.abs(s) > 0.15) { auto = null; posT = 0; }   // 自己動搖桿就取消自動走
-    tour.yaw += t * 1.7 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.9 * dt));
-    let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.5 * dt;
+    tour.yaw += t * 1.45 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.75 * dt));   // 轉頭、抬頭低頭、走路都比之前慢約 15%
+    let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.25 * dt;
     const np = auto ? stepAuto(dt, now) : { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
     dx = Math.cos(tour.yaw); dz = Math.sin(tour.yaw);
     updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z; sendPos(now);
