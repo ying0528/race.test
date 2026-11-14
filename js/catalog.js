@@ -221,10 +221,13 @@ export const FINISH = {
     colors: [['#C9C8BC', '灰綠'], ['#EFEDE8', '白'], ['#D9C2A3', '淺橡'], ['#5A5E64', '深灰']], label: '櫃體' },
   dress: { mats: [['leather', '咖啡皮革'], ['walnut', '胡桃木'], ['white', '白色']], mcol: { leather: '#6E4630', walnut: '#6B4A33', white: '#F1EEE8' }, mlabel: '檯面',
     colors: [['#EFEBE3', '白'], ['#D9C2A3', '淺橡'], ['#CFC2B2', '奶茶'], ['#9FA593', '灰綠']], label: '櫃體' },
+  // 茶几、邊桌：桌面材質，顏色共用（例：原木色＋大理石＝咖啡色石紋）
+  table: { mats: [['wood', '木紋'], ['paint', '烤漆'], ['marble', '大理石']],
+    colors: [['#EFEBE5', '白'], ['#D9C9B0', '米'], ['#BDBDBA', '淺灰'], ['#5A5E64', '深灰'], ['#2A2A2C', '黑'], ['#3F5A54', '墨綠'], ['#D8B4A6', '粉'], ['#C08A52', '原木'], ['#7A5236', '胡桃']], label: '顏色' },
   ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
-export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'coffee' || s.cat === 'side' ? 'table' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
 // 拉門的開口（門關著時這段被門扇擋住，3D 導覽走近才會滑開）。回傳 [x1, x2] 或 null
 export function doorGap(s) {
@@ -240,7 +243,7 @@ export function wallSegs(s) {
   return [[-w / 2, w / 2]];
 }
 // 可以伸縮寬度的種類與範圍（cm）；牆上置物架另外可以調離地高度
-export const lenRange = (s) => (!s ? null : s.v === 'showcase' ? { min: 120, max: 300, step: 10 } : s.v === 'dress' ? { min: 200, max: 400, step: 10 } : s.t === 'wall' ? { min: 40, max: 600, step: 10 } : s.t === 'built' ? { min: 100, max: 400, step: 10 } : s.t === 'wshelf' ? { min: 60, max: 300, step: 10 } : null);
+export const lenRange = (s) => (!s ? null : s.v === 'showcase' ? { min: 120, max: 300, step: 10 } : s.v === 'dress' ? { min: 200, max: 600, step: 10 } : s.t === 'wall' ? { min: 40, max: 800, step: 10 } : s.t === 'built' ? { min: 100, max: 600, step: 10 } : s.t === 'wshelf' ? { min: 60, max: 400, step: 10 } : null);
 export const elevRange = (s) => (s && s.t === 'wshelf' ? { min: 40, max: Math.max(40, 265 - s.h), step: 10 } : null);
 export function getItem(key, styleKey, it) {
   const [cid, i] = String(key).split(':');

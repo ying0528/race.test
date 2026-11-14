@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261114x';
-import * as MT from './mats.js?v=20261114x';
+import { WOODS, FINISH } from './catalog.js?v=20261114y';
+import * as MT from './mats.js?v=20261114y';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -695,7 +695,13 @@ function books(g, x, y, z, n = 3, ry = 0) { for (let i = 0; i < n; i++) rbox(g, 
 
 B.table = (g, it, P, o) => {
   const { w, d, v } = it; if (v === 'stoolseat' || v === 'fmirror') return OLD.table(g, it, P);
-  const h = v === 'mirror' ? 75 : it.h, f = it.color, marble = f === 'marble', painted = f === 'white' || f === 'black' || f === 'gray', top = marble ? MT.marble('#EFEBE5') : painted ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 6, gloss: 0.45 }), lg = marble ? BRASSY() : f === 'black' ? MT.metal('#1E1E20', 0.45) : woodOf(f), low = h < 62;
+  const h = v === 'mirror' ? 75 : it.h, f = it.color, marble = f === 'marble', painted = f === 'white' || f === 'black' || f === 'gray', low = h < 62;
+  let top = marble ? MT.marble('#EFEBE5') : painted ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 6, gloss: 0.45 }), lg = marble ? BRASSY() : f === 'black' ? MT.metal('#1E1E20', 0.45) : woodOf(f);
+  if (f && f[0] === '#' && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'marble')) {   // 手機上個別選的桌面材質＋顏色
+    const dark = new THREE.Color(f).getHSL({}).l < 0.3;
+    top = it.fin === 'marble' ? MT.marble(f) : it.fin === 'paint' ? MT.gloss(f) : MT.wood(f, { rings: 6, gloss: 0.45 });
+    lg = it.fin === 'marble' ? (dark ? MT.metal('#1E1E20', 0.45) : BRASSY()) : it.fin === 'paint' ? (dark ? MT.metal('#1E1E20', 0.45) : MT.gloss(f)) : MT.wood(f, { rings: 6, gloss: 0.3 });
+  }
   if (v === 'round') {
     mesh(g, new THREE.CylinderGeometry(w / 2, w / 2 - 1.2, 3, 56), top, 0, h - 1.5, 0).scale.z = d / w;
     if (!low) { lathe(g, [[0.1, 0], [w * 0.27, 0], [w * 0.25, 2.5], [5, 6], [4, h * 0.5], [6.5, h - 5], [w * 0.16, h - 3]], lg, 0, 0, 0).scale.z = d / w; }

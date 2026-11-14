@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114x';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114x';
-import { buildItem, buildPerson, M } from './models.js?v=20261114x';
-import * as MT from './mats.js?v=20261114x';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114y';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114y';
+import { buildItem, buildPerson, M } from './models.js?v=20261114y';
+import * as MT from './mats.js?v=20261114y';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -782,7 +782,7 @@ function onMsg(entry, m) {
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
       state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
-    case 'len': { const it = find(m.id), R = it && lenRange(getItem(it.key)); if (R) { it.len = Math.round(num(m.len, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
+    case 'len': { const it = find(m.id), R = it && lenRange(getItem(it.key)); if (R) { const st = m.exact ? 1 : R.step; it.len = Math.round(num(m.len, R.min, R.max) / st) * st; syncItems(); } break; }   // exact：填滿整面時算到公分
     case 'elev': { const it = find(m.id), s = it && getItem(it.key, null, it), R = elevRange(s); if (R) { it.el = Math.round(num(m.el, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;

@@ -118,7 +118,10 @@ export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + colo
 export const leather = (color) => memo('l' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('leather', color, grainy, 3, 4), { roughness: 0.38, normalScale: V2(0.35) })));
 const vertical = (v, m) => { if (v) for (const t of [m.map, m.normalMap]) { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; } return m; };
 export const wood = (color, { rings = 9, gloss = 0.25, warp = 2.4, vert = false } = {}) => memo('w' + color + rings + gloss + warp + vert, () => vertical(vert, new THREE.MeshStandardMaterial(Object.assign(maps('wood' + rings + warp, color, woodFn(rings, new THREE.Color(color).r * 50, warp), 2.2), { roughness: 0.5 - gloss * 0.35, normalScale: V2(0.5) }))));
-export const marble = (color) => memo('mb' + color, () => new THREE.MeshStandardMaterial({ map: maps('marble', color, marbleFn, 0).map, roughness: 0.14 }));
+// 深色大理石（黑、墨綠、深灰）：紋路改成淺色，才看得出石紋
+const marbleDarkFn = (x, y, S) => [0.5, 1 + Math.pow(Math.max(0, 1 - veins(x, y, S)) * 5, 1.3) * 2.6];
+const darkHex = (c) => { const q = new THREE.Color(c); return 0.2126 * q.r + 0.7152 * q.g + 0.0722 * q.b < 0.12; };
+export const marble = (color) => memo('mb' + color, () => new THREE.MeshStandardMaterial({ map: darkHex(color) ? maps('marbleD', color, marbleDarkFn, 0).map : maps('marble', color, marbleFn, 0).map, roughness: 0.14 }));
 export const floorWood = (color) => memo('fw' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('floor', color, floorFn, 2.5, 1, Math.max(SIZE, 1024)), { roughness: 0.36 })));
 export const tiles = (color, nx = 2, soft = false, rough = 0.3) => memo('tl' + color + nx + soft, () => new THREE.MeshStandardMaterial(Object.assign(maps('tile' + nx + soft, color, tilesFn(nx, soft), 2.2), { roughness: soft ? Math.min(rough, 0.16) : rough * 0.8 })));
 export const terrazzo = (color) => memo('tz' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('terrazzo', color, terrazzoFn, 0.6, 1, Math.max(SIZE, 1024)), { roughness: 0.3 })));
