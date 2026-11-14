@@ -22,7 +22,8 @@
     font-family: inherit; cursor: pointer; box-shadow: 0 12px 30px rgba(160, 103, 58, 0.35); }
   .btn:hover { background: #8A5630; }
   .ghost { background: none; border: none; color: #4E5561; font-family: inherit; font-size: 15px; cursor: pointer; text-decoration: underline; }
-  .units { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  #select { justify-content: safe center; overflow-y: auto; }   /* 戶型多到超過一頁時可以捲動，不會被切掉 */
+  .units { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1360px; }
   .unit { width: 300px; padding: 22px; border-radius: 22px; background: #fff; border: 2px solid transparent; text-align: left; font-family: inherit; color: inherit;
     box-shadow: 0 10px 30px rgba(25, 30, 40, 0.12); cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
   .unit:hover { border-color: #A0673A; }
@@ -84,6 +85,6 @@
   <div id="tip" class="card">3D 畫面為示意，家具與裝潢非交屋附贈，實際以合約為準。</div>
 </div>
 
-<script type="module" src="./js/host.js?v=20261114f"></script>
+<script type="module" src="./js/host.js?v=20261114w"></script>
 </body>
 </html>
