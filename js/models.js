@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261114y';
-import * as MT from './mats.js?v=20261114y';
+import { WOODS, FINISH } from './catalog.js?v=20261115a';
+import * as MT from './mats.js?v=20261115a';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -24,7 +24,10 @@ export function M(kind, color = '#FFFFFF') {
     default: return MT.flat(color, 0.62);
   }
 }
-const finish = (f) => (f === 'marble' ? M('marble', '#EFEBE5') : f && f[0] === '#' ? M('paint', f) : M('wood', WOODS[f] || WOODS.oak));
+// 手機上選的櫃體材質：'w#色碼' = 木紋、'p#色碼' = 烤漆
+const cfin = (f) => (typeof f === 'string' && /^[wp]#/.test(f) ? [f[0], f.slice(1)] : null);
+const hexOf = (f) => { const c = cfin(f); return c ? c[1] : f && f[0] === '#' ? f : WOODS[f] || WOODS.oak; };
+const finish = (f) => { const c = cfin(f); if (c) return c[0] === 'w' ? M('wood', c[1]) : M('paint', c[1]); return f === 'marble' ? M('marble', '#EFEBE5') : f && f[0] === '#' ? M('paint', f) : M('wood', WOODS[f] || WOODS.oak); };
 const CHROME = () => M('metal', '#D5D8DC'), STEEL = () => M('metal', '#AEB3B8'), DARK = () => M('paint', '#2B2C2E'), BRASS = () => M('metal', '#B8955A');
 
 // ---------- 幾何小工具（單位 cm；x 寬、y 高、z 深，正面朝 +z） ----------
@@ -155,7 +158,7 @@ B.chair = (g, it, P) => {
 };
 
 B.ochair = (g, it) => {
-  const { w, h } = it, fab = M('fabric', it.color || '#2E2F31'), dk = DARK(), st = STEEL();
+  const { w, h } = it, hc = it.color && it.color[0] === '#' ? it.color : '#2E2F31', fab = it.fin === 'leather' ? MT.leather(hc) : it.fin === 'mesh' ? MT.fabric(hc, 6, 'knit') : M('fabric', hc), dk = DARK(), st = STEEL();   // 網布／皮革／布面
   for (let i = 0; i < 5; i++) { const a = i * 1.2566, s = box(g, w * 0.48, 2.5, 4, dk, Math.cos(a) * w * 0.24, 6, Math.sin(a) * w * 0.24); s.rotation.y = -a; cyl(g, 2.6, 2.6, 4, dk, Math.cos(a) * w * 0.47, 2.6, Math.sin(a) * w * 0.47, 10).rotation.z = Math.PI / 2; }
   const sy = Math.min(46, h * 0.5);   // 椅座中心高度：矮的兒童椅跟著降低
   cyl(g, 2.4, 2.4, sy - 10, st, 0, 7 + (sy - 10) / 2, 0, 12);
@@ -227,17 +230,19 @@ B.plant = (g, it) => {
 };
 
 // ---- 廚具 ----
-function baseCab(g, w, d, h, f, counter = true) {
-  const m = finish(f), ct = M('marble', '#EDEBE7'), ch = counter ? 4 : 0, ph = 10, bh = h - ph - ch;
+const COUNTER = { quartz: () => M('marble', '#EDEBE7'), marble: () => MT.marble('#EFEBE5'), black: () => MT.marble('#2A2A2C'), steel: () => STEEL() };
+function baseCab(g, w, d, h, f, counter = true, top = null) {
+  const m = finish(f), ct = (COUNTER[top] || COUNTER.quartz)(), ch = counter ? 4 : 0, ph = 10, bh = h - ph - ch;
   box(g, w - 2, ph, d - 10, DARK(), 0, ph / 2, -3);
   box(g, w, bh, d - 4, m, 0, ph + bh / 2, -2);
   const n = Math.max(1, Math.round(w / 45)), dw = (w - 0.6) / n;
   for (let i = 0; i < n; i++) { const x = -w / 2 + 0.3 + dw * (i + 0.5); box(g, dw - 0.7, bh - 1.4, 2, m, x, ph + bh / 2, d / 2 - 3); box(g, Math.min(dw - 8, 20), 1.1, 1.6, STEEL(), x, ph + bh - 5, d / 2 - 1.4); }
   if (counter) box(g, w, ch, d, ct, 0, h - ch / 2, 0, 0.5);
 }
-B.kcab = (g, it, P) => baseCab(g, it.w, it.d, it.h, it.styled ? 'white' : it.color);
+const kc = (it) => (COUNTER[it.fin] && it.color && it.color[0] === '#' ? it.color : it.styled ? 'white' : it.color);   // 廚房門板顏色（手機選的，整個廚房同步）
+B.kcab = (g, it, P) => baseCab(g, it.w, it.d, it.h, kc(it), true, it.fin);
 B.cook = (g, it, P) => {
-  const { w, d, h, v } = it; baseCab(g, w, d, h, it.styled ? 'white' : it.color);
+  const { w, d, h, v } = it; baseCab(g, w, d, h, kc(it), true, it.fin);
   const gw = Math.min(w - 8, 78), ih = typeof v === 'string';
   box(g, gw, 0.8, d - 16, M('gloss', '#0E0F11'), 0, h + 0.4, 0, 0.3);
   const n = ih ? +v.slice(2) : v || 2, pos = n === 1 ? [[0, 0]] : n === 2 ? [[-gw / 4, 0], [gw / 4, 0]] : n === 3 ? [[-gw / 3.4, 4], [gw / 3.4, 4], [0, -9]] : [[-gw / 4, 9], [gw / 4, 9], [-gw / 4, -11], [gw / 4, -11]];
@@ -248,7 +253,7 @@ B.cook = (g, it, P) => {
   if (!ih) for (let i = 0; i < Math.min(n, 3); i++) cyl(g, 1.8, 1.8, 2, STEEL(), (i - (Math.min(n, 3) - 1) / 2) * 9, h + 1.6, d / 2 - 12, 12);
 };
 B.sink = (g, it) => {
-  const { w, d, h, v } = it; baseCab(g, w, d, h, it.styled ? 'white' : it.color);
+  const { w, d, h, v } = it; baseCab(g, w, d, h, kc(it), true, it.fin);
   const basins = v === 'double' ? [[-w / 4, w / 2 - 12], [w / 4, w / 2 - 12]] : [[0, Math.min(w - 16, 70)]];
   for (const [x, bw] of basins) { box(g, bw, 0.5, d - 22, STEEL(), x, h + 0.2, 2, 0.2); box(g, bw - 5, 0.5, d - 27, M('metal', '#7E848A'), x, h + 0.3, 2, 0.2); }
   cyl(g, 1.3, 1.5, 26, CHROME(), 0, h + 13, -d / 2 + 7, 12);
@@ -265,15 +270,15 @@ B.fridge = (g, it) => {
   box(g, w, 0.4, d - 3, gap, 0, 0.2, -1.5);
 };
 B.hood = (g, it) => {
-  const { w, d, h, v } = it, st = STEEL();
+  const { w, d, h, v } = it, st = it.color && it.color[0] === '#' && it.fin ? new THREE.MeshStandardMaterial({ color: it.color, metalness: 0.55, roughness: 0.35 }) : STEEL();
   if (v === 'T') { box(g, w, 6, d, st, 0, 3, 0, 0.6); box(g, 30, h - 6, 28, st, 0, 6 + (h - 6) / 2, -d / 2 + 15); }
   else { box(g, w, h * 0.45, d, st, 0, h * 0.225, 0, 0.6); box(g, w, h * 0.55, d * 0.6, M('paint', '#F1EEE8'), 0, h * 0.45 + h * 0.275, -d * 0.2); }
   box(g, w - 10, 0.5, d - 10, M('paint', '#3A3C40'), 0, -0.2, 0);
 };
 B.tower = (g, it) => {
   const { w, d, h, v } = it;
-  if (v === 'dw') { baseCab(g, w, d, h, it.color); box(g, w - 1.5, h - 18, 1, STEEL(), 0, 10 + (h - 14) / 2, d / 2 - 1.6); return; }
-  const m = finish(it.color);
+  if (v === 'dw') { baseCab(g, w, d, h, kc(it), true, it.fin); box(g, w - 1.5, h - 18, 1, STEEL(), 0, 10 + (h - 14) / 2, d / 2 - 1.6); return; }
+  const m = finish(kc(it));
   box(g, w - 4, 8, d - 8, DARK(), 0, 4, -2); box(g, w, h - 8, d - 3, m, 0, 8 + (h - 8) / 2, -1.5);
   const ov = (y, hh) => { box(g, w - 6, hh, 2.5, M('gloss', '#101113'), 0, y, d / 2 - 1.75, 0.5); box(g, w - 16, 1.4, 2, STEEL(), 0, y + hh / 2 - 5, d / 2 + 0.4); };
   if (w <= 90 && h >= 150) { ov(105, 56); if (v === 2) ov(152, 34); box(g, w - 1, 68, 2, m, 0, 8 + 35, d / 2 - 2); box(g, w - 1, h - (v === 2 ? 174 : 138), 2, m, 0, h - (h - (v === 2 ? 172 : 136)) / 2, d / 2 - 2); }
@@ -552,7 +557,7 @@ B.toilet = (g, it) => {
 B.vanity = (g, it) => {
   const { w, d, h, v } = it, c = M('ceramic', '#F6F6F4');
   if (v === 'ped') cyl(g, 9, 11, h - 6, c, 0, (h - 6) / 2, -2, 20);
-  else { const m = finish(it.styled ? 'white' : it.color); box(g, w - 2, 50, d - 4, m, 0, h - 32, -2); if (h > 60) box(g, w - 8, h - 56, d - 12, m, 0, (h - 56) / 2, -3); const n = w > 75 ? 2 : 1; for (let i = 0; i < n; i++) { const dw = (w - 2.6) / n; box(g, dw - 0.7, 48, 1.8, m, -(w - 2.6) / 2 + dw * (i + 0.5), h - 32, d / 2 - 3.1); box(g, 1.1, 12, 1.5, STEEL(), -(w - 2.6) / 2 + dw * (i + 0.5) + (i ? -1 : 1) * (n === 1 ? dw * 0.3 : dw / 2 - 4), h - 25, d / 2 - 1.5); } }
+  else { const m = finish('white'); box(g, w - 2, 50, d - 4, m, 0, h - 32, -2); if (h > 60) box(g, w - 8, h - 56, d - 12, m, 0, (h - 56) / 2, -3); const n = w > 75 ? 2 : 1; for (let i = 0; i < n; i++) { const dw = (w - 2.6) / n; box(g, dw - 0.7, 48, 1.8, m, -(w - 2.6) / 2 + dw * (i + 0.5), h - 32, d / 2 - 3.1); box(g, 1.1, 12, 1.5, STEEL(), -(w - 2.6) / 2 + dw * (i + 0.5) + (i ? -1 : 1) * (n === 1 ? dw * 0.3 : dw / 2 - 4), h - 25, d / 2 - 1.5); } }
   box(g, w, 7, d, c, 0, h - 3.5, 0, 2.2);
   const xs = v === 'double' ? [-w / 4, w / 4] : [0];
   for (const x of xs) {
@@ -567,7 +572,7 @@ B.tub = (g, it) => {
   cyl(g, 1.3, 1.3, 12, CHROME(), w / 2 - 8, h + 6, 0, 12); const sp = cyl(g, 1.1, 1.1, 12, CHROME(), w / 2 - 13, h + 11, 0, 10); sp.rotation.z = Math.PI / 2;
 };
 B.shower = (g, it) => {
-  const { w, d, h, v } = it, gl = M('glass', '#CFE6F0'), ch = CHROME();
+  const { w, d, h, v } = it, gl = it.fin === 'frost' ? MT.frost() : M('glass', '#CFE6F0'), ch = it.fin && it.color && it.color[0] === '#' ? MT.metal(it.color, 0.3) : CHROME();   // 清玻璃／霧面玻璃＋框色
   if (v === 'panel') { box(g, w, h, 1, gl, 0, h / 2, 0).castShadow = false; box(g, w, 2.5, 3, ch, 0, h - 1.2, 0); box(g, w, 2.5, 3, ch, 0, 1.2, 0); return; }
   box(g, w, 5, d, M('ceramic', '#F1F1EF'), 0, 2.5, 0, 1);
   box(g, w, h - 5, 1, gl, 0, 5 + (h - 5) / 2, d / 2 - 0.5).castShadow = false; box(g, 1, h - 5, d, gl, w / 2 - 0.5, 5 + (h - 5) / 2, 0).castShadow = false;
@@ -580,7 +585,7 @@ B.mirror = (g, it) => {
   box(g, w, h, d, M('paint', '#F1EEE8'), 0, h / 2, 0); box(g, w - 1.5, h - 1.5, 0.5, M('mirror'), 0, h / 2, d / 2 + 0.2);
 };
 B.washer = (g, it) => {
-  const { w, d, h, v } = it, wh = M('gloss', '#F3F3F1'), dk = M('gloss', '#1B1C1F');
+  const { w, d, h, v } = it, wh = it.fin && it.color && it.color[0] === '#' ? new THREE.MeshStandardMaterial({ color: it.color, metalness: it.color === '#F3F3F1' ? 0 : 0.45, roughness: 0.25 }) : M('gloss', '#F3F3F1'), dk = M('gloss', '#1B1C1F');
   const bh = v === 'top' ? h - 9 : h;
   box(g, w, bh, d, wh, 0, bh / 2, 0, 1.5);
   const port = (y) => { const r = cyl(g, w * 0.3, w * 0.3, 2, STEEL(), 0, y, d / 2 + 0.6, 32); r.rotation.x = Math.PI / 2; const q = cyl(g, w * 0.24, w * 0.24, 2.4, dk, 0, y, d / 2 + 0.7, 32); q.rotation.x = Math.PI / 2; };
@@ -638,7 +643,7 @@ function tleg(p, len, rt, rb, m, x, z, splay = 0.12, cap = null) {
   return g;
 }
 const lathe = (p, prof, m, x, y, z, seg = 32) => mesh(p, new THREE.LatheGeometry(prof.map(([r, yy]) => new THREE.Vector2(r, yy)), seg), m, x, y, z);
-const woodOf = (f) => (f === 'marble' ? MT.marble('#EFEBE5') : M('wood', WOODS[f] || WOODS.oak));
+const woodOf = (f) => { const c = cfin(f); if (c) return c[0] === 'w' ? MT.wood(c[1], { rings: 6, gloss: 0.35 }) : MT.gloss(c[1]); return f === 'marble' ? MT.marble('#EFEBE5') : M('wood', WOODS[f] || WOODS.oak); };
 const BRASSY = () => MT.metal('#B8955A', 0.3);
 const OLD = { table: B.table, chair: B.chair, bed: B.bed, cab: B.cab };
 
@@ -667,10 +672,15 @@ B.sofa = (g, it, P, o) => {
 
 B.bed = (g, it, P, o) => {
   const { w, d, h, v } = it; if (v === 'bunk') return OLD.bed(g, it, P);
-  const soft = v === 'soft', wm = woodOf(P.wood), linen = MT.fabric('#F4F1EA', 5), duv = MT.fabric(soft ? '#EBE6DB' : shade(it.color || '#E3DED4', 1.08), 5), hb = MT.fabric(it.color || '#B9B2A4', 2), accent = MT.fabric(P.accent, 6, 'knit');
+  const pick = it.fin === 'fabric' || it.fin === 'leather' || it.fin === 'wood', hc = it.color && it.color[0] === '#' ? it.color : null;
+  const soft = v === 'soft' || (pick && it.fin !== 'wood'), wm = woodOf(P.wood), linen = MT.fabric('#F4F1EA', 5), accent = MT.fabric(P.accent, 6, 'knit');
+  // 手機選的床頭（布面／皮革／木頭）與床單被套顏色
+  const hb = pick ? (it.fin === 'leather' ? MT.leather(hc) : it.fin === 'wood' ? MT.wood(hc, { rings: 6, gloss: 0.3 }) : MT.fabric(hc, 2)) : MT.fabric(it.color || '#B9B2A4', 2);
+  const duv = it.color2 ? MT.fabric(it.color2, 5) : MT.fabric(soft && !pick ? '#EBE6DB' : shade(pick ? '#E3DED4' : it.color || '#E3DED4', 1.08), 5);
+  if (pick && it.fin === 'wood') { rbox(g, w, h - 6, 6, hb, 0, 6 + (h - 6) / 2, -d / 2 + 3, 2.4); }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 13, 3.2, 2.2, wm, sx * (w / 2 - 8), sz * (d / 2 - 9), 0.05, BRASSY());
-  rbox(g, w, 15, d, soft ? hb : wm, 0, 20.5, 0, 3, 5);
-  if (soft) { rbox(g, w, h - 8, 5, hb, 0, 8 + (h - 8) / 2, -d / 2 + 2.5, 2.2); const n = Math.max(3, Math.round(w / 23)), pw = (w - 2) / n; for (let i = 0; i < n; i++) cushion(g, pw - 0.3, 8, h - 38, hb, -(w - 2) / 2 + pw * (i + 0.5), 36 + (h - 38) / 2, -d / 2 + 8, { r: 3.8, bulge: 0.28, pipe: false, sd: i * 2 }).rotation.x = Math.PI / 2; }
+  rbox(g, w, 15, d, soft ? hb : pick ? hb : wm, 0, 20.5, 0, 3, 5);
+  if (pick && it.fin === 'wood') { /* 木頭床頭已經畫好 */ } else if (soft) { rbox(g, w, h - 8, 5, hb, 0, 8 + (h - 8) / 2, -d / 2 + 2.5, 2.2); const n = Math.max(3, Math.round(w / 23)), pw = (w - 2) / n; for (let i = 0; i < n; i++) cushion(g, pw - 0.3, 8, h - 38, hb, -(w - 2) / 2 + pw * (i + 0.5), 36 + (h - 38) / 2, -d / 2 + 8, { r: 3.8, bulge: 0.28, pipe: false, sd: i * 2 }).rotation.x = Math.PI / 2; }
   else rbox(g, w, h - 6, 6, wm, 0, 6 + (h - 6) / 2, -d / 2 + 3, 2.4);
   const hd = soft ? 13 : 7, md = d - hd - 3, mz = -d / 2 + hd + md / 2 + 1, mw = w - 6;
   rbox(g, mw, 25, md, linen, 0, 40.5, mz, 9, 6); loop(g, rrPts(mw - 3, md - 3, 8, 49.5).map((p) => p.setZ(p.z + mz)), 0.4, linen);
@@ -727,7 +737,9 @@ B.table = (g, it, P, o) => {
 
 B.chair = (g, it, P, o) => {
   const { w, d, h, v } = it; if (v === 'bench') return OLD.chair(g, it, P);
-  const hexc = it.color && it.color[0] === '#', wm = hexc ? woodOf(P.wood) : woodOf(it.color), f = MT.fabric(hexc ? it.color : '#D9D3C6', 2, 'boucle'), sh = v === 'bar' ? 71 : 44.5;
+  const hexc = it.color && it.color[0] === '#', pick = hexc && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'fabric');
+  let wm = hexc ? woodOf(P.wood) : woodOf(it.color), f = MT.fabric(hexc ? it.color : '#D9D3C6', 2, 'boucle'); const sh = v === 'bar' ? 71 : 44.5;
+  if (pick) { wm = it.fin === 'wood' ? MT.wood(it.color, { rings: 6, gloss: 0.35 }) : it.fin === 'paint' ? MT.gloss(it.color) : MT.fabric(it.color, 2, 'boucle'); f = it.fin === 'fabric' ? wm : MT.fabric(shade(it.color, 1.12), 2, 'boucle'); }   // 整張椅子同一個顏色
   for (const sx of [-1, 1]) { tleg(g, sh, 2, 1.15, wm, sx * (w / 2 - 4.5), d / 2 - 5.5, 0.07, null); const b = mesh(g, new THREE.CylinderGeometry(1.35, 1.15, h + 2, 14), wm, sx * (w / 2 - 4.5), h / 2 - 0.5, -d / 2 + 6); b.rotation.x = -0.1; b.rotation.z = -sx * 0.03; }
   rbox(g, w - 5, 3.2, d - 8, wm, 0, sh - 0.5, 0, 1.4); rbox(g, w - 12, 2.4, 2.4, wm, 0, sh * 0.62, d / 2 - 6.5, 1); for (const sx of [-1, 1]) rbox(g, 2.2, 2.4, d - 14, wm, sx * (w / 2 - 5), sh * 0.55, 0, 1);
   if (v === 'bar') rbox(g, w - 10, 1.6, 1.6, MT.metal('#AEB3B8'), 0, 26, d / 2 - 5.6, 0.6);
@@ -740,7 +752,7 @@ B.chair = (g, it, P, o) => {
 };
 
 B.rug = (g, it) => {
-  const { w, d, v } = it, m = MT.rugPile(it.color || '#D8D2C6');
+  const { w, d, v } = it, pat = it.fin && it.fin !== 'plain' && it.color && it.color[0] === '#', m = pat ? MT.rugPattern(it.fin, it.color, w / d) : MT.rugPile(it.color || '#D8D2C6');   // 條紋／幾何／波斯花紋
   if (v === 'round') { const r = mesh(g, new THREE.CylinderGeometry(w / 2, w / 2, 1.2, 64), m, 0, 0.6, 0); r.castShadow = false; return; }
   rbox(g, w, 1.2, d, m, 0, 0.6, 0, 0.5, 2).castShadow = false;
 };
@@ -749,12 +761,12 @@ B.tv = (g, it) => { const { w, h } = it; rbox(g, w, h, 2.2, MT.flat('#0C0D0F', 0
 
 B.cab = (g, it, P, o) => {
   if (it.cat !== 'tvcab' || it.v === 'float') { OLD.cab(g, it, P); if (o.decor && it.cat === 'chest' && it.h < 110) { vase(g, -it.w * 0.22, it.h, 0, 0.55, '#3F5A54'); books(g, it.w * 0.2, it.h, 0, 2, -0.1); } return; }
-  const { w, d, h } = it, f = it.color, wm = woodOf(f === 'marble' ? 'walnut' : f), top = f === 'marble' ? MT.marble('#EFEBE5') : f === 'white' || f === 'black' || f === 'gray' ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 5, gloss: 0.5 }), dk = MT.metal('#1E1E20', 0.45), L = 13, T = 2;
+  const { w, d, h } = it, f = it.color, wm = woodOf(f === 'marble' ? 'walnut' : f), top = cfin(f) ? woodOf(f) : f === 'marble' ? MT.marble('#EFEBE5') : f === 'white' || f === 'black' || f === 'gray' ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 5, gloss: 0.5 }), dk = MT.metal('#1E1E20', 0.45), L = 13, T = 2;
   for (const sx of [-1, 1]) { rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, d / 2 - 6, 0.5); rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, -d / 2 + 6, 0.5); rbox(g, 2.4, 2, d - 10, dk, sx * (w / 2 - 14), 1, 0, 0.5); }
   const bh = h - L - 2.5, by = L + bh / 2, open = Math.min(52, w * 0.3), dw = w - open - 3, x0 = -w / 2 + 1.5, nx = w / 2 - open / 2 - 1.2;
   rbox(g, w, T, d - 1, wm, 0, L + T / 2, -0.5, 0.5); rbox(g, w, bh, T, wm, 0, by, -d / 2 + T / 2, 0.5); for (const x of [-w / 2 + T / 2, w / 2 - T / 2, w / 2 - open - 1.5]) rbox(g, T, bh, d - 1, wm, x, by, -0.5, 0.5);
   rbox(g, w + 1.6, 2.5, d + 1, top, 0, h - 1.25, 0, 1.1);
-  rbox(g, dw, bh - 4, 1, MT.flat(shade(WOODS[f] || WOODS.oak, 0.4), 0.7), x0 + dw / 2, by, d / 2 - 1.6, 0.3);
+  rbox(g, dw, bh - 4, 1, MT.flat(shade(hexOf(f), 0.4), 0.7), x0 + dw / 2, by, d / 2 - 1.6, 0.3);
   for (let x = 0.95; x < dw; x += 2.3) { if (Math.abs(x - dw / 2) < 1) continue; mesh(g, new THREE.CylinderGeometry(0.9, 0.9, bh - 4, 8), wm, x0 + x, by, d / 2 - 0.75); }
   for (const s of [-1, 1]) rbox(g, 0.9, 9, 1.6, BRASSY(), x0 + dw / 2 + s * 2.6, by + 4, d / 2 + 0.6, 0.3);
   rbox(g, open - 1.2, 1.4, d - 5, wm, w / 2 - open / 2 - 1.25, by + 0.5, 0, 0.4);
@@ -763,12 +775,14 @@ B.cab = (g, it, P, o) => {
   vase(g, -w / 2 + 22, h, 2, 1.05, '#3F5A54'); vase(g, -w / 2 + 40, h, -4, 0.58, '#EEEAE2'); books(g, w / 2 - 30, h, 1, 3, -0.1);
 };
 
+const CABS = { tvcab: 1, nstand: 1, chest: 1, shoe: 1, shelf: 1 };
 // 建立一件家具。style = STYLES[風格]；opts.decor = 是否附上抱枕、毯子、花瓶等擺飾
 export function buildItem(it, style, opts = {}) {
   const g = new THREE.Group(), o = Object.assign({ decor: true }, opts);
   const hex = it.color && it.color[0] === '#';
   const P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent };
   const spec = Object.assign({}, it, { styled: false });
+  if (CABS[it.cat] && hex && (it.fin === 'wood' || it.fin === 'paint')) spec.color = it.fin[0] + it.color;   // 櫃子：木紋或烤漆＋顏色
   (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P, o);
   g.scale.setScalar(0.01);
   return g;

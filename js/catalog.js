@@ -221,13 +221,35 @@ export const FINISH = {
     colors: [['#C9C8BC', '灰綠'], ['#EFEDE8', '白'], ['#D9C2A3', '淺橡'], ['#5A5E64', '深灰']], label: '櫃體' },
   dress: { mats: [['leather', '咖啡皮革'], ['walnut', '胡桃木'], ['white', '白色']], mcol: { leather: '#6E4630', walnut: '#6B4A33', white: '#F1EEE8' }, mlabel: '檯面',
     colors: [['#EFEBE3', '白'], ['#D9C2A3', '淺橡'], ['#CFC2B2', '奶茶'], ['#9FA593', '灰綠']], label: '櫃體' },
+  // 櫃子（電視櫃、床頭櫃、斗櫃、鞋櫃、書櫃）
+  cab: { mats: [['wood', '木紋'], ['paint', '烤漆']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2E2F31', '黑']] },
+  // 床：床頭材質＋顏色；第二排是床單被套
+  bed: { mats: [['fabric', '布面'], ['leather', '皮革'], ['wood', '木頭']], mlabel: '床頭材質', label: '床頭顏色',
+    colors: [['#D9D3C6', '米白'], ['#B8AC98', '米灰'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#B5673A', '焦糖'], ['#C08A52', '原木'], ['#7A5236', '胡桃']],
+    colors2: [['#F4F1EA', '白'], ['#E3DED4', '米'], ['#C9CDD2', '淺灰藍'], ['#8E9AA6', '霧藍'], ['#B9C2A8', '灰綠'], ['#D8B4A6', '乾燥玫瑰'], ['#5A5E64', '深灰'], ['#2F3E5C', '深藍']], label2: '床單被套' },
+  // 餐椅：整張椅子一個顏色
+  chair: { mats: [['wood', '木頭'], ['paint', '烤漆'], ['fabric', '布面']], label: '整體顏色',
+    colors: [['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#2E2F31', '黑'], ['#EFE9DD', '米白'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#B5673A', '焦糖'], ['#2F3E5C', '深藍']] },
+  ochair: { mats: [['mesh', '網布'], ['leather', '皮革'], ['fabric', '布面']],
+    colors: [['#2E2F31', '黑'], ['#5A5E64', '深灰'], ['#C9C9C7', '淺灰'], ['#EFE9DD', '米白'], ['#2F3E5C', '深藍'], ['#3F5A54', '墨綠'], ['#B5673A', '焦糖'], ['#8E3B3B', '酒紅']] },
+  rug: { mats: [['plain', '素色'], ['stripe', '條紋'], ['geo', '幾何'], ['persian', '波斯花紋']], mlabel: '圖案', label: '主色',
+    colors: [['#D8D2C6', '米'], ['#BDB7AC', '灰褐'], ['#8D8D8A', '灰'], ['#4B5058', '深灰'], ['#8E9AA6', '霧藍'], ['#2F3E5C', '深藍'], ['#9FA593', '灰綠'], ['#B5673A', '焦糖'], ['#8E3B3B', '酒紅']] },
+  lamp: { mats: [['shade', '燈罩']], label: '燈罩顏色',
+    colors: [['#F4EBDD', '米白'], ['#FFFFFF', '白'], ['#E6D3B3', '亞麻'], ['#C9C9C7', '淺灰'], ['#9FA593', '灰綠'], ['#C9A35A', '金'], ['#B5673A', '焦糖'], ['#2E2F31', '黑']] },
+  // 廚具：瓦斯爐、水槽、櫥櫃、電器櫃一起換（選一次，整個廚房同步）
+  kitchen: { mats: [['quartz', '白石英石'], ['marble', '大理石'], ['black', '黑色石材'], ['steel', '不鏽鋼']], mcol: { quartz: '#EDEBE7', marble: '#EFEBE5', black: '#2A2A2C', steel: '#C9CCCF' }, mlabel: '檯面', label: '門板顏色',
+    colors: [['#F1EEE8', '白'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#9FA593', '灰綠'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#2E2F31', '黑']] },
+  // 冰箱、排油煙機、洗衣機：外觀顏色
+  appl: { mats: [['std', '外觀']], label: '外觀顏色', colors: [['#C9CCCF', '不鏽鋼'], ['#F3F3F1', '白'], ['#2A2B2E', '黑'], ['#D8C7A8', '香檳金'], ['#8E9499', '鈦灰']] },
+  shower: { mats: [['clear', '清玻璃'], ['frost', '霧面玻璃']], mlabel: '玻璃', label: '框色', colors: [['#C8CCD0', '銀'], ['#1E1E20', '黑'], ['#C9A35A', '金']] },
   // 茶几、邊桌：桌面材質，顏色共用（例：原木色＋大理石＝咖啡色石紋）
   table: { mats: [['wood', '木紋'], ['paint', '烤漆'], ['marble', '大理石']],
     colors: [['#EFEBE5', '白'], ['#D9C9B0', '米'], ['#BDBDBA', '淺灰'], ['#5A5E64', '深灰'], ['#2A2A2C', '黑'], ['#3F5A54', '墨綠'], ['#D8B4A6', '粉'], ['#C08A52', '原木'], ['#7A5236', '胡桃']], label: '顏色' },
   ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
-export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : s.cat === 'coffee' || s.cat === 'side' ? 'table' : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
+const FIN_CAT = { coffee: 'table', side: 'table', dtable: 'table', desk: 'table', dresser: 'table', tvcab: 'cab', nstand: 'cab', chest: 'cab', shoe: 'cab', shelf: 'cab', bed: 'bed', chair: 'chair', dchair: 'ochair', rug: 'rug', lamp: 'lamp', cook: 'kitchen', sink: 'kitchen', kcab: 'kitchen', tower: 'kitchen', fridge: 'appl', hood: 'appl', washer: 'appl', shower: 'shower' };
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : FIN_CAT[s.cat] ? FIN_CAT[s.cat] : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
 // 拉門的開口（門關著時這段被門扇擋住，3D 導覽走近才會滑開）。回傳 [x1, x2] 或 null
 export function doorGap(s) {
@@ -264,7 +286,7 @@ export function getItem(key, styleKey, it) {
   if (cat.t === 'wshelf') s.elev = r[7];
   const lr = lenRange(s); if (it && it.len && lr) s.w = Math.max(lr.min, Math.min(lr.max, it.len));   // 伸縮後的寬度
   const er = elevRange(s); if (it && it.el != null && er) s.elev = Math.max(er.min, Math.min(er.max, it.el));   // 置物架離地高度
-  if (it && it.m && it.c && finishOf(s)) { s.fin = it.m; s.color = it.c; }   // 個別指定的材質與顏色
+  if (it && it.m && it.c && finishOf(s)) { s.fin = it.m; s.color = it.c; if (it.c2) s.color2 = it.c2; }   // 個別指定的材質與顏色（c2：床單被套）
   return s;
 }
 

@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114y';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114y';
-import * as ART from './planart.js?v=20261114y';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115a';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115a';
+import * as ART from './planart.js?v=20261115a';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -390,7 +390,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261114y').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261115a').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -401,7 +401,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114y'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115a'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -425,7 +425,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114y'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115a'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
@@ -448,8 +448,10 @@ function renderSheet() {
     const cm = it.m || (s.v === 'leather' ? 'leather' : null), cc = it.c;
     $('sheetTitle').textContent = '材質與顏色・' + s.name; $('groups').innerHTML = ''; $('cats').innerHTML = '';
     const cm2 = cm || s.fin;
-    $('list').innerHTML = `<h2 style="font-size:17px">${f.mlabel || '材質'}</h2><div class="grid2">` + f.mats.map(([k, n]) => `<button class="card finm ${k === cm2 ? 'on' : ''}" data-fm="${k}"><i class="fm-${k}" style="--c:${f.mcol ? f.mcol[k] : cc || s.color && s.color[0] === '#' ? cc || s.color : f.colors[0][0]}"></i><b>${n}</b></button>`).join('') + '</div>' +
-      `<h2 style="font-size:17px;margin-top:6px">${f.label && f.mcol ? f.label : '顏色'}</h2><div class="fgrid" style="flex:none;overflow:visible">` + f.colors.map(([c, n]) => `<button class="fsw ${c === cc ? 'on' : ''}" data-fc="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>';
+    $('list').innerHTML = (f.mats.length < 2 ? '' : `<h2 style="font-size:17px">${f.mlabel || '材質'}</h2><div class="grid2">` + f.mats.map(([k, n]) => `<button class="card finm ${k === cm2 ? 'on' : ''}" data-fm="${k}"><i class="fm-${k}" style="--c:${f.mcol ? f.mcol[k] : cc || s.color && s.color[0] === '#' ? cc || s.color : f.colors[0][0]}"></i><b>${n}</b></button>`).join('') + '</div>') +   // 只有一種材質（燈罩、家電）就不顯示材質這排
+      `<h2 style="font-size:17px;margin-top:6px">${f.label || '顏色'}</h2><div class="fgrid" style="flex:none;overflow:visible">` + f.colors.map(([c, n]) => `<button class="fsw ${c === cc ? 'on' : ''}" data-fc="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>' +
+      (f.colors2 ? `<h2 style="font-size:17px;margin-top:6px">${f.label2 || '顏色'}</h2><div class="fgrid" style="flex:none;overflow:visible">` + f.colors2.map(([c, n]) => `<button class="fsw ${c === it.c2 ? 'on' : ''}" data-fc2="${c}"><i style="--c:${c}"></i><span>${n}</span></button>`).join('') + '</div>' : '') +
+      (finishOf(s) === 'kitchen' ? '<div class="muted" style="margin-top:4px">整個廚房的櫃子會一起換</div>' : '');
     return;
   }
   if (S.sheet === 'person') {
@@ -472,10 +474,11 @@ $('sheetClose').addEventListener('click', closeSheet);
 $('groups').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.group = b.dataset.g; S.cat = null; renderSheet(); } });
 $('cats').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.cat = b.dataset.c; renderSheet(); } });
 $('list').addEventListener('click', (e) => {
-  const fb = e.target.closest('[data-fm],[data-fc]');
+  const fb = e.target.closest('[data-fm],[data-fc],[data-fc2]');
   if (fb && S.st) { const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), f = FINISH[finishOf(s)]; if (!f) return;
     it.m = fb.dataset.fm || it.m || (s.v === 'leather' ? 'leather' : f.mats[0][0]); it.c = fb.dataset.fc || it.c || (f.colors.find((x) => x[0] === s.color) || f.colors[0])[0];
-    send({ t: 'fin', id: it.id, m: it.m, c: it.c }); renderSheet(); update(); return; }
+    if (fb.dataset.fc2) it.c2 = fb.dataset.fc2;
+    send({ t: 'fin', id: it.id, m: it.m, c: it.c, c2: it.c2 }); renderSheet(); update(); return; }
   const b = e.target.closest('[data-key]'), r = curRoom(); if (!b || b.disabled || !r || !S.st) return;
   const person = b.dataset.key.startsWith('person:'); if (person && peopleIn(r) >= 3) return;
   const big = r.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m));

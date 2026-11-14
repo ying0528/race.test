@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114y';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114y';
-import { buildItem, buildPerson, M } from './models.js?v=20261114y';
-import * as MT from './mats.js?v=20261114y';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115a';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115a';
+import { buildItem, buildPerson, M } from './models.js?v=20261115a';
+import * as MT from './mats.js?v=20261115a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -776,8 +776,13 @@ function onMsg(entry, m) {
       if (m.room) { if (!PLAN.rooms.some((q) => q.id === m.room)) break; if (k) state.floors[m.room] = k; else delete state.floors[m.room]; }
       else { state.floor = k; state.floors = {}; }   // 選「全戶」會蓋掉各區域的設定
       later(applyFloors); break; }
-    case 'fin': { const it = find(m.id), f = it && FINISH[finishOf(getItem(it.key))];
-      if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) { it.m = m.m; it.c = m.c; syncItems(); } break; }
+    case 'fin': { const it = find(m.id), fk = it && finishOf(getItem(it.key)), f = FINISH[fk];
+      if (f && f.mats.some((x) => x[0] === m.m) && f.colors.some((x) => x[0] === m.c)) {
+        const c2 = f.colors2 && f.colors2.some((x) => x[0] === m.c2) ? m.c2 : it.c2;
+        // 廚具：瓦斯爐、水槽、櫥櫃、電器櫃全部一起換
+        for (const q of fk === 'kitchen' ? state.items.filter((i) => finishOf(getItem(i.key)) === 'kitchen') : [it]) { q.m = m.m; q.c = m.c; if (c2) q.c2 = c2; }
+        syncItems();
+      } break; }
     case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
@@ -792,6 +797,7 @@ function onMsg(entry, m) {
       if (spec.t === 'person') { const rm = roomAt(x, y); if (rm && state.items.filter((i) => i.key.startsWith('person:') && roomAt(i.x, i.y) === rm).length >= 3) break; }
       const it = { id: m.id.slice(0, 16), key: m.key, x, y, r: 0 };
       if (spec.t !== 'person') it.st = STYLES[m.st] ? m.st : state.style;
+      if (finishOf(spec) === 'kitchen') { const k = state.items.find((i) => i.m && finishOf(getItem(i.key)) === 'kitchen'); if (k) { it.m = k.m; it.c = k.c; } }   // 新加的廚具跟著整個廚房的顏色
       state.items.push(it); syncItems(); break;
     }
     case 'reset': state.items = PLAN.defaults.map((d) => ({ ...d })); if (state.cut.length) { state.cut = []; buildShell(); } syncItems(); break;

@@ -128,6 +128,36 @@ export const terrazzo = (color) => memo('tz' + color, () => new THREE.MeshStanda
 export const stoneTile = (color, nx = 2) => memo('st' + color + nx, () => new THREE.MeshStandardMaterial(Object.assign(maps('stone' + nx, color, stoneFn(nx), 2.4, 1, Math.max(SIZE, 1024)), { roughness: 0.62 })));
 export const carpet = (color) => memo('cp' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('loop', color, loopFn, 5, 1, Math.max(SIZE, 1024)), { roughness: 1 })));
 export const wallPaint = (color) => memo('wl' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('plaster', color, plaster, 0.7, 3), { roughness: 0.95 })));
+// 有圖案的地毯（整張一個圖案，不重複）：stripe 條紋、geo 幾何、persian 波斯花紋。主色＋自動配出的深色、淺色
+export const rugPattern = (kind, color, aspect = 1.4) => memo('rp' + kind + color + Math.round(aspect * 4), () => {
+  const W = 512, H = Math.max(256, Math.min(1024, Math.round(512 / Math.max(0.5, Math.min(2.5, aspect))))), c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  const base = new THREE.Color(color), hsl = {}; base.getHSL(hsl);
+  const col = (l, s = 1, dh = 0) => '#' + new THREE.Color().setHSL((hsl.h + dh + 1) % 1, Math.min(1, hsl.s * s), Math.max(0, Math.min(1, l))).getHexString();
+  const dark = col(hsl.l * 0.55, 1.1), deep = col(hsl.l * 0.35, 1.2), light = col(Math.min(0.9, hsl.l + 0.3), 0.6), cream = '#EDE6D6', accent = col(Math.min(0.7, hsl.l + 0.1), 1.3, 0.06);
+  x.fillStyle = color; x.fillRect(0, 0, W, H);
+  if (kind === 'stripe') {
+    let y = 0, k = 0; const pal = [light, color, dark, color, cream, color];
+    while (y < H) { const t = [26, 10, 4, 18, 6, 30][k % 6]; x.fillStyle = pal[k % pal.length]; x.fillRect(0, y, W, t); y += t + 2; k++; }
+  } else if (kind === 'geo') {
+    const n = 7, cw = W / n, ch = cw * 0.8; x.lineWidth = 5; x.strokeStyle = light;
+    for (let j = -1; j < H / ch + 1; j++) for (let i = -1; i <= n; i++) { const cx = (i + (j % 2 ? 0.5 : 0)) * cw, cy = j * ch; x.beginPath(); x.moveTo(cx, cy - ch / 2); x.lineTo(cx + cw / 2, cy); x.lineTo(cx, cy + ch / 2); x.lineTo(cx - cw / 2, cy); x.closePath(); x.stroke(); x.fillStyle = dark; x.fillRect(cx - 4, cy - 4, 8, 8); }
+    x.lineWidth = 16; x.strokeStyle = dark; x.strokeRect(14, 14, W - 28, H - 28);
+  } else if (kind === 'persian') {
+    x.fillStyle = deep; x.fillRect(0, 0, W, H); x.fillStyle = cream; x.fillRect(16, 16, W - 32, H - 32); x.fillStyle = dark; x.fillRect(26, 26, W - 52, H - 52);
+    x.fillStyle = light; for (let p = 40; p < W - 40; p += 22) { x.beginPath(); x.arc(p, 37, 4, 0, 7); x.arc(p, H - 37, 4, 0, 7); x.fill(); } for (let p = 40; p < H - 40; p += 22) { x.beginPath(); x.arc(37, p, 4, 0, 7); x.arc(W - 37, p, 4, 0, 7); x.fill(); }
+    x.fillStyle = color; x.fillRect(50, 50, W - 100, H - 100);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.3;
+    const dia = (r, f) => { x.fillStyle = f; x.beginPath(); x.moveTo(cx, cy - r * 0.9); x.lineTo(cx + r * 1.3, cy); x.lineTo(cx, cy + r * 0.9); x.lineTo(cx - r * 1.3, cy); x.closePath(); x.fill(); };
+    dia(R, deep); dia(R * 0.82, cream); dia(R * 0.7, accent); x.fillStyle = dark; x.beginPath(); x.ellipse(cx, cy, R * 0.5, R * 0.36, 0, 0, 7); x.fill(); x.fillStyle = light; x.beginPath(); x.ellipse(cx, cy, R * 0.24, R * 0.17, 0, 0, 7); x.fill();
+    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; x.fillStyle = cream; x.beginPath(); x.ellipse(cx + Math.cos(a) * R * 0.38, cy + Math.sin(a) * R * 0.27, 7, 4, a, 0, 7); x.fill(); }
+    for (const [qx, qy] of [[50, 50], [W - 50, 50], [50, H - 50], [W - 50, H - 50]]) { x.fillStyle = deep; x.beginPath(); x.ellipse(qx, qy, R * 0.55, R * 0.4, 0, 0, 7); x.fill(); x.fillStyle = cream; x.beginPath(); x.ellipse(qx, qy, R * 0.32, R * 0.23, 0, 0, 7); x.fill(); }
+    x.fillStyle = accent; for (let j = 0; j < 5; j++) for (let i = 0; i < 7; i++) { const px = 80 + i * (W - 160) / 6, py = 80 + j * (H - 160) / 4; if (Math.abs(px - cx) < R * 1.4 && Math.abs(py - cy) < R) continue; x.beginPath(); x.moveTo(px, py - 7); x.lineTo(px + 5, py); x.lineTo(px, py + 7); x.lineTo(px - 5, py); x.fill(); }
+  }
+  // 織紋：每個點加一點明暗雜訊，看起來像毛料
+  const im = x.getImageData(0, 0, W, H), d = im.data; for (let i = 0; i < d.length; i += 4) { const p = i / 4, n = (hash(p % W, Math.floor(p / W)) - 0.5) * 22 + (((p % W) + Math.floor(p / W)) % 2 ? 4 : -4); d[i] += n; d[i + 1] += n; d[i + 2] += n; } x.putImageData(im, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
+});
 export const rugPile = (color) => memo('rg' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('pile', color, pile, 5), { roughness: 1 })));
 export const ceramic = (color) => memo('c' + color, () => new THREE.MeshStandardMaterial({ color, roughness: 0.12 }));
 export const metal = (color = '#2B2B2D', rough = 0.35) => memo('m' + color + rough, () => new THREE.MeshStandardMaterial({ color, metalness: 1, roughness: rough }));
