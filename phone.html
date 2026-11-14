@@ -90,7 +90,8 @@
   .second { height: 44px; border: 1px solid #D9D5CE; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; }
   .second:disabled { opacity: .4; }
   .rowb { display: flex; gap: 8px; } .rowb > * { flex: 1; }
-  .planBox { flex: 1 1 0; min-height: 0; background: #fff; border-radius: 16px; border: 1px solid #E4E1DC; padding: 6px; touch-action: none; }
+  .planBox { flex: 1 1 0; min-height: 0; background: #fff; border-radius: 16px; border: 1px solid #E4E1DC; padding: 6px; touch-action: none; position: relative; }
+  .vtools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; } .vtools button { height: 34px; padding: 0 11px; border-radius: 17px; border: 1.5px solid #D9D5CE; background: rgba(255,255,255,.94); font-weight: 800; font-size: 13px; color: #3A3530; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
   .plan { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
   #sel { height: 42px; padding: 0 12px; border-radius: 12px; background: #fff; border: 1px solid #E4E1DC; font-size: 13px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
   #sel b { font-size: 14px; flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -135,6 +136,6 @@
   <div class="chips" id="cats"></div>
   <div id="list"></div>
 </div>
-<script type="module" src="./js/phone.js?v=20261114d"></script>
+<script type="module" src="./js/phone.js?v=20261114e"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114d';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114d';
-import * as ART from './planart.js?v=20261114d';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114e';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114e';
+import * as ART from './planart.js?v=20261114e';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -57,11 +57,18 @@ function onData(m) {
 
 // ================= 畫面 =================
 const curRoom = () => PLAN.rooms.find((r) => r.id === S.room);
+// 平面圖旋轉（和大螢幕鳥瞰同步）：vdeg 順時針角度；rotVB 算出轉過之後要看的範圍
+const vdeg = () => ((((S.st && S.st.vrot) || 0) % 4) + 4) % 4 * 90;
+function rotVB([x, y, w, h], deg = vdeg()) {
+  const t = deg * Math.PI / 180, c = Math.round(Math.cos(t)), s = Math.round(Math.sin(t)), P = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([a, b]) => [a * c - b * s, a * s + b * c]);
+  const xs = P.map((p) => p[0]), ys = P.map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+}
+const vtools = () => '<div class="vtools"><button data-act="vrot">↻ 轉 90°</button><button data-act="vreset">預設視角</button></div>';
 const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) => it.x >= a - 12 && it.x <= c + 12 && it.y >= b - 12 && it.y <= d + 12);
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm].join('|');
+  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm, st && st.vrot].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -111,18 +118,18 @@ function renderMain() {
   } else if (S.tab === 'edit') {
     const r = curRoom();
     if (!r) {
-      const vb = [-20, -20, PLAN.W + 40, PLAN.D + 40];
-      let h = planBase(vb);
+      const vb0 = [-20, -20, PLAN.W + 40, PLAN.D + 40], vb = rotVB(vb0), dg = vdeg();
+      let h = planBase(vb0);
       for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style, it); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
       PLAN.rooms.forEach((q, i) => { for (const [a, b, c, d] of q.rs) h += `<rect data-act="room" data-room="${q.id}" x="${a}" y="${b}" width="${c - a}" height="${d - b}" fill="${ROOM_COLORS[i]}" fill-opacity="0.5"/>`; });
       h += planWalls();
       PLAN.rooms.forEach((q) => { const [a, b, c, d] = q.rs.reduce((m, x) => ((x[2] - x[0]) * (x[3] - x[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? x : m)); const fs = Math.min(46, (c - a - 14) / q.n.length);
-        h += `<text x="${(a + c) / 2}" y="${(b + d) / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="800" fill="#1D2129" stroke="#fff" stroke-width="5" paint-order="stroke" pointer-events="none">${q.n}</text>`; });
-      el.innerHTML = `<div><h2>點選要佈置的區域</h2><div class="muted">直接點平面圖上的區域</div></div><div class="planBox"><svg class="plan" viewBox="${vb.join(' ')}" xmlns="http://www.w3.org/2000/svg">${h}</svg></div>` +
+        h += `<text x="${(a + c) / 2}" y="${(b + d) / 2}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="800" fill="#1D2129" stroke="#fff" stroke-width="5" paint-order="stroke" pointer-events="none" transform="rotate(${-dg} ${(a + c) / 2} ${(b + d) / 2})">${q.n}</text>`; });
+      el.innerHTML = `<div><h2>點選要佈置的區域</h2><div class="muted">直接點平面圖上的區域</div></div><div class="planBox"><svg class="plan" viewBox="${vb.join(' ')}" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(${dg})">${h}</g></svg>${vtools()}</div>` +
         `<button class="second" data-act="reset">${S.resetArm ? '再按一次，確定還原' : '全部還原成預設家具'}</button>`;
     } else {
       el.innerHTML = `<div class="rowb" style="align-items:center;flex:none"><button class="second" data-act="room" data-room="" style="flex:0 0 92px">← 區域</button><div style="min-width:0"><h2>${r.n}</h2><div class="muted">約 ${((r.r[2] - r.r[0]) / 100).toFixed(1)} × ${((r.r[3] - r.r[1]) / 100).toFixed(1)} m · 依實際比例</div></div></div>
-        <div class="planBox"><svg id="plan" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div class="planBox"><svg id="plan" class="plan" xmlns="http://www.w3.org/2000/svg"></svg>${vtools()}</div>
         <div id="sel"></div>
         <div class="rowb"><button class="second" id="rotBtn" data-act="rot">旋轉 90°</button><button class="second" id="finBtn" data-act="fin">材質顏色</button><button class="second" id="delBtn" data-act="del">刪除</button></div>
         <div class="rowb"><button class="primary" data-act="open">＋ 家具</button><button class="primary alt" data-act="person">＋ 模擬人偶</button></div>`;
@@ -189,6 +196,7 @@ $('main').addEventListener('click', (e) => {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return;
     it.len = Math.max(R.min, Math.min(R.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len }); snapToWall(it);
   }
+  else if (a === 'vrot' || a === 'vreset') { const n = a === 'vreset' ? 0 : (vdeg() / 90 + 1) % 4; S.st.vrot = n; S.view = null; send({ t: 'vrot', r: n }); }
   else if (a === 'fill') { const it = S.st.items.find((i) => i.id === S.sel); if (it && !fillWall(it)) { S.fillNo = Date.now(); setTimeout(update, 1600); } }
   else if (a === 'elev') {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = elevRange(s); if (!R) return;
@@ -207,7 +215,7 @@ const PAD = 22;
 function drawPlan() {
   const svg = $('plan'), r = curRoom(); if (!svg || !r) return;
   const [x1, y1, x2, y2] = r.r, vb = [x1 - PAD, y1 - PAD, x2 - x1 + 2 * PAD, y2 - y1 + 2 * PAD];
-  svg.setAttribute('viewBox', (S.view || vb).join(' '));
+  svg.setAttribute('viewBox', (S.view || rotVB(vb)).join(' '));
   let h = planBase(vb);
   h += planWalls();
   (PLAN.cuts || []).forEach((_, i) => {   // 可拆的牆：橘色虛線框；已拆的：灰色虛線。點一下選取，再按下面的按鈕
@@ -235,7 +243,7 @@ function drawPlan() {
     const m = sel ? 5 : 0;
     h += `<g ${attr} transform="translate(${it.x} ${it.y}) rotate(${it.r})">${ART.itemArt(s)}` + (sel ? `<rect x="${-s.w / 2 - m}" y="${-s.d / 2 - m}" width="${s.w + 2 * m}" height="${s.d + 2 * m}" rx="5" fill="rgba(160,103,58,.12)" stroke="#A0673A" stroke-width="3" stroke-dasharray="9 6"/>` : `<rect x="${-s.w / 2}" y="${-s.d / 2}" width="${s.w}" height="${s.d}" fill="transparent"/>`) + '</g>';
   }
-  svg.innerHTML = h;
+  svg.innerHTML = `<g id="rg" transform="rotate(${vdeg()})">${h}</g>`;
 }
 function updateSel() {
   const el = $('sel'); if (!el) return;
@@ -297,9 +305,9 @@ function fillWall(it) {
 }
 function bindPlan() {
   const svg = $('plan');
-  const pt = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); };
+  const pt = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform((svg.querySelector('#rg') || svg).getScreenCTM().inverse()); };
   const pts = new Map(); let lastSend = 0, pinch = null;
-  const baseVB = () => { const r = curRoom().r; return [r[0] - PAD, r[1] - PAD, r[2] - r[0] + 2 * PAD, r[3] - r[1] + 2 * PAD]; };
+  const baseVB = () => { const r = curRoom().r; return rotVB([r[0] - PAD, r[1] - PAD, r[2] - r[0] + 2 * PAD, r[3] - r[1] + 2 * PAD]); };
   const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) { send({ t: 'move', id: it.id, x: it.x, y: it.y }); snapToWall(it); } S.drag = null; };
   // 兩指：縮放與平移平面圖（改 viewBox，家具比例不變）
   const two = () => { const [a, b] = [...pts.values()]; return { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
@@ -349,7 +357,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114e'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -373,7 +381,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114e'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);

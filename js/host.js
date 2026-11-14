@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114d';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114d';
-import { buildItem, buildPerson, M } from './models.js?v=20261114d';
-import * as MT from './mats.js?v=20261114d';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114e';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114e';
+import { buildItem, buildPerson, M } from './models.js?v=20261114e';
+import * as MT from './mats.js?v=20261114e';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { style: 'nordic', floor: null, floors: {}, wall: null, walls: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { vrot: 0, style: 'nordic', floor: null, floors: {}, wall: null, walls: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -321,8 +321,10 @@ function fitDist(wm, dm) { // 讓 wm × dm（公尺）的區域塞進畫面
   return Math.max(dv, dh) * 1.12 + 1.5;
 }
 function setGoal() {
-  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; goal.az = 0; return; }
-  goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = 0;   // 佈置時固定全戶鳥瞰；az = 0：房子的底邊和螢幕平行
+  if (screen !== 'play') { goal.tx = CX; goal.tz = CZ; goal.dist = fitDist(PLAN.W * cm, PLAN.D * cm) * 0.92; goal.el = 0.95; goal.az = 0; view.az += 2 * Math.PI * Math.round(-view.az / (2 * Math.PI)); return; }
+  // 佈置時固定全戶鳥瞰；vrot：手機上平面圖順時針轉了幾個 90 度，鳥瞰跟著轉（0 = 房子的底邊和螢幕平行）
+  const odd = state.vrot % 2 === 1; goal.el = 1.05; goal.tx = CX; goal.tz = CZ; goal.dist = odd ? fitDist(PLAN.D * cm, PLAN.W * cm) : fitDist(PLAN.W * cm, PLAN.D * cm); goal.az = state.vrot * Math.PI / 2;
+  view.az += 2 * Math.PI * Math.round((goal.az - view.az) / (2 * Math.PI));   // 走最短的方向轉，不會繞一大圈
 }
 function applyMode() {
   invalidate(6);
@@ -662,7 +664,7 @@ $('startBtn').addEventListener('click', () => { tvVideo.muted = false; tvVideo.p
 $('units').innerHTML = UNITS.map((u) => `<button class="unit" data-unit="${u.id}"><b>${u.name}</b><span>${u.spec}</span><span>${u.note}</span><em>進入佈置</em></button>`).join('');
 function useUnit(id) {
   if (id === UNIT.id || !setUnit(id)) return;
-  CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ);
+  CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ); state.vrot = 0;
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
   state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {}; state.walls = {}; state.cut = [];
@@ -693,7 +695,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size, vrot: state.vrot }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -731,6 +733,7 @@ function onMsg(entry, m) {
   if (m.t !== 'joy' && m.t !== 'look') lastInput = performance.now();   // 有人在操作時，背景的模型準備先暫停
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
+  if (m.t === 'vrot') { state.vrot = ((Math.round(+m.r || 0) % 4) + 4) % 4; setGoal(); invalidate(4); broadcast(); return; }   // 手機旋轉平面圖／回到預設視角
   if (m.t === 'shotget') { if (lastShots && lastShots.tok === m.tok) lastShots.imgs.forEach((img, i) => send(entry.conn, { t: 'shot', tok: m.tok, i, n: lastShots.imgs.length, img })); return; }
   if (m.t === 'shot') { const tok = String(m.tok || '').slice(0, 20); if (screen === 'play') setTimeout(() => makeShots(entry, tok), 30); else send(entry.conn, { t: 'shot', tok, err: 'not-ready' }); return; }
   if (m.t === 'goto') { if (state.mode === 'tour' && state.tourBy === entry.id) startAuto(num(m.x, 0, PLAN.W), num(m.y, 0, PLAN.D)); return; }
