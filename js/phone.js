@@ -1,13 +1,13 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114e';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114e';
-import * as ART from './planart.js?v=20261114e';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114f';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114f';
+import * as ART from './planart.js?v=20261114f';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const S = { tab: 'style', net: 'wait', netText: '正在連線…', st: null, room: null, sel: null, drag: null, resetArm: false, group: GROUPS[0], cat: null, sheet: null };
 const room = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-let peer = null, conn = null, fast = null, jn = 0, lastKey = '';
+let peer = null, conn = null, fast = null, jn = 0, lastKey = '', lastTouch = 0;
 // 搖桿與轉頭走不排隊的通道（連不上就退回一般通道）
 function sendFast(m) { try { if (fast && fast.open) return fast.send(m); } catch (e) { /* 改走一般通道 */ } send(m); }
 const pending = new Map();
@@ -15,24 +15,54 @@ function send(m) { try { if (conn && conn.open) conn.send(m); } catch (e) { /* �
 
 // ================= 連線 =================
 function setNet(s, text) { S.net = s; S.netText = text; $('status').dataset.s = s; $('statusText').textContent = text; update(); }
+// 連線：斷線（手機休眠、換網路、訊號不好）時自動重連，不用重新整理；畫面上的進度都會保留
+const HOST_ID = () => 'myhome-a1-' + room.toLowerCase();
+const cid = (() => { try { return sessionStorage.cid || (sessionStorage.cid = Math.random().toString(36).slice(2, 10)); } catch (e) { return Math.random().toString(36).slice(2, 10); } })();
+let lastRx = Date.now(), retryT = 0, tries = 0, everOk = false;
+function newPeer() {
+  try { if (peer) peer.destroy(); } catch (e) { /* 忽略 */ }
+  peer = new Peer();
+  peer.on('open', openConn);
+  peer.on('disconnected', () => { if (S.net !== 'ok') recover(); });   // 只跟配對伺服器斷線時，已經連上的手機不受影響
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') { if (!everOk) setNet('bad', '找不到房間 ' + room + '，請確認大螢幕還開著（會自動重試）'); recover(); }
+    else if (S.net !== 'ok') { if (!everOk) setNet('bad', '連線失敗（' + err.type + '），會自動重試'); recover(); }
+  });
+}
+function openConn() {
+  try { if (conn) conn.close(); } catch (e) { /* 忽略 */ } try { if (fast) fast.close(); } catch (e) { /* 忽略 */ }
+  fast = null; if (!everOk) setNet('wait', '正在連到大螢幕…');
+  const c = peer.connect(HOST_ID(), { reliable: true }); conn = c;
+  c.on('open', () => {
+    if (conn !== c) return; lastRx = Date.now(); tries = 0; everOk = true; setNet('ok', '已連上大螢幕 ' + room); send({ t: 'hello', cid });
+    try { fast = peer.connect(HOST_ID(), { reliable: false, label: 'fast' }); } catch (e) { fast = null; }
+    try { c.peerConnection.addEventListener('iceconnectionstatechange', () => { const st = c.peerConnection.iceConnectionState; if (conn === c && (st === 'failed' || st === 'closed')) recover(); }); } catch (e) { /* 忽略 */ }
+  });
+  c.on('data', (m) => { if (conn !== c) return; lastRx = Date.now(); if (m && m.t === 'pong') return; onData(m); });
+  c.on('close', () => { if (conn === c) recover(); });
+  c.on('error', () => { if (conn === c) recover(); });
+  setTimeout(() => { if (conn === c && !c.open) recover(); }, 9000);   // 9 秒還沒接通就再試一次
+}
+function recover() {
+  if (retryT) return;
+  if (everOk) setNet('retry', '重新連線中…');
+  retryT = setTimeout(() => {
+    retryT = 0; tries++;
+    if (!peer || peer.destroyed || tries % 3 === 0) return newPeer();   // 試了幾次都不行就整個重來
+    if (peer.disconnected) { try { peer.reconnect(); } catch (e) { newPeer(); } return; }   // 重新登入配對伺服器後會自動 openConn
+    openConn();
+  }, Math.min(4000, 400 * (tries + 1)));
+}
 function connect() {
   if (!room) return setNet('bad', '網址缺少房間代碼，請重新掃描 QR code');
   if (typeof Peer === 'undefined') return setNet('bad', '無法載入連線元件，請檢查網路');
-  peer = new Peer();
-  peer.on('open', () => {
-    setNet('wait', '正在連到大螢幕…');
-    conn = peer.connect('myhome-a1-' + room.toLowerCase(), { reliable: true });
-    conn.on('open', () => { setNet('ok', '已連上大螢幕 ' + room); send({ t: 'hello' }); try { fast = peer.connect('myhome-a1-' + room.toLowerCase(), { reliable: false, label: 'fast' }); } catch (e) { fast = null; } });
-    conn.on('data', onData);
-    conn.on('close', () => setNet('bad', '連線中斷，請重新整理'));
-    conn.on('error', () => setNet('bad', '連線出錯，請重新整理'));
-  });
-  peer.on('error', (err) => {
-    if (err.type === 'peer-unavailable') setNet('bad', '找不到房間 ' + room + '，請確認大螢幕還開著');
-    else if (S.net !== 'ok') setNet('bad', '連線失敗（' + err.type + '），試試換個網路');
-  });
-  setTimeout(() => { if (S.net === 'wait') setNet('bad', '連線逾時，試試切換 Wi-Fi／行動網路'); }, 20000);
-  setInterval(() => send({ t: 'ping' }), 2000);
+  newPeer();
+  setInterval(() => {   // 心跳：大螢幕會回 pong；超過 8 秒什麼都沒收到，就當作斷了，自動重連
+    send({ t: 'ping', cid });
+    if (S.net === 'ok' && Date.now() - lastRx > 8000 && !(S.shots && S.shots.busy)) recover();
+  }, 2000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && everOk && Date.now() - lastRx > 3500) recover(); });   // 手機從休眠回來
+  addEventListener('online', () => { if (everOk && S.net !== 'ok') recover(); });
 }
 function onData(m) {
   if (m && m.t === 'pos') { S.pos = m; moveMe(); return; }
@@ -99,7 +129,7 @@ function wallPicker(cur) {
 }
 function renderMain() {
   const el = $('main'), st = S.st;
-  if (S.net !== 'ok' || !st) { el.innerHTML = `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
+  if (S.net !== 'ok' || !st) { el.innerHTML = S.net === 'retry' ? '<div class="shotWait"><div class="spin"></div><h2>重新連線中…</h2><div class="muted">不用重新整理，連上後會回到剛剛的畫面。</div></div>' : `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
   if (!st.ready) { el.innerHTML = '<h2>已連上大螢幕</h2><div class="muted">請先在大螢幕上按「開始打造」，再選擇戶型。</div>'; return; }
   const touring = st.mode === 'tour', mine = st.tourBy === st.you;
   document.body.classList.toggle('tourL', S.tab === 'tour' && touring && mine && innerWidth > innerHeight);
@@ -357,7 +387,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114e'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114f'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -380,12 +410,13 @@ function warmThumbs() {
 }
 async function warmStep() {
   if (!warmList.length) return;
-  if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114e'); } catch (e) { return; }
+  if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114f'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
-  warmTimer = setTimeout(warmStep, 30);
+  warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
 }
+addEventListener('pointerdown', () => { lastTouch = Date.now(); }, { capture: true, passive: true });
 function closeSheet() { S.sheet = null; $('sheet').classList.add('hidden'); }
 function openSheet(kind) { S.sheet = kind; $('sheet').classList.remove('hidden'); renderSheet(); }
 function row(s, sk, extra = '') {

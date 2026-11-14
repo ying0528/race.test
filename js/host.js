@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114e';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114e';
-import { buildItem, buildPerson, M } from './models.js?v=20261114e';
-import * as MT from './mats.js?v=20261114e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114f';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261114f';
+import { buildItem, buildPerson, M } from './models.js?v=20261114f';
+import * as MT from './mats.js?v=20261114f';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -233,8 +233,11 @@ const objs = new Map();
 const tvVideo = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'none' }); tvVideo.setAttribute('playsinline', ''); tvVideo.src = './media/tv.mp4?v=2';
 const tvTex = new THREE.VideoTexture(tvVideo); tvTex.colorSpace = THREE.SRGBColorSpace;
 const tvMat = new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false });
+let screenPos = [];   // 屋裡每台電視螢幕的位置：沒有電視就不播；聲音大小看離最近的電視多遠
 function setScreens(on) {
-  furn.traverse((n) => { if (n.isMesh && n.userData.screen) { if (!n.userData.off) n.userData.off = n.material; n.material = on ? tvMat : n.userData.off; } });
+  screenPos = []; furn.updateMatrixWorld(true);
+  furn.traverse((n) => { if (n.isMesh && n.userData.screen) { if (!n.userData.off) n.userData.off = n.material; n.material = on ? tvMat : n.userData.off; screenPos.push(n.getWorldPosition(new THREE.Vector3())); } });
+  if (!screenPos.length) on = false;
   if (on) tvVideo.play().catch(() => { tvVideo.muted = true; tvVideo.play().catch(() => {}); }); else tvVideo.pause();   // 瀏覽器不准出聲時退回靜音播放
 }
 // 每一款家具只建一次模型，之後都用複製的（共用幾何與材質），換風格、搬動時就不會卡
@@ -263,6 +266,7 @@ function syncItems() {
     else { e.o.position.set(it.x * cm, q.spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; if (e.cap) { e.cap.position.set(it.x * cm, 0, it.y * cm); e.cap.rotation.y = e.o.rotation.y; } }
   }
   for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); objs.delete(id); }
+  if (state.mode === 'tour') setScreens(true);   // 導覽中新增／刪除電視：重新決定要不要播
 }
 // 閒置時先把其他風格的材質與預設家具準備好，之後切換風格就不用現算
 const warm = []; let warming = false, camMoving = false;
@@ -631,6 +635,7 @@ function frame(now) {
     dx = Math.cos(tour.yaw); dz = Math.sin(tour.yaw);
     updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z; sendPos(now);
     camera.position.set(tour.x, 1.5, tour.z);
+    if (screenPos.length && !tvVideo.muted) { let d = 99; for (const p of screenPos) d = Math.min(d, Math.hypot(p.x - tour.x, p.z - tour.z)); tvVideo.volume = Math.max(0, Math.min(1, 1 - (d - 2) / 6)); }   // 離電視 2 公尺內最大聲，8 公尺外聽不到
     camera.lookAt(tour.x + dx * Math.cos(tour.pitch), 1.5 + Math.sin(tour.pitch), tour.z + dz * Math.cos(tour.pitch));
     if (Q0 === null) tuneQuality(dt);
     renderer.render(scene, camera);
@@ -699,12 +704,13 @@ function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, 
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
-function startPeer() {
+let peerReady = false;
+function startPeer(code) {
   if (typeof Peer === 'undefined') { setNet('無法載入連線元件，請檢查網路後重新整理', false); return; }
-  roomCode = makeCode();
+  roomCode = code || makeCode();
   setNet('正在連線配對伺服器…');
   peer = new Peer('myhome-a1-' + roomCode.toLowerCase());
-  peer.on('open', () => { setNet('已就緒，可以掃碼加入', true); showQR(); });
+  peer.on('open', () => { peerReady = true; setNet('已就緒，可以掃碼加入', true); showQR(); });
   peer.on('connection', (conn) => {
     if (conn.label === 'fast') {   // 第二條不排隊的通道：只傳搖桿與轉頭，封包晚到就丟，不會越積越慢
       conn.on('data', (m) => { const e = [...conns].find((q) => q.conn.peer === conn.peer); if (e && m && (m.t === 'joy' || m.t === 'look')) { e.seen = Date.now(); onMsg(e, m); } });
@@ -717,19 +723,34 @@ function startPeer() {
   });
   peer.on('disconnected', () => { setNet('與配對伺服器斷線，重新連線中…'); setTimeout(() => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) { /* 忽略 */ } }, 1500); });
   peer.on('error', (err) => {
-    if (err.type === 'unavailable-id') { peer.destroy(); startPeer(); return; }
+    if (err.type === 'unavailable-id') { const keep = peerReady; peer.destroy(); setTimeout(() => startPeer(keep ? roomCode : null), keep ? 3000 : 0); return; }   // 重新登入時代碼還被占著：等一下用同一個代碼再試，手機才不會找不到房間
     if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) setNet('連不上配對伺服器（' + err.type + '），可能被網路擋住', false);
   });
 }
 function endTour() { auto = null; state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
-function drop(entry) { if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ } if (state.tourBy === entry.id) endTour(); broadcast(); }
-setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 30000) drop(e); }, 1000);
+// 同一支手機（cid 相同）重新連線：接手舊連線，導覽主控權也一起轉過來
+const lostTour = { cid: null, id: null };
+function claim(entry, cid) {
+  if (!cid) return; entry.cid = String(cid).slice(0, 20);
+  for (const o of [...conns]) if (o !== entry && o.cid === entry.cid) { if (state.tourBy === o.id) state.tourBy = entry.id; joy.delete(o); conns.delete(o); try { o.conn.close(); } catch (e) { /* 忽略 */ } }
+  if (lostTour.cid === entry.cid && state.tourBy === lostTour.id) state.tourBy = entry.id;
+  lostTour.cid = null;
+}
+function drop(entry) {
+  if (!conns.delete(entry)) return; joy.delete(entry); try { entry.conn.close(); } catch (e) { /* 忽略 */ }
+  if (state.tourBy === entry.id) {   // 導覽中的手機斷線：等 15 秒，它重新連上就繼續導覽，不然才結束
+    if (entry.cid) { lostTour.cid = entry.cid; lostTour.id = entry.id; setTimeout(() => { if (state.tourBy === entry.id) endTour(); broadcast(); }, 15000); } else endTour();
+  }
+  broadcast();
+}
+setInterval(() => { const now = Date.now(); for (const e of [...conns]) if (now - e.seen > 15000) drop(e); }, 1000);   // 手機每 2 秒會送心跳，15 秒沒聲音就是斷了
 
 const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
 function onMsg(entry, m) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'hello') return send(entry.conn, snapshot(entry));
-  if (m.t === 'ping' || screen !== 'play') return;
+  if (m.t === 'hello') { claim(entry, m.cid); send(entry.conn, snapshot(entry)); broadcast(); return; }
+  if (m.t === 'ping') { if (m.cid && !entry.cid) { claim(entry, m.cid); broadcast(); } send(entry.conn, { t: 'pong' }); return; }
+  if (screen !== 'play') return;
   if (m.t !== 'joy' && m.t !== 'look') lastInput = performance.now();   // 有人在操作時，背景的模型準備先暫停
   const find = (id) => state.items.find((i) => i.id === id);
   if (m.t === 'joy') { if (m.n !== undefined) { if (m.n < (entry.jn || 0)) return; entry.jn = m.n; } if (state.mode === 'tour' && state.tourBy === entry.id) joy.set(entry, { f: num(m.f, -1, 1), s: num(m.s, -1, 1), t: num(m.tn, -1, 1), p: num(m.p, -1, 1) }); return; }
@@ -793,4 +814,4 @@ wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera
 if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders, pickShots };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders, pickShots, screens: () => screenPos.length };   // 給測試用
