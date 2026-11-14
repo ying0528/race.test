@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261114c';
-import * as MT from './mats.js?v=20261114c';
+import { WOODS, FINISH } from './catalog.js?v=20261114d';
+import * as MT from './mats.js?v=20261114d';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -283,39 +283,103 @@ B.tower = (g, it) => {
 // ---- 裝修櫃與牆上置物架（背面在 z = -d/2，貼牆；寬度可伸縮，門片數跟著變） ----
 const BCOL = ['#C96F4A', '#3F5A54', '#E8E2D4', '#2F3E5C', '#D8B35A', '#8C8F94', '#B5673A', '#EFEAE0'];
 // 化妝台＋開放更衣牆：左邊化妝台固定 100 寬（鏡子、懸空檯面、燈條），其餘是更衣區（吊衣桿、小層板、上方收納層板、下方抽屜櫃與開放格）
+// 鏡子：用一張「柔和反射」的貼圖假裝映出房間（真的鏡面反射太耗效能），不會閃
+let mirTex = null;
+function mirrorMat() {
+  if (!mirTex) { const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d');
+    const gr = x.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#E9ECEB'); gr.addColorStop(0.55, '#C9CFCF'); gr.addColorStop(1, '#AEB4B3'); x.fillStyle = gr; x.fillRect(0, 0, 128, 256);
+    x.globalAlpha = 0.22; x.fillStyle = '#FFFFFF'; x.beginPath(); x.moveTo(20, 0); x.lineTo(60, 0); x.lineTo(10, 256); x.lineTo(-30, 256); x.fill(); x.beginPath(); x.moveTo(78, 0); x.lineTo(90, 0); x.lineTo(40, 256); x.lineTo(28, 256); x.fill();
+    x.globalAlpha = 0.12; x.fillStyle = '#7C6A58'; x.fillRect(0, 170, 128, 86);
+    mirTex = new THREE.CanvasTexture(c); mirTex.colorSpace = THREE.SRGBColorSpace; }
+  return memoMat('mirror2', () => new THREE.MeshStandardMaterial({ map: mirTex, roughness: 0.12, metalness: 0.25, envMapIntensity: 1.4 }));
+}
+// 燈條打在背板上的光暈（往一個方向淡出的半透明光）
+let glowTex = null;
+function glowMat(op) {
+  if (!glowTex) { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const x = c.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 4, 128); glowTex = new THREE.CanvasTexture(c); }
+  return memoMat('glow' + op, () => new THREE.MeshBasicMaterial({ color: '#FFC46E', map: glowTex, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+}
 function dressWall(g, it, b, D, W, dec) {
-  const top = it.fin === 'walnut' ? MT.wood('#6B4A33', { rings: 14, warp: 0.4 }) : it.fin === 'white' ? MT.flat('#F1EEE8', 0.4) : MT.leather('#6E4630');
+  const top = it.fin === 'walnut' ? MT.wood('#6B4A33', { rings: 14, warp: 0.4 }) : it.fin === 'white' ? MT.flat('#F1EEE8', 0.4) : MT.leather('#7A4A2E');
   const c = it.color && it.color[0] === '#' ? it.color : '#EFEBE3', m = c === '#D9C2A3' ? MT.wood(c, { rings: 16, warp: 0.35, vert: true, gloss: 0.1 }) : MT.flat(c, 0.5);
-  const bk = MT.fabric('#D9D0C0', 6), led = MT.emit('#FFD79A'), blk = MT.flat('#1C1C1E', 0.4), X0 = -W / 2, L = (...a) => { const x = b(...a); x.castShadow = false; return x; };
-  b(W, 152, 1.5, bk, 0, 76, 0); b(W, 76, 1.5, m, 0, 0, 0);   // 背板
-  b(W, 6, 40, m, 0, 228, 0); b(W, 12, 4, m, 0, 234, 36); L(W - 6, 0.6, 1.4, led, 0, 227.4, 34); b(W, 46, 1.5, MT.flat('#EDE9E2', 0.9), 0, 234, 0);   // 上方收納層板＋線板＋燈條
-  // 化妝台
-  const vx = X0 + 50; b(100, 4, D, top, vx, 74, 0); b(98, 12, D - 4, m, vx, 62, 1); b(96, 10.6, 1.4, m, vx, 62.7, D - 3); L(94, 0.6, 1.2, led, vx, 61.4, D - 10);
-  const mir = new THREE.Mesh(new THREE.PlaneGeometry(82, 142), MIRROR_LIGHT); mir.position.set(vx, 156, -D / 2 + 2.2); g.add(mir); b(86, 146, 1, MT.flat('#2A2A2C', 0.4), vx, 85, 1.2);
-  L(1, 150, 1.4, led, vx - 45, 82, 1.5); L(1, 150, 1.4, led, vx + 45, 82, 1.5); L(0.8, 228, 1.2, led, X0 + 1, 0, 1.5);
-  // 更衣區
-  const wx = X0 + 100, ww = W - 100, cx = wx + ww / 2, n = Math.max(2, Math.round(ww / 50)), dw = ww / n;
-  b(ww - 10, 10, 38, MT.flat('#2A2622', 0.9), cx, 0, 0); L(ww - 14, 0.6, 1.2, led, cx, 9.2, 38);   // 懸空踢腳＋燈
-  b(ww, 17, 44, m, cx, 10, 0); b(ww, 15, 44, m, cx, 57, 0); b(ww, 30, 2, MT.flat('#F6EEDF', 0.8), cx, 27, 0); b(2, 30, 44, m, wx + 1, 27, 0); b(2, 30, 44, m, wx + ww - 1, 27, 0); L(ww - 6, 0.6, 1.2, led, cx, 56.4, 41);   // 下排抽屜、開放格、上排抽屜
-  for (const [y, h] of [[10, 17], [57, 15]]) for (let i = 0; i < n; i++) b(dw - 1, h - 1, 1.6, m, wx + dw * (i + 0.5), y + 0.5, 44);
-  b(ww + 2, 4, 46, top, cx, 72, 0); L(ww - 6, 0.6, 1.2, led, cx, 76, 1.5);   // 檯面＋燈條
-  const rx1 = wx + (ww >= 140 ? 70 : 10), rx2 = wx + ww - 8; b(rx2 - rx1, 2.4, 2.4, blk, (rx1 + rx2) / 2, 208, 24); for (const x of [rx1 + 4, rx2 - 4]) b(1.4, 20, 1.4, blk, x, 208, 24.5);   // 吊衣桿
-  if (ww >= 140) for (const y of [126, 146]) { const sm = MT.metal('#8C8676', 0.4); b(44, 1.6, 12, sm, wx + 32, y, 1.5); b(44, 5, 1, sm, wx + 32, y, 12.5); L(40, 0.5, 1, led, wx + 32, y - 0.5, 6); }   // 小層板
+  const panel = MT.fabric('#E4DACA', 6), led = MT.emit('#FFD9A0'), blk = MT.metal('#1E1E20', 0.45), bronze = MT.metal('#8C8070', 0.35), groove = MT.flat('#3A3530', 0.8);
+  const X0 = -W / 2, Z = -D / 2, L = (...a) => { const x = b(...a); x.castShadow = false; return x; };
+  // 光暈：dir 1 往上淡出、-1 往下淡出；橫的(h)或直的(v)
+  const glow = (x, y, z, w, h, op, rot = 0) => { const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glowMat(op)); q.position.set(x, y, Z + z); q.rotation.z = rot; q.castShadow = false; q.renderOrder = 2; g.add(q); };
+  const VW = 104, vx = X0 + VW / 2, wx = X0 + VW, ww = W - VW, cx = wx + ww / 2;
+  // ── 背板：整面淺色布紋板，左邊化妝區是鏡子
+  b(W, 6, 1.5, m, 0, 0, 0); b(W, 222, 1.5, panel, 0, 6, 0);
+  // ── 上方：層板（雙層線板）＋燈條＋向下的光暈
+  b(W + 4, 5, 42, m, 0, 228, 0); b(W + 6, 3, 3, m, 0, 233, 41); b(W + 2, 2, 2, m, 0, 226, 40); b(W, 44, 1.5, MT.flat('#EDE9E2', 0.9), 0, 236, 0);
+  L(W - 8, 0.6, 1.4, led, 0, 227.4, 37); glow(0, 196, 1.62, W - 8, 62, 0.28);
+  // ── 化妝區：大鏡子＋細古銅框，三邊燈條
+  const mw = 92, mh = 140, my = 82;
+  b(mw + 6, mh + 6, 1.2, groove, vx, my - 3, 1.5);
+  for (const sx of [-1, 1]) b(1.4, mh + 6, 2.2, bronze, vx + sx * (mw / 2 + 2.3), my - 3, 1.5);
+  b(mw + 6, 1.4, 2.2, bronze, vx, my + mh + 1.6, 1.5);
+  const mir = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), mirrorMat()); mir.position.set(vx, my + mh / 2, Z + 3.4); g.add(mir);   // 鏡面比背框前面 0.7cm，不會跟背框搶畫面而閃爍
+  for (const sx of [-1, 1]) { L(0.8, mh + 4, 1.2, led, vx + sx * (mw / 2 + 4.2), my - 2, 1.6); glow(vx + sx * (mw / 2 + 12), my + mh / 2, 1.62, mh, 16, 0.22, sx * Math.PI / 2); }
+  L(0.8, 222, 1.2, led, X0 + 0.8, 6, 1.6); L(0.8, 150, 1.2, led, wx - 0.4, 78, 1.6);
+  // 化妝台：皮革檯面＋薄抽屜（指溝）＋底部燈條
+  b(VW, 4, D - 6, top, vx, 74, 0); b(VW - 2, 13, D - 10, m, vx, 61, 1); b(VW - 4, 11.6, 1.6, m, vx, 61.6, D - 8.4); b(VW - 30, 0.8, 0.5, groove, vx, 70.8, D - 6.9);
+  L(VW - 8, 0.6, 1.2, led, vx, 60.4, D - 14);
+  // ── 更衣區：懸空抽屜櫃（下排抽屜、發光開放格、上排抽屜）
+  const n = Math.max(2, Math.round(ww / 55)), dw = ww / n;
+  b(ww - 12, 9, 38, groove, cx, 0, 2); L(ww - 16, 0.6, 1.2, led, cx, 8.4, 39);
+  b(ww, 18, 44, m, cx, 9, 0); b(ww, 15, 44, m, cx, 57, 0); b(ww, 30, 2, MT.flat('#F4E9D6', 0.85), cx, 27, 0);
+  for (const xx of [wx + 1, wx + ww - 1, cx]) b(2, 30, 44, m, xx, 27, 0);
+  L(ww - 6, 0.6, 1.2, led, cx, 56.3, 41); glow(cx, 41.5, 2.1, ww - 4, 29, 0.3);
+  for (const [y, h] of [[9, 18], [57, 15]]) for (let i = 0; i < n; i++) { const x = wx + dw * (i + 0.5); b(dw - 1, h - 1, 1.6, m, x, y + 0.5, 44); b(dw * 0.45, 0.8, 0.5, groove, x, y + h - 2.2, 45.6); }
+  b(ww + 2, 4, 47, top, cx, 72, 0);
+  // 背板直燈條＋小層板（古銅＋燈）
+  L(0.8, 222, 1.2, led, X0 + W - 0.8, 6, 1.6);
+  const sx0 = wx + 34;
+  if (ww >= 150) for (const y of [128, 150]) { b(48, 1.6, 12, bronze, sx0, y, 1.5); b(48, 4, 0.8, bronze, sx0, y - 2.4, 13); L(44, 0.5, 1, led, sx0, y - 0.6, 6); glow(sx0, y - 12, 1.62, 50, 22, 0.3); }
+  // 吊衣桿：從上方層板吊下來的黑色細桿
+  const rx1 = wx + (ww >= 150 ? 68 : 12), rx2 = wx + ww - 8; b(rx2 - rx1, 2.2, 2.2, blk, (rx1 + rx2) / 2, 206, 22);
+  for (const x of [rx1 + 3, (rx1 + rx2) / 2, rx2 - 3]) b(1.2, 20, 1.2, blk, x, 208, 22.5);
   if (!dec) return;
-  for (const x of [-30, 60]) if (Math.abs(x) < W / 2 - 25) { b(46, 24, 34, MT.flat('#EFEAE0', 0.6), x, 234, 3); b(4, 4, 1, blk, x, 246, 37.2); }   // 上方收納盒
-  for (const x of [cx - ww * 0.25, cx + ww * 0.22]) { b(40, 18, 30, MT.flat('#F2EDE3', 0.6), x, 27, 8); b(4, 4, 1, blk, x, 37, 38.2); }   // 開放格收納盒
+  // ── 擺飾
+  const box2 = (x, y, z, w, h, d, col) => { b(w, h, d, MT.flat(col, 0.55), x, y, z); b(5, 5, 0.8, MT.leather('#3A2A20'), x, y + h * 0.55, z + d); };
+  for (const x of [-W * 0.12, W * 0.2]) box2(x, 233, 4, 44, 22, 32, '#F1ECE2');   // 上方收納盒
+  box2(cx - ww * 0.24, 29, 6, 40, 20, 30, '#F3EEE4'); box2(cx + ww * 0.24, 29, 6, 36, 18, 30, '#F3EEE4');   // 開放格收納盒
   const nc = Math.max(1, Math.min(3, Math.floor((rx2 - rx1 - 10) / 36)));
-  for (let i = 0; i < nc; i++) { const x = rx1 + 22 + i * 36, kind = i % 3, sh = new THREE.Shape();   // 衣架＋衣服
-    if (kind === 0) [[-9, 0], [9, 0], [12, -12], [10, -40], [16, -86], [-16, -86], [-10, -40], [-12, -12]].forEach(([px, py], k) => (k ? sh.lineTo(px, py) : sh.moveTo(px, py)));
-    else [[-10, 0], [10, 0], [22, -8], [26, -50], [19, -52], [17, -20], [16, -64], [-16, -64], [-17, -20], [-19, -52], [-26, -50], [-22, -8]].forEach(([px, py], k) => (k ? sh.lineTo(px, py) : sh.moveTo(px, py)));
-    const cloth = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 3, bevelEnabled: true, bevelSize: 1.2, bevelThickness: 1.2, bevelSegments: 2 }), MT.fabric(['#E3D7BF', '#F4EEE2', '#B8956E'][kind], 5, kind === 1 ? 'boucle' : kind === 0 ? 'herring' : 'knit'));
-    cloth.position.set(x, 202, -D / 2 + 23); g.add(cloth);
-    const hg = new THREE.Mesh(new THREE.TorusGeometry(11, 0.8, 6, 24, Math.PI * 0.86), MT.wood('#8A5A3A')); hg.rotation.z = Math.PI * 0.07; hg.position.set(x, 201, -D / 2 + 24.5); g.add(hg); b(0.6, 8, 0.6, MT.metal('#B8B8B8'), x, 202, 24.5); }
-  b(22, 8, 14, MT.leather('#8A5A3A'), wx + 40, 76, 14); b(20, 7, 13, MT.flat('#F1EEE8', 0.5), wx + 40, 84, 14); b(14, 18, 10, MT.leather('#C2652F'), wx + ww - 22, 76, 20);   // 檯面擺飾
-  const st = new THREE.Group(), seat = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 45, 28), MT.leather('#E6E1D6')); seat.position.y = 22.5; st.add(seat);   // 化妝椅
-  const bk2 = new THREE.Mesh(new THREE.TorusGeometry(20, 3, 10, 24, Math.PI), MT.leather('#C2652F')); bk2.position.set(0, 62, 2); bk2.rotation.x = -Math.PI / 2 + 0.25; bk2.scale.z = 2.6; st.add(bk2);
-  for (const sx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(2, 64, 2), MT.metal('#2B2B2D', 0.5)); leg.position.set(sx * 20, 32, 2); st.add(leg); }   // 腳一路接到椅背
-  st.traverse((q) => { if (q.isMesh) q.castShadow = true; }); st.position.set(vx, 0, -D / 2 + 62); st.rotation.y = Math.PI; g.add(st);   // 椅背朝房間
+  for (let i = 0; i < nc; i++) { const x = rx1 + 22 + i * 36, kind = i % 3, sh = new THREE.Shape();   // 衣架＋衣服：洋裝、荷葉邊襯衫、外套
+    const P = kind === 0 ? [[-8, 0], [8, 0], [11, -6], [10, -32], [14, -40], [17, -88], [-17, -88], [-14, -40], [-10, -32], [-11, -6]]
+      : kind === 1 ? [[-9, 0], [9, 0], [20, -6], [27, -40], [21, -42], [17, -20], [17, -60], [-17, -60], [-17, -20], [-21, -42], [-27, -40], [-20, -6]]
+      : [[-9, 0], [9, 0], [21, -7], [25, -58], [19, -59], [17, -24], [17, -70], [-17, -70], [-17, -24], [-19, -59], [-25, -58], [-21, -7]];
+    P.forEach(([px, py], k) => (k ? sh.lineTo(px, py) : sh.moveTo(px, py)));
+    const cloth = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 3, bevelEnabled: true, bevelSize: 1.4, bevelThickness: 1.4, bevelSegments: 2 }), MT.fabric(['#E8DFCF', '#F6F1E8', '#EFE7D8'][kind], 5, kind === 1 ? 'boucle' : kind === 0 ? 'herring' : 'knit'));
+    cloth.position.set(x, 201, Z + 21); cloth.castShadow = true; g.add(cloth);
+    if (kind === 0) { b(1.2, 52, 0.6, MT.flat('#B9AE9C', 0.7), x, 148, 25.7); for (const yy of [170, 160]) for (const s2 of [-1, 1]) b(3, 2.4, 0.6, MT.flat('#F5F0E6', 0.4), x + s2 * 8, yy, 25.7); }
+    if (kind === 1) for (let k = 0; k < 12; k++) { const r2 = new THREE.Mesh(new THREE.SphereGeometry(4.2, 10, 8), MT.fabric('#FBF8F2', 4, 'boucle')); r2.scale.z = 0.45; r2.position.set(x + ((k % 3) - 1) * 9 + (k % 2 ? 1.5 : -1.5), 192 - Math.floor(k / 3) * 12, Z + 26); g.add(r2); }   // 荷葉邊
+    if (kind === 2) for (let k = 0; k < 4; k++) b(1.6, 1.6, 0.6, MT.metal('#C9A35A', 0.3), x - 2, 186 - k * 12, 25.8);
+    const hg = new THREE.Mesh(new THREE.TorusGeometry(11, 0.8, 6, 24, Math.PI * 0.86), MT.wood('#8A5A3A')); hg.rotation.z = Math.PI * 0.07; hg.position.set(x, 200, Z + 22.5); g.add(hg); b(0.6, 8, 0.6, MT.metal('#B8B8B8'), x, 200.5, 22.2); }
+  if (ww >= 150) {   // 層板上：香氛瓶＋折好的絲巾
+    cyl(g, 3, 3, 9, MT.glass('#3A2A20'), sx0 + 12, 157, Z + 7, 12); for (let k = 0; k < 5; k++) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 22, 4), MT.flat('#2A2420', 0.8)); st.position.set(sx0 + 12 + (k - 2) * 0.6, 172, Z + 7); st.rotation.z = (k - 2) * 0.09; g.add(st); }
+    b(10, 1.5, 9, MT.fabric('#C9B79A', 5, 'herring'), sx0 - 12, 151.6, 3); b(5, 22, 1, MT.fabric('#A88E6E', 5, 'herring'), sx0 - 12, 128, 13.2);
+  }
+  // 化妝台上：項鍊架、首飾盒、圓環擺飾
+  const nk = new THREE.Mesh(new THREE.CylinderGeometry(7, 9, 24, 20, 1, false, -Math.PI / 2, Math.PI), MT.leather('#EDE6DA')); nk.position.set(vx - 32, 90, Z + 14); g.add(nk);
+  const nl = new THREE.Mesh(new THREE.TorusGeometry(6, 0.25, 4, 24, Math.PI), MT.metal('#D8B970', 0.25)); nl.rotation.z = Math.PI; nl.position.set(vx - 32, 96, Z + 21.5); g.add(nl);
+  b(22, 8, 14, MT.flat('#F2EDE4', 0.5), wx + 30, 76, 14); b(22, 3, 14.4, MT.leather('#8A5A3A'), wx + 30, 79, 13.8); b(18, 6, 12, MT.flat('#F2EDE4', 0.5), wx + 32, 84, 15);
+  cyl(g, 1, 4, 18, MT.wood('#8A5A3A'), wx + 12, 85, Z + 18, 16); const ring = new THREE.Mesh(new THREE.TorusGeometry(8, 0.7, 6, 32), MT.metal('#C9A35A', 0.25)); ring.position.set(wx + 6, 100, Z + 18); g.add(ring); b(14, 0.8, 0.8, MT.metal('#C9A35A', 0.25), wx + 13, 100, 17.6);
+  // 更衣區檯面：手提包、帽子、鞋、蠟燭罐
+  const bx = cx + ww * 0.12, bag = new THREE.Shape(); [[-13, 0], [13, 0], [10, 20], [-10, 20]].forEach(([px, py], k) => (k ? bag.lineTo(px, py) : bag.moveTo(px, py)));
+  const bg = new THREE.Mesh(new THREE.ExtrudeGeometry(bag, { depth: 10, bevelEnabled: true, bevelSize: 0.8, bevelThickness: 0.8, bevelSegments: 2 }), MT.leather('#EDE8DF')); bg.position.set(bx, 76, Z + 14); bg.castShadow = true; g.add(bg);
+  b(26.5, 4, 11.6, MT.leather('#5A3A28'), bx, 76, 13.2); const hd = new THREE.Mesh(new THREE.TorusGeometry(6.5, 0.7, 6, 18, Math.PI), MT.leather('#5A3A28')); hd.position.set(bx, 96.5, Z + 19); g.add(hd);
+  const hx = rx2 - 16; cyl(g, 15, 15, 0.8, MT.fabric('#D7C3A3', 5, 'knit'), hx, 96, Z + 22, 28); cyl(g, 8, 9, 10, MT.fabric('#D7C3A3', 5, 'knit'), hx, 101.5, Z + 22, 24); cyl(g, 9.1, 9.1, 2.4, MT.fabric('#F6F2EA', 4), hx, 98.2, Z + 22, 24);
+  cyl(g, 1, 1, 16, MT.metal('#C9A35A', 0.3), hx, 84, Z + 22, 8); cyl(g, 6, 6, 1, MT.metal('#C9A35A', 0.3), hx, 76.5, Z + 22, 18);
+  for (const s2 of [-1, 1]) { const sh2 = new THREE.Mesh(new THREE.CapsuleGeometry(3.6, 16, 4, 10), MT.leather('#E9D6C0')); sh2.rotation.x = Math.PI / 2; sh2.scale.y = 0.55; sh2.position.set(bx + 30 + s2 * 4.5, 78, Z + 26 + s2 * 2); g.add(sh2); }
+  cyl(g, 6, 6, 9, MT.flat('#E8E2D6', 0.6), cx - ww * 0.12, 80.5, Z + 20, 18); cyl(g, 6.2, 6.2, 2.6, MT.leather('#8A5A3A'), cx - ww * 0.12, 82, Z + 20, 18);
+  // ── 化妝椅：白色圓凳＋橘色弧形皮椅背，黑鐵框從地面一路圍上去
+  const st = new THREE.Group(), seat = new THREE.Mesh(new THREE.CylinderGeometry(19, 19, 40, 32), MT.fabric('#EAE5DC', 4, 'knit')); seat.position.y = 22; st.add(seat);
+  const cush = new THREE.Mesh(new THREE.CylinderGeometry(18.6, 19, 5, 32), MT.leather('#ECE7DE')); cush.position.y = 44; st.add(cush);
+  const base = new THREE.Mesh(new THREE.TorusGeometry(22, 0.9, 6, 40), blk); base.rotation.x = Math.PI / 2; base.position.y = 1; st.add(base);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(23, 23, 9, 32, 1, true, -Math.PI * 0.38, Math.PI * 0.76), memoMat('stoolBack', () => { const q = MT.leather('#C2652F').clone(); q.side = THREE.DoubleSide; return q; })); band.position.y = 66; st.add(band);   // 椅背朝房間那一側
+  for (const a2 of [-Math.PI * 0.38, Math.PI * 0.38]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(1.8, 70, 1.8), blk); leg.position.set(Math.sin(a2) * 22, 35, Math.cos(a2) * 22); st.add(leg); }
+  st.traverse((q) => { if (q.isMesh) q.castShadow = true; }); st.position.set(vx + 4, 0, Z + 70); g.add(st);
 }
 function builtKit(g, it) {
   const D = it.d, c = it.color && it.color[0] === '#' ? it.color : '#D9C2A3', GL = it.fin === 'glass' || it.fin === 'frost', woodC = { '#D9C2A3': 1, '#C08A52': 1, '#7A5236': 1 }[c];
@@ -341,7 +405,8 @@ B.built = (g, it, P, o) => {
   if (v === 'tvwall') { const R = W - 60, cx = 30, n = Math.max(2, Math.round(R / 80)), dw = R / n;
     b(R - 4, 210, 3, main, cx, 30, 0); b(60, H, D, white, -W / 2 + 30, 0, 0); door(60, H - 8, white, -W / 2 + 30, 8, D, 1);
     b(R, 34, D, white, cx, 26, 0); for (let i = 0; i < n; i++) door(dw, 34, white, cx - R / 2 + dw * (i + 0.5), 26, D); b(R, 4, 26, white, cx, 196, 0);
-    b(Math.min(138, R - 30), 80, 4, MT.gloss('#05070A'), cx, 92, 3); if (dec) { books(cx - R * 0.28, 200, 0, 60, 7); pot(cx + R * 0.33, 200, 13); } return; }
+    { const tw = Math.min(138, R - 30); b(tw, 80, 4, MT.flat('#0C0D0F', 0.3), cx, 92, 3); mesh(g, new THREE.PlaneGeometry(tw - 3.6, 76.4), MT.gloss('#05070A'), cx, 132, -D / 2 + 7.15).userData.screen = true; }
+    if (dec) { books(cx - R * 0.28, 200, 0, 60, 7); pot(cx + R * 0.33, 200, 13); } return; }   // 上面那行：內建電視，導覽時播影片
   if (v === 'entry') { const bw = Math.min(80, W * 0.4), cw = W - bw, cx = -W / 2 + cw / 2, bx = W / 2 - bw / 2, n = Math.max(1, Math.round(cw / 60)), dw = cw / n;
     b(cw, 78, D - 2, white, cx, 20, 0); b(cw, 40, D - 4, main, cx, 98, 0); b(cw - 4, 34, D - 6, MT.flat('#8A6B4A', 0.8), cx, 101, 3); b(cw, H - 138, D - 2, white, cx, 138, 0);
     for (let i = 0; i < n; i++) { const x = cx - cw / 2 + dw * (i + 0.5), hs = n === 1 ? 1 : i % 2 ? -1 : 1; door(dw, 78, white, x, 20, D - 2, hs); door(dw, H - 138, white, x, 138, D - 2, hs); }

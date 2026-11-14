@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114c';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114c';
-import * as ART from './planart.js?v=20261114c';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114d';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114d';
+import * as ART from './planart.js?v=20261114d';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -189,6 +189,7 @@ $('main').addEventListener('click', (e) => {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return;
     it.len = Math.max(R.min, Math.min(R.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len }); snapToWall(it);
   }
+  else if (a === 'fill') { const it = S.st.items.find((i) => i.id === S.sel); if (it && !fillWall(it)) { S.fillNo = Date.now(); setTimeout(update, 1600); } }
   else if (a === 'elev') {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = elevRange(s); if (!R) return;
     it.el = Math.max(R.min, Math.min(R.max, s.elev + (+b.dataset.d))); send({ t: 'elev', id: it.id, el: it.el });
@@ -248,22 +249,51 @@ function updateSel() {
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
   else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
   else if (lenRange(s)) { const R = lenRange(s), E = elevRange(s), bt = (act, d, txt, off) => `<button data-act="${act}" data-d="${d}" ${off ? 'disabled' : ''}>${txt}</button>`;
-    el.innerHTML = `<b>${esc(s.name)}</b><span>${s.t === 'wall' ? '長' : '寬'} ${s.w}${E ? '・離地 ' + s.elev : ''}</span><span class="lenb">${bt('len', -R.step, '－' + R.step, s.w <= R.min)}${bt('len', R.step, '＋' + R.step, s.w >= R.max)}${E ? bt('elev', -E.step, '↓', s.elev <= E.min) + bt('elev', E.step, '↑', s.elev >= E.max) : ''}</span>`; }
+    el.innerHTML = `<b>${esc(s.name)}</b><span>${s.t === 'wall' ? '長' : '寬'} ${s.w}${E ? '・離地 ' + s.elev : ''}</span><span class="lenb">${bt('len', -R.step, '－' + R.step, s.w <= R.min)}${bt('len', R.step, '＋' + R.step, s.w >= R.max)}${bt('fill', 0, Date.now() - (S.fillNo || 0) < 1500 ? '這面牆放不下' : '填滿整面', false)}${E ? bt('elev', -E.step, '↓', s.elev <= E.min) + bt('elev', E.step, '↑', s.elev >= E.max) : ''}</span>`; }
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
 }
 // 裝修櫃與牆上置物架：離牆 70cm 內就自動貼上去、背面靠牆
-function snapToWall(it) {
+function snapToWall(it, force) {   // force：不管離牆多遠都貼到最近的牆（填滿整面用）
   const s = getItem(it.key, it.st || S.st.style, it), r = curRoom(); if (!s || !r || (s.t !== 'built' && s.t !== 'wshelf')) return;
   const q = r.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || r.r, [x1, y1, x2, y2] = q, hd = s.d / 2, hw = s.w / 2;
   const opts = [[it.y - y1, 0], [x2 - it.x, 90], [y2 - it.y, 180], [it.x - x1, 270]].sort((a, b) => a[0] - b[0]);
-  if (opts[0][0] > 70 + hd) return;
+  if (opts[0][0] > 70 + hd && !force) return;
   const k = opts[0][1], cl = (v, lo, hi) => (hi < lo ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
   it.r = k;
   if (k === 0) { it.y = y1 + hd; it.x = cl(it.x, x1 + hw, x2 - hw); } else if (k === 180) { it.y = y2 - hd; it.x = cl(it.x, x1 + hw, x2 - hw); }
   else if (k === 90) { it.x = x2 - hd; it.y = cl(it.y, y1 + hw, y2 - hw); } else { it.x = x1 + hd; it.y = cl(it.y, y1 + hw, y2 - hw); }
   it.x = Math.round(it.x); it.y = Math.round(it.y);
   send({ t: 'rot', id: it.id, r: it.r }); send({ t: 'move', id: it.id, x: it.x, y: it.y });
+}
+// 填滿整面：裝修櫃／置物架沿著背後那面牆左右延伸到牆的盡頭（遇到門、窗、轉角就停）；隔間牆則延伸到兩邊的牆
+// 已經靠著某面牆就用那面；還沒靠牆就從最近的牆開始試，找第一面放得下的
+function fillWall(it) {
+  const s = getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return false;
+  const inWall = (x, y, z0, z1) => PLAN.walls.some(([a, b, c, d, lo, hi]) => x > Math.min(a, c) && x < Math.max(a, c) && y > Math.min(b, d) && y < Math.max(b, d) && lo <= z0 + 1 && hi >= z1 - 1);
+  const anyWall = (x, y) => PLAN.walls.some(([a, b, c, d]) => x > Math.min(a, c) - 0.5 && x < Math.max(a, c) + 0.5 && y > Math.min(b, d) - 0.5 && y < Math.max(b, d) + 0.5);
+  const others = S.st.items.filter((o) => o.id !== it.id).map((o) => { const t = getItem(o.key, o.st || S.st.style, o); if (!t || t.t === 'person' || t.t === 'rug' || t.h < 15) return null; const sw = o.r % 180 ? t.d : t.w, sd = o.r % 180 ? t.w : t.d; return [o.x - sw / 2, o.y - sd / 2, o.x + sw / 2, o.y + sd / 2]; }).filter(Boolean);
+  const hitItem = (x, y) => others.some(([a, b, c, d]) => x > a && x < c && y > b && y < d);   // 不要延伸到別的家具上
+  const grow = (c, ok) => { if (!ok(c)) return null; let lo = c, hi = c; while (hi - lo < 2000 && ok(lo - 2)) lo -= 2; while (hi - lo < 2000 && ok(hi + 2)) hi += 2; return [lo, hi]; };
+  const apply = (axisX, c, span, r, fixed) => {
+    const [lo, hi] = span, w = Math.min(R.max, Math.floor((hi - lo) / R.step) * R.step); if (w < R.min) return false;
+    const mid = Math.max(lo + w / 2, Math.min(hi - w / 2, w >= hi - lo - R.step ? (lo + hi) / 2 : c));
+    it.len = w; it.r = r; if (axisX) { it.x = Math.round(mid); it.y = Math.round(fixed); } else { it.y = Math.round(mid); it.x = Math.round(fixed); }
+    send({ t: 'rot', id: it.id, r: it.r }); send({ t: 'len', id: it.id, len: it.len }); send({ t: 'move', id: it.id, x: it.x, y: it.y }); return true;
+  };
+  if (s.t === 'wall') { const axisX = it.r % 180 === 0, c = axisX ? it.x : it.y, sp = grow(c, (v) => !anyWall(axisX ? v : it.x, axisX ? it.y : v)); return !!sp && apply(axisX, c, sp, it.r, axisX ? it.y : it.x); }
+  const rm = curRoom(); if (!rm) return false;
+  const q = rm.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || rm.r, [x1, y1, x2, y2] = q, hd = s.d / 2, z0 = s.elev || 0, z1 = Math.min(z0 + s.h, 235);
+  const sides = [[it.y - y1, 0], [x2 - it.x, 90], [y2 - it.y, 180], [it.x - x1, 270]].sort((a, b) => a[0] - b[0]);
+  for (const [, k] of sides[0][0] <= 70 + hd ? [sides[0]] : sides) {
+    const axisX = k === 0 || k === 180, fixed = k === 0 ? y1 + hd : k === 180 ? y2 - hd : k === 90 ? x2 - hd : x1 + hd, c = axisX ? Math.max(x1, Math.min(x2, it.x)) : Math.max(y1, Math.min(y2, it.y));
+    const back = k === 0 ? [0, -hd - 6] : k === 180 ? [0, hd + 6] : k === 90 ? [hd + 6, 0] : [-hd - 6, 0];
+    const ok = (v) => { const px = axisX ? v : fixed, py = axisX ? fixed : v; return inWall(px + back[0], py + back[1], z0, z1) && !anyWall(px, py) && !hitItem(px, py) && !hitItem(px + back[0] * 0.5, py + back[1] * 0.5); };
+    // 從中間找不到牆時，沿著這面牆往兩邊找一段完整的牆（避開中間的窗或門）
+    let sp = grow(c, ok); if (!sp) { const lim = axisX ? [x1, x2] : [y1, y2]; for (let d = 10; !sp && d < lim[1] - lim[0]; d += 10) sp = (c - d > lim[0] && grow(c - d, ok)) || (c + d < lim[1] && grow(c + d, ok)) || null; }
+    if (sp && apply(axisX, c, sp, k, fixed)) return true;
+  }
+  return false;
 }
 function bindPlan() {
   const svg = $('plan');
@@ -319,7 +349,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 async function fillThumbs() {
   const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114d'); } catch (e) { return; }
   for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -343,7 +373,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour')) { warmTimer = setTimeout(warmStep, 600); return; }
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114d'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, 30);
