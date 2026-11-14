@@ -1,6 +1,6 @@
 // 手機平面圖的繪製：有材質的地板、粗黑牆、門弧線，以及每種家具的俯視圖（單位 cm，等比例）
-import { PLAN } from './plan.js?v=20261114w';
-import { STYLES, FLOORS, planColor, wallSegs, doorGap } from './catalog.js?v=20261114w';
+import { PLAN } from './plan.js?v=20261114x';
+import { STYLES, FLOORS, planColor, wallSegs, doorGap } from './catalog.js?v=20261114x';
 
 const INK = '#4A4038';
 function tint(hex, f) {   // f > 1 變亮，f < 1 變暗

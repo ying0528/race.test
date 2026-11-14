@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114w';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114w';
-import * as ART from './planart.js?v=20261114w';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261114x';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261114x';
+import * as ART from './planart.js?v=20261114x';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -385,10 +385,21 @@ function bindPlan() {
 // ================= 型錄（3D 縮圖） =================
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
+// 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
+let TH = null, thDone = false;
+fetch('./media/thumbs/index.json?v=20261114x').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+function thumbStrip(key, sk) {
+  if (!TH) return null;
+  const [cat, idx] = key.split(':');
+  if (cat === 'person') { const i = TH.people.indexOf(idx), n = TH.people.length; return i < 0 ? null : ['people.webp', i, n]; }
+  const n = TH.cats[cat], i = +idx; if (!n || !(i < n) || !TH.styles.includes(sk)) return null;   // 之後新增、還沒畫縮圖的家具，改用手機即時畫
+  return [sk + '/' + cat + '.webp', i, n];
+}
 async function fillThumbs() {
-  const run = ++thumbRun;
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114w'); } catch (e) { return; }
-  for (const img of [...document.querySelectorAll('#list img[data-th]')]) {
+  const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
+  if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114x'); } catch (e) { return; }
+  for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
     if (!thumbCache.has(k)) {
@@ -402,16 +413,16 @@ async function fillThumbs() {
 // 連上後就在背景先算好這個風格的 3D 縮圖，打開型錄時幾乎不用等
 let warmList = [], warmTimer = null, warmStyle = null;
 function warmThumbs() {
-  if (!S.st || !S.st.ready || warmStyle === S.st.style) return;
+  if (!thDone || !S.st || !S.st.ready || warmStyle === S.st.style) return;   // 先等縮圖清單載入
   warmStyle = S.st.style;
   const cats = [...CATS].sort((a, b) => (b.g === S.group) - (a.g === S.group));
-  warmList = [...Object.keys(PEOPLE).map((k) => 'person:' + k), ...cats.flatMap((c) => c.items.map((_, i) => c.id + ':' + i))].map((k) => k + '@' + warmStyle);
+  warmList = [...Object.keys(PEOPLE).map((k) => 'person:' + k), ...cats.flatMap((c) => c.items.map((_, i) => c.id + ':' + i))].filter((k) => !thumbStrip(k, warmStyle)).map((k) => k + '@' + warmStyle);   // 有現成圖片的就不用畫
   clearTimeout(warmTimer); warmTimer = setTimeout(warmStep, 600);
 }
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114w'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261114x'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
@@ -420,9 +431,11 @@ addEventListener('pointerdown', () => { lastTouch = Date.now(); }, { capture: tr
 function closeSheet() { S.sheet = null; $('sheet').classList.add('hidden'); }
 function openSheet(kind) { S.sheet = kind; $('sheet').classList.remove('hidden'); renderSheet(); }
 function row(s, sk, extra = '') {
-  const k = s.key + '@' + sk, m = Math.max(s.w, s.d) * 0.62 + 6, have = thumbCache.get(k);
-  const icon = s.t === 'person' ? '' : `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${ART.itemArt(s)}</svg>`;   // 3D 圖還沒好之前先顯示俯視圖
-  return `<button class="it" data-key="${s.key}" ${extra}><div class="pv">${icon}<img data-th="${k}" src="${have || BLANK}" class="${have ? 'ok' : ''}" alt=""></div>` +
+  const k = s.key + '@' + sk, m = Math.max(s.w, s.d) * 0.62 + 6, have = thumbCache.get(k), st = thumbStrip(s.key, sk);
+  const icon = s.t === 'person' ? '' : `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${ART.itemArt(s)}</svg>`;   // 圖片還沒載入前先顯示俯視圖
+  const pic = st ? `<i class="th" style="background-image:url(./media/thumbs/${st[0]}?v=${TH.v});background-size:${st[2] * 100}% 100%;background-position:${st[2] > 1 ? st[1] / (st[2] - 1) * 100 : 0}% 0"></i>`
+    : `<img data-th="${k}" src="${have || BLANK}" class="${have ? 'ok' : ''}" alt="">`;
+  return `<button class="it" data-key="${s.key}" ${extra}><div class="pv">${icon}${pic}</div>` +
     `<div class="tx"><div class="nm">${esc(s.name)}</div><div class="dm">${s.t === 'person' ? `身高 ${s.h} cm` : `寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm`}</div></div><div class="add">加入</div></button>`;
 }
 function renderSheet() {
