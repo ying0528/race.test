@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115a';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115a';
-import * as ART from './planart.js?v=20261115a';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115b';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115b';
+import * as ART from './planart.js?v=20261115b';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -390,7 +390,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261115a').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261115b').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -401,7 +401,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115a'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115b'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -415,7 +415,16 @@ async function fillThumbs() {
 }
 // 連上後就在背景先算好這個風格的 3D 縮圖，打開型錄時幾乎不用等
 let warmList = [], warmTimer = null, warmStyle = null;
+// 先在背景把目前風格所有類別的縮圖下載好，打開型錄時圖片已經在手機裡
+const prefetched = new Set();
+function prefetchStrips(sk) {
+  if (!TH || !TH.styles.includes(sk)) return;
+  const urls = ['people.webp', ...Object.keys(TH.cats).map((c) => sk + '/' + c + '.webp')].map((u) => './media/thumbs/' + u + '?v=' + TH.v).filter((u) => !prefetched.has(u));
+  let i = 0; const next = () => { if (i >= urls.length) return; const u = urls[i++]; prefetched.add(u); const im = new Image(); im.onload = im.onerror = next; im.src = u; };
+  next(); next(); next();   // 同時下載 3 個
+}
 function warmThumbs() {
+  if (thDone && S.st) prefetchStrips(S.st.style);
   if (!thDone || !S.st || !S.st.ready || warmStyle === S.st.style) return;   // 先等縮圖清單載入
   warmStyle = S.st.style;
   const cats = [...CATS].sort((a, b) => (b.g === S.group) - (a.g === S.group));
@@ -425,7 +434,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115a'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115b'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
@@ -435,7 +444,7 @@ function closeSheet() { S.sheet = null; $('sheet').classList.add('hidden'); }
 function openSheet(kind) { S.sheet = kind; $('sheet').classList.remove('hidden'); renderSheet(); }
 function row(s, sk, extra = '') {
   const k = s.key + '@' + sk, m = Math.max(s.w, s.d) * 0.62 + 6, have = thumbCache.get(k), st = thumbStrip(s.key, sk);
-  const icon = s.t === 'person' ? '' : `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${ART.itemArt(s)}</svg>`;   // 圖片還沒載入前先顯示俯視圖
+  const icon = s.t === 'person' || st || !thDone ? '' : `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${ART.itemArt(s)}</svg>`;   // 有現成圖片就不顯示俯視圖（避免先閃一下平面圖）
   const pic = st ? `<i class="th" style="background-image:url(./media/thumbs/${st[0]}?v=${TH.v});background-size:${st[2] * 100}% 100%;background-position:${st[2] > 1 ? st[1] / (st[2] - 1) * 100 : 0}% 0"></i>`
     : `<img data-th="${k}" src="${have || BLANK}" class="${have ? 'ok' : ''}" alt="">`;
   return `<button class="it" data-key="${s.key}" ${extra}><div class="pv">${icon}${pic}</div>` +
