@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115e';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115e';
-import { buildItem, buildPerson, M } from './models.js?v=20261115e';
-import * as MT from './mats.js?v=20261115e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115f';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115f';
+import { buildItem, buildPerson, M } from './models.js?v=20261115f';
+import * as MT from './mats.js?v=20261115f';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -14,6 +14,7 @@ import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
 const LITE_Q = new URLSearchParams(location.search).get('lite');
 const LITE = LITE_Q === '1' || (LITE_Q !== '0' && (/iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))));
 MT.setTexSize(LITE ? 256 : 512); if (LITE) MT.setBigTex(512);
+MT.setOnTexLoad(() => invalidate(3));   // 照片紋路下載好時重畫
 
 const $ = (id) => document.getElementById(id);
 const cm = 0.01;

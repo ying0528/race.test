@@ -107,7 +107,14 @@ const WALL = {
 const WALL_REP = { pandora: 240, gold: 320, stucco: 300, veneer: 120, slat: 120, travertine: 240, concrete: 240 };   // 一張貼圖代表幾公分
 const WALL_ROUGH = { pandora: 0.16, gold: 0.12, stucco: 0.8, veneer: 0.55, slat: 0.6, travertine: 0.24, concrete: 0.85 };
 // kind：上面七種；color：底色；matte：石材改霧面
-export const wallFinish = (kind, color, matte = false) => memo('wf' + kind + color + matte, () => {
+// 橡木紋板：用實拍照片（灰階）當紋路，再乘上選的顏色。照片要等下載完才會出現，下載好時通知大螢幕重畫
+let onTexLoad = () => {}; export function setOnTexLoad(f) { onTexLoad = f; }
+let oakTex = null;
+function photoTex(url, srgb) { const t = new THREE.TextureLoader().load(url, () => onTexLoad()); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; }
+const oakMaps = () => oakTex || (oakTex = { map: photoTex('./media/tex/oak-grain.jpg?v=1', true), normalMap: photoTex('./media/tex/oak-grain-n.jpg?v=1', false) });
+export const wallFinish = (kind, color, matte = false) => kind === 'oak' ? memo('wfoak' + color, () => {
+  const m = new THREE.MeshStandardMaterial({ ...oakMaps(), color, roughness: 0.62, normalScale: new THREE.Vector2(0.35, 0.35) }); m.userData.repCm = 90; return m;
+}) : memo('wf' + kind + color + matte, () => {
   const m = new THREE.MeshStandardMaterial(Object.assign(maps('wf-' + kind, color, WALL[kind], kind === 'slat' ? 6 : kind === 'veneer' ? 2.4 : 1.6, 1, Math.max(SIZE, BIG)), { roughness: matte && WALL_ROUGH[kind] < 0.5 ? 0.6 : WALL_ROUGH[kind] }));
   m.userData.repCm = WALL_REP[kind]; return m; });
 // 長條磚地板：貼圖＝120×120 cm，60×7.5 cm 長條、直排；每塊深淺不一、白色磚縫
