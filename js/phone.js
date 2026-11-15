@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115g';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115g';
-import * as ART from './planart.js?v=20261115g';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115h';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115h';
+import * as ART from './planart.js?v=20261115h';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -98,7 +98,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm, st && st.vrot].join('|');
+  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm, st && st.vrot, S.pick, S.areaOpen, S.resetSty].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -127,6 +127,57 @@ function wallPicker(cur) {
     (opt ? `<div class="chips sub">${opt}</div>` : '') +
     '<div class="fgrid">' + G.colors.map(([c, n]) => { const k = wallKey(kind, c, matte); return `<button class="fsw ${k === cur ? 'on' : ''}" data-act="wallf" data-k="${k}"><i class="wk-${kind}" style="--c:${c}"></i><span>${n}</span></button>`; }).join('') + '</div>';
 }
+// ===== 風格頁（方案 A）：主頁只有「地板」「牆面」兩張摘要卡，按「更換」打開選擇面板 =====
+const SWV = 1;   // 色塊圖片版本（重新產生 media/swatch 時加 1）
+const fImg = (id, style) => `./media/swatch/${id ? 'f_' + id : 'f_style_' + style}.jpg?v=${SWV}`;
+const wImg = (pw) => `./media/swatch/w_${pw.kind}_${pw.color.slice(1)}.jpg?v=${SWV}`;
+const floorName = (id) => (FLOORS[id] ? FLOORS[id].n : '跟著風格');
+const floorGroup = (id) => (FLOOR_GROUPS.find((g) => g.items.some((f) => f[0] === id)) || {}).n || '';
+function wallName(k) {
+  const pw = parseWall(k); if (!pw) return '跟著風格';
+  const c = (pw.group.colors.find((x) => x[0] === pw.color) || [])[1] || '';
+  return pw.group.n + '・' + c + (pw.group.alt && pw.kind === pw.group.alt[0] ? '・' + pw.group.alt[1] : '');
+}
+const wallSw = (k, st, cls = '') => { const pw = parseWall(k); return pw ? `<img class="${cls}" src="${wImg(pw)}" alt="">` : `<i class="${cls} plainw" style="background:${STYLES[st.style].wall}"></i>`; };
+const floorSw = (id, st, cls = '') => `<img class="${cls}" src="${fImg(FLOORS[id] ? id : null, st.style)}" alt="">`;
+const roomName = (id) => (PLAN.rooms.find((q) => q.id === id) || {}).n || id;
+function styleMain(st) {
+  const fo = Object.entries(st.floors || {}).filter(([id]) => PLAN.rooms.some((q) => q.id === id)), wo = Object.entries(st.walls || {}).filter(([id]) => PLAN.rooms.some((q) => q.id === id));
+  const pw = parseWall(st.wall);
+  return '<h2>選擇風格</h2><div class="grid2 styles">' +
+    Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b></button>`).join('') + '</div>' +
+    '<div class="sumh">地板</div>' +
+    `<div class="sum">${floorSw(st.floor, st, 'big')}<div class="t"><b>${esc(floorName(st.floor))}</b><span>全戶・${st.floor ? esc(floorGroup(st.floor)) : STYLES[st.style].n + '風格的地板'}</span>` +
+    (fo.length ? '<div class="ovr">' + fo.map(([id, k]) => `<em>${floorSw(k, st)}${esc(roomName(id))}：${esc(floorName(k))}</em>`).join('') + '</div>' : '') +
+    '</div><button class="chg" data-act="pick" data-k="floor">更換</button></div>' +
+    '<div class="sumh">牆面</div>' +
+    `<div class="sum">${wallSw(st.wall, st, 'big')}<div class="t"><b>${esc(wallName(st.wall))}</b><span>全戶${pw && pw.group.sheen ? '・' + (pw.matte ? '霧面' : '亮面') : ''}（浴室、陽台除外）</span>` +
+    (wo.length ? '<div class="ovr">' + wo.map(([id, k]) => `<em>${wallSw(k, st)}${esc(roomName(id))}：${esc(wallName(k))}</em>`).join('') + '</div>' : '') +
+    '</div><button class="chg" data-act="pick" data-k="wall">更換</button></div>' +
+    ((st.floor || st.wall || fo.length || wo.length) ? `<button class="linkb" data-act="resetsty">${S.resetSty ? '再按一次：地板、牆面全部回到風格預設' : '全部回到風格預設'}</button>` : '');
+}
+function stylePicker(st) {
+  const W = S.pick === 'wall', fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', over = (W ? st.walls : st.floors) || {};
+  const cur = W ? (fr ? over[fr] : st.wall) : fr ? over[fr] : st.floor, dflt = fr ? '跟著全戶' : '跟著風格';
+  let h = `<div class="pk"><div class="pkh"><b>選擇${W ? '牆面' : '地板'}</b><button class="x" data-act="pick" data-k="">✕</button></div>` +
+    `<button class="apply" data-act="area">套用到 <b>${fr ? esc(roomName(fr)) : '全戶'}</b><span>${S.areaOpen ? '收起' : '更改區域'} ›</span></button>` +
+    (S.areaOpen ? '<div class="areas">' + [['', '全戶'], ...PLAN.rooms.map((q) => [q.id, q.n])].map(([id, n]) => `<button class="${id === fr ? 'on' : ''}" data-act="fr" data-k="${id}">${n}${id && over[id] ? '<i></i>' : ''}</button>`).join('') + '</div>' : '');
+  if (!W) {
+    const fg = S.fg ?? Math.max(0, FLOOR_GROUPS.findIndex((g) => g.items.some((f) => f[0] === cur)));
+    h += '<div class="utabs">' + FLOOR_GROUPS.map((g, i) => `<button class="${i === fg ? 'on' : ''}" data-act="fg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
+      '<div class="tgrid">' + `<button class="tile ${cur ? '' : 'on'}" data-act="floor" data-k="">${fr ? floorSw(st.floor, st) : floorSw(null, st)}<span>${dflt}</span></button>` +
+      FLOOR_GROUPS[fg].items.map(([id, n]) => `<button class="tile ${id === cur ? 'on' : ''}" data-act="floor" data-k="${id}"><img src="${fImg(id)}" alt=""><span>${n}</span></button>`).join('') + '</div>';
+  } else {
+    const { wg, G, matte, kind } = wallOpts(cur), pw = parseWall(cur);
+    h += '<div class="pkl">1　材質</div><div class="mats">' + `<button class="mt ${cur ? '' : 'on'}" data-act="wallf" data-k="">${fr ? wallSw(st.wall, st) : `<i class="plainw" style="background:${STYLES[st.style].wall}"></i>`}<span>${dflt}</span></button>` +
+      WALL_GROUPS.map((g, i) => `<button class="mt ${cur && i === wg ? 'on' : ''}" data-act="wg" data-i="${i}"><img src="${wImg({ kind: g.k, color: g.colors[0][0] })}" alt=""><span>${g.n}</span></button>`).join('') + '</div>' +
+      (G.alt ? `<div class="seg wide">${[[G.k, '木皮平板'], [G.alt[0], G.alt[1]]].map(([k, n]) => `<button class="${k === kind ? 'on' : ''}" data-act="walt" data-k="${k}">${n}</button>`).join('')}</div>` : '') +
+      `<div class="pkl">2　${esc(G.n)}的顏色</div><div class="cols">` + G.colors.map(([c, n]) => { const k = wallKey(kind, c, matte); return `<button class="cl ${k === cur ? 'on' : ''}" data-act="wallf" data-k="${k}"><img src="${wImg({ kind, color: c })}" alt=""><span>${n}</span></button>`; }).join('') + '</div>' +
+      (G.sheen ? `<button class="tog" data-act="wo" data-k="${matte ? 'g' : 'm'}">霧面（不反光）<i class="${matte ? 'on' : ''}"></i></button>` : '') +
+      (pw ? '' : '<div class="muted" style="text-align:center">選一個顏色就會套用到大螢幕</div>');
+  }
+  return h + `<button class="primary done" data-act="pick" data-k="">完成</button></div>`;
+}
 function renderMain() {
   const el = $('main'), st = S.st;
   if (S.net !== 'ok' || !st) { el.innerHTML = S.net === 'retry' ? '<div class="shotWait"><div class="spin"></div><h2>重新連線中…</h2><div class="muted">不用重新整理，連上後會回到剛剛的畫面。</div></div>' : `<h2>連線中</h2><div class="muted">${esc(S.netText)}</div>`; return; }
@@ -136,15 +187,8 @@ function renderMain() {
   if (touring && S.tab !== 'tour') {
     el.innerHTML = `<h2>編輯暫停中</h2><div class="muted">${mine ? '你正在 3D 導覽。結束導覽後就能繼續佈置。' : '另一支手機正在 3D 導覽，等他結束後就能繼續佈置。'}</div>`; return;
   }
-  if (S.tab === 'style') {
-    const fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', W = S.fk === 'wall', cur = W ? (fr ? (st.walls || {})[fr] : st.wall) : fr ? (st.floors || {})[fr] : st.floor, over = (W ? st.walls : st.floors) || {};
-    const fg = S.fg ?? Math.max(0, FLOOR_GROUPS.findIndex((g) => g.items.some((f) => f[0] === cur))), sw = (f) => { const [id, n, c, k = 'wood'] = f; return `<button class="fsw ${id === cur ? 'on' : ''}" data-act="floor" data-k="${id}"><i class="fk-${k}" style="--c:${c}"></i><span>${n}</span></button>`; };
-    el.innerHTML = '<h2>選擇風格</h2><div class="grid2 styles">' +
-      Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b></button>`).join('') + '</div>' +
-      `<div class="rowb" style="align-items:center"><div class="seg"><button class="${W ? '' : 'on'}" data-act="fk" data-k="floor">地板</button><button class="${W ? 'on' : ''}" data-act="fk" data-k="wall">牆面</button></div><button class="second ${cur ? '' : 'on'}" data-act="${W ? 'wallf' : 'floor'}" data-k="" style="flex:0 0 108px;height:36px">${fr ? '跟著全戶' : '跟著風格'}</button></div>` +
-      '<div class="chips">' + [['', '全戶'], ...PLAN.rooms.map((q) => [q.id, q.n])].map(([id, n]) => `<button class="${id === fr ? 'on' : ''}" data-act="fr" data-k="${id}">${n}${id && over[id] ? ' ●' : ''}</button>`).join('') + '</div>' +
-      (W ? wallPicker(cur) : '<div class="chips">' + FLOOR_GROUPS.map((g, i) => `<button class="${i === fg ? 'on' : ''}" data-act="fg" data-i="${i}">${g.n}</button>`).join('') + '</div>' +
-      '<div class="fgrid">' + FLOOR_GROUPS[fg].items.map(sw).join('') + '</div>');
+  if (S.tab === 'style') { el.innerHTML = S.pick ? stylePicker(st) : styleMain(st);
+    for (const q of el.querySelectorAll('.mats .mt.on, .utabs .on')) { const p = q.parentElement; p.scrollLeft = Math.max(0, q.offsetLeft - (p.clientWidth - q.offsetWidth) / 2); }   // 選中的材質／分類捲到看得見的地方
   } else if (S.tab === 'edit') {
     const r = curRoom();
     if (!r) {
@@ -198,7 +242,10 @@ $('main').addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b || !S.st) return;
   const a = b.dataset.act;
   if (a === 'floor') { const k = b.dataset.k || null, fr = S.fr || ''; S.st.floors = S.st.floors || {}; if (fr) { if (k) S.st.floors[fr] = k; else delete S.st.floors[fr]; } else { S.st.floor = k; S.st.floors = {}; } send({ t: 'floor', k, room: fr || undefined }); }
-  if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; S.wg = S.wo = S.walt = undefined; }
+  if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; S.wg = S.wo = S.walt = undefined; S.areaOpen = false; }
+  if (a === 'pick') { S.pick = b.dataset.k || null; S.areaOpen = false; S.fg = undefined; S.wg = S.wo = S.walt = undefined; if (!S.pick) S.fr = ''; }
+  if (a === 'area') S.areaOpen = !S.areaOpen;
+  if (a === 'resetsty') { if (!S.resetSty) { S.resetSty = true; setTimeout(() => { S.resetSty = false; update(); }, 3000); } else { S.resetSty = false; S.fr = ''; S.st.floor = null; S.st.floors = {}; S.st.wall = null; S.st.walls = {}; send({ t: 'floor', k: null }); send({ t: 'wallf', k: null }); } }
   if (a === 'fk') { S.fk = b.dataset.k; S.wg = S.wo = S.walt = undefined; }
   if (a === 'wg') { S.wg = +b.dataset.i; S.wo = S.walt = undefined; }
   if (a === 'wo' || a === 'walt') {   // 換亮面／霧面或木皮／格柵：目前這一區已經是這種材質的話，直接套用到同一個顏色
@@ -394,7 +441,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261115g').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261115h').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -405,7 +452,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115g'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115h'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -438,7 +485,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115g'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115h'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
