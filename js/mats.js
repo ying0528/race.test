@@ -80,7 +80,14 @@ const WALL = {
     const t = (1 - 0.06 * grain - 0.12 * mid - 0.78 * c1 - 0.6 * c2 - 0.35 * c3) * (1 - 0.8 * cl(blob));
     return g < 1 ? [0.2, 0, 0, 0.62] : [0.55 - 0.2 * (c1 + c2), cl(t), 0.18 * c1 * id]; },
   gold: (x, y, S) => { const u = x / S, v = y / S, j = Math.min(x % (S / 2), S / 2 - (x % (S / 2))) < S / 1024 * 0.8, cloud = pfbm(u, v, 5, 3), w = pfbm(u + 0.2, v, 4, 2), line = (f, p) => Math.pow(1 - Math.abs(Math.sin(f * Math.PI)), p);
-    const band = Math.abs(((v - 0.55 + u * 0.42 + (w - 0.5) * 0.25) % 1 + 1) % 1 - 0.5) * 2, bw = 0.045 + 0.06 * pfbm(u, v + 0.4, 3, 4), core = cl((1 - band / bw) * 2.5), halo = cl(1 - band / (bw * 2.4)) - core;
+    // 金色條紋：三組沿不同方向流動、彎曲的紋路（係數用整數，貼圖可無縫），粗細忽大忽小、會斷續，旁邊再長出細的金色分岔
+    const fr = (q) => q - Math.floor(q), W1 = 0.8 * (pfbm(u, v, 3, 2) - 0.5) + 0.2 * (pfbm(u + 0.3, v + 0.7, 4, 6) - 0.5), W2 = 0.9 * (pfbm(u + 0.5, v + 0.3, 3, 2) - 0.5) + 0.2 * (pfbm(u + 0.8, v + 0.1, 4, 6) - 0.5);
+    const vein = (d, w, f) => [cl((1 - d / w) * 2.5) * f, cl(1 - d / (w * 2.4)) * f];
+    const A = vein(Math.abs(fr(u + v + W1 * 2) - 0.5) * 2, 0.025 + 0.06 * Math.pow(pfbm(u + 0.2, v + 0.7, 3, 3), 2), cl((pfbm(u + 0.7, v + 0.3, 3, 2) - 0.25) * 3));
+    const B = vein(Math.abs(fr(2 * u - v + W2 * 2.4) - 0.5) * 2, 0.012 + 0.035 * Math.pow(pfbm(u + 0.6, v + 0.2, 3, 3), 2), cl((pfbm(u + 0.1, v + 0.8, 3, 2) - 0.3) * 3));
+    const C = vein(Math.abs(fr(u - 2 * v + W1 * 2.8) - 0.5) * 2, 0.008 + 0.025 * Math.pow(pfbm(u + 0.9, v + 0.5, 3, 3), 2), cl((pfbm(u + 0.4, v + 0.6, 3, 2) - 0.35) * 3));
+    const near = cl(A[1] * 3 + B[1] * 3 + C[1] * 2), bn = pfbm(u + 0.12 * W1, v + 0.12 * W2, 4, 4), twig = cl(Math.exp(-Math.pow((bn - 0.5) / 0.007, 2)) + 0.7 * Math.exp(-Math.pow((bn - 0.41) / 0.005, 2))) * near;
+    const core = cl(Math.max(A[0], B[0] * 0.9, C[0] * 0.8, twig * 0.75)), halo = cl(Math.max(A[1], B[1], C[1]) - core);
     const fine = line(u * 1 + v * 2 + w * 2.2, 90), fine2 = line(u * 3 - v * 1 + w * 3, 140), mott = pfbm(u, v, 3, 32);
     const t = 1.02 - 0.06 * cloud - 0.32 * fine - 0.22 * fine2 - core * (0.42 + 0.18 * mott) - 0.1 * halo;
     return j ? [0.3, 0.86] : [0.5, cl(t), core * (0.5 + 0.2 * mott) + halo * 0.12 + fine * 0.05]; },
