@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115d';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115d';
-import { buildItem, buildPerson, M } from './models.js?v=20261115d';
-import * as MT from './mats.js?v=20261115d';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115e';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115e';
+import { buildItem, buildPerson, M } from './models.js?v=20261115e';
+import * as MT from './mats.js?v=20261115e';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -650,8 +650,8 @@ function frame(now) {
     const cl = (v) => Math.max(-1, Math.min(1, v)); f = cl(f); s = cl(s); t = cl(t); p = cl(p);
     if (Math.abs(t) > 0.05) lastTurn = now;
     if (auto && Math.abs(f) + Math.abs(s) > 0.15) { auto = null; posT = 0; }   // 自己動搖桿就取消自動走
-    tour.yaw += t * 1.25 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.75 * dt));   // 轉頭、抬頭低頭、走路都比之前慢約 15%
-    let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.25 * dt;
+    tour.yaw += t * 1.0 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.6 * dt));   // 轉頭、抬頭低頭、走路再放慢約 20%
+    let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.0 * dt;
     const np = auto ? stepAuto(dt, now) : { x: tour.x + (dx * f - dz * s) * sp, z: tour.z + (dz * f + dx * s) * sp };
     dx = Math.cos(tour.yaw); dz = Math.sin(tour.yaw);
     updateDoors(dt, true); collide(np); tour.x = np.x; tour.z = np.z; sendPos(now);
