@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115i';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115i';
-import * as ART from './planart.js?v=20261115i';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115j';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115j';
+import * as ART from './planart.js?v=20261115j';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -144,7 +144,7 @@ const roomName = (id) => (PLAN.rooms.find((q) => q.id === id) || {}).n || id;
 function styleMain(st) {
   const fo = Object.entries(st.floors || {}).filter(([id]) => PLAN.rooms.some((q) => q.id === id)), wo = Object.entries(st.walls || {}).filter(([id]) => PLAN.rooms.some((q) => q.id === id));
   const pw = parseWall(st.wall);
-  return '<h2>選擇風格</h2><div class="grid2 styles">' +
+  return '<h2>選擇裝修風格</h2><div class="grid2 styles">' +
     Object.entries(STYLES).map(([k, s]) => `<button class="card ${k === st.style ? 'on' : ''}" data-act="style" data-k="${k}"><div class="sw">${s.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</div><b>${s.n}</b></button>`).join('') + '</div>' +
     '<div class="sumh">地板</div>' +
     `<div class="sum">${floorSw(st.floor, st, 'big')}<div class="t"><b>${esc(floorName(st.floor))}</b><span>全戶・${st.floor ? esc(floorGroup(st.floor)) : STYLES[st.style].n + '風格的地板'}</span>` +
@@ -441,7 +441,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261115i').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261115j').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -452,7 +452,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115i'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115j'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -485,7 +485,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115i'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115j'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
