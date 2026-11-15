@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 let SIZE = 512;
 export function setTexSize(n) { SIZE = n; }
+let BIG = 1024;   // 地板、牆面紋路的尺寸（平板省記憶體模式用 512）
+export function setBigTex(n) { BIG = n; }
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
 function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
   const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
@@ -30,7 +32,7 @@ function maps(key, base, fn, nStrength, rep = 1, size = SIZE) {
     if (capture) { capture.push(genMaps(k, base, fn, nStrength, size)); throw CAPTURE; }
     for (const _ of genMaps(k, base, fn, nStrength, size)) { /* 一次畫完 */ }
   }
-  const [cv, nv] = gcache.get(k), mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const [cv, nv] = gcache.get(k), mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.userData.gk = k; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
   return { map: mk(cv, true), normalMap: mk(nv, false) };
 }
 const P = 8;
@@ -106,12 +108,12 @@ const WALL_REP = { pandora: 240, gold: 320, stucco: 300, veneer: 120, slat: 120,
 const WALL_ROUGH = { pandora: 0.16, gold: 0.12, stucco: 0.8, veneer: 0.55, slat: 0.6, travertine: 0.24, concrete: 0.85 };
 // kind：上面七種；color：底色；matte：石材改霧面
 export const wallFinish = (kind, color, matte = false) => memo('wf' + kind + color + matte, () => {
-  const m = new THREE.MeshStandardMaterial(Object.assign(maps('wf-' + kind, color, WALL[kind], kind === 'slat' ? 6 : kind === 'veneer' ? 2.4 : 1.6, 1, Math.max(SIZE, 1024)), { roughness: matte && WALL_ROUGH[kind] < 0.5 ? 0.6 : WALL_ROUGH[kind] }));
+  const m = new THREE.MeshStandardMaterial(Object.assign(maps('wf-' + kind, color, WALL[kind], kind === 'slat' ? 6 : kind === 'veneer' ? 2.4 : 1.6, 1, Math.max(SIZE, BIG)), { roughness: matte && WALL_ROUGH[kind] < 0.5 ? 0.6 : WALL_ROUGH[kind] }));
   m.userData.repCm = WALL_REP[kind]; return m; });
 // 長條磚地板：貼圖＝120×120 cm，60×7.5 cm 長條、直排；每塊深淺不一、白色磚縫
 const stripFn = (x, y, S) => { const tw = S / 2, th = S / 16, col = Math.floor(x / tw), off = col % 2 ? th * 0.18 : 0, row = Math.floor((y + off) / th), g = grout(x, y + off, tw, th, S, 1.6), id = hash(col * 31 + row, row);
   const u = x / S, v = y / S, n = pfbm(u, v, 4, 6), m = pfbm(u + id, v, 3, 24); return g < 1 ? [0.15, 0, 0, 0.8] : [0.55 + 0.1 * (m - 0.5), cl((0.78 + 0.4 * id) * (0.94 + 0.12 * (n - 0.5)) * (0.97 + 0.06 * m)), (id - 0.5) * 0.12]; };
-export const stripTile = (color) => memo('sb' + color, () => { const m = new THREE.MeshStandardMaterial(Object.assign(maps('strip', color, stripFn, 1.8, 160 / 120, Math.max(SIZE, 1024)), { roughness: 0.7 })); m.userData.repCm = 160; return m; });
+export const stripTile = (color) => memo('sb' + color, () => { const m = new THREE.MeshStandardMaterial(Object.assign(maps('strip', color, stripFn, 1.8, 160 / 120, Math.max(SIZE, BIG)), { roughness: 0.7 })); m.userData.repCm = 160; return m; });
 
 const V2 = (a) => new THREE.Vector2(a, a);
 export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + color + rep, () => new THREE.MeshStandardMaterial(Object.assign(maps(kind, color, FAB[kind], kind === 'linen' ? 4.4 : 6, rep), { roughness: 0.9, normalScale: V2(0.9) })));
@@ -122,11 +124,11 @@ export const wood = (color, { rings = 9, gloss = 0.25, warp = 2.4, vert = false 
 const marbleDarkFn = (x, y, S) => [0.5, 1 + Math.pow(Math.max(0, 1 - veins(x, y, S)) * 5, 1.3) * 2.6];
 const darkHex = (c) => { const q = new THREE.Color(c); return 0.2126 * q.r + 0.7152 * q.g + 0.0722 * q.b < 0.12; };
 export const marble = (color) => memo('mb' + color, () => new THREE.MeshStandardMaterial({ map: darkHex(color) ? maps('marbleD', color, marbleDarkFn, 0).map : maps('marble', color, marbleFn, 0).map, roughness: 0.14 }));
-export const floorWood = (color) => memo('fw' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('floor', color, floorFn, 2.5, 1, Math.max(SIZE, 1024)), { roughness: 0.36 })));
+export const floorWood = (color) => memo('fw' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('floor', color, floorFn, 2.5, 1, Math.max(SIZE, BIG)), { roughness: 0.36 })));
 export const tiles = (color, nx = 2, soft = false, rough = 0.3) => memo('tl' + color + nx + soft, () => new THREE.MeshStandardMaterial(Object.assign(maps('tile' + nx + soft, color, tilesFn(nx, soft), 2.2), { roughness: soft ? Math.min(rough, 0.16) : rough * 0.8 })));
-export const terrazzo = (color) => memo('tz' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('terrazzo', color, terrazzoFn, 0.6, 1, Math.max(SIZE, 1024)), { roughness: 0.3 })));
-export const stoneTile = (color, nx = 2) => memo('st' + color + nx, () => new THREE.MeshStandardMaterial(Object.assign(maps('stone' + nx, color, stoneFn(nx), 2.4, 1, Math.max(SIZE, 1024)), { roughness: 0.62 })));
-export const carpet = (color) => memo('cp' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('loop', color, loopFn, 5, 1, Math.max(SIZE, 1024)), { roughness: 1 })));
+export const terrazzo = (color) => memo('tz' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('terrazzo', color, terrazzoFn, 0.6, 1, Math.max(SIZE, BIG)), { roughness: 0.3 })));
+export const stoneTile = (color, nx = 2) => memo('st' + color + nx, () => new THREE.MeshStandardMaterial(Object.assign(maps('stone' + nx, color, stoneFn(nx), 2.4, 1, Math.max(SIZE, BIG)), { roughness: 0.62 })));
+export const carpet = (color) => memo('cp' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('loop', color, loopFn, 5, 1, Math.max(SIZE, BIG)), { roughness: 1 })));
 export const wallPaint = (color) => memo('wl' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('plaster', color, plaster, 0.7, 3), { roughness: 0.95 })));
 // 有圖案的地毯（整張一個圖案，不重複）：stripe 條紋、geo 幾何、persian 波斯花紋。主色＋自動配出的深色、淺色
 export const rugPattern = (kind, color, aspect = 1.4) => memo('rp' + kind + color + Math.round(aspect * 4), () => {
@@ -167,3 +169,13 @@ export const frost = () => memo('frost', () => new THREE.MeshStandardMaterial({ 
 export const glass = (color) => memo('gl' + color, () => new THREE.MeshStandardMaterial({ color, roughness: 0.04, transparent: true, opacity: 0.22, depthWrite: false }));
 export const emit = (color) => memo('e' + color, () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.8 }));
 export const mirror = () => memo('mirror', () => new THREE.MeshStandardMaterial({ color: '#E8EEF2', metalness: 1, roughness: 0.03 }));
+
+// 平板省記憶體：畫面上沒在用的紋路材質全部釋放（之後再用到會自動重畫）
+export function purge(inUse) {
+  let n = 0;
+  for (const [key, m] of [...mc]) {
+    if (!m || !m.isMaterial || inUse.has(m) || !(m.map && m.map.userData && m.map.userData.gk)) continue;
+    gcache.delete(m.map.userData.gk); for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) t.dispose(); m.dispose(); mc.delete(key); n++;
+  }
+  return n;
+}

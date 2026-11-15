@@ -1,15 +1,19 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115b';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115b';
-import { buildItem, buildPerson, M } from './models.js?v=20261115b';
-import * as MT from './mats.js?v=20261115b';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115c';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261115c';
+import { buildItem, buildPerson, M } from './models.js?v=20261115c';
+import * as MT from './mats.js?v=20261115c';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
-MT.setTexSize(512);
+// 平板（iPad 等）當大螢幕：記憶體比電腦少很多，用量太大 Safari 會把網頁砍掉重整。改用省記憶體模式
+// 網址加 ?lite=1 強制開啟、?lite=0 強制關閉
+const LITE_Q = new URLSearchParams(location.search).get('lite');
+const LITE = LITE_Q === '1' || (LITE_Q !== '0' && (/iPad|iPhone|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))));
+MT.setTexSize(LITE ? 256 : 512); if (LITE) MT.setBigTex(512);
 
 const $ = (id) => document.getElementById(id);
 const cm = 0.01;
@@ -21,7 +25,7 @@ let screen = 'start';
 // ================= 3D 基本設定 =================
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-const BASE_PR = Math.min(window.devicePixelRatio || 1, 1.5);
+const BASE_PR = LITE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
 renderer.setPixelRatio(BASE_PR);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -44,7 +48,7 @@ scene.environmentIntensity = 0.55;
 const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 200);
 const hemi = new THREE.HemisphereLight(0xffffff, 0xcfc8bc, 0.7); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
-sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+sun.castShadow = true; sun.shadow.mapSize.set(LITE ? 2048 : 4096, LITE ? 2048 : 4096);
 Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 60 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
 scene.add(sun); scene.add(sun.target);
@@ -108,6 +112,7 @@ function wallKeyAt(x, y) {
   return f && f[4] !== 'bath' && f[4] !== 'balc' ? state.wall : null;
 }
 function applyWallFinishes() {
+  liteClean();
   for (const m of linings) { m.removeFromParent(); m.geometry.dispose(); } linings.length = 0;
   if (!wallsFull || (!state.wall && !Object.keys(state.walls).length)) return;
   const quads = new Map();   // 材質鍵 → { full: [], cut: [] }
@@ -142,12 +147,13 @@ function applyWallFinishes() {
   renderer.shadowMap.needsUpdate = true; invalidate(4);
 }
 function applyFloors() {   // 只換地板，不重做牆面
-  invalidate(6); const fm = mainFloorMat(); for (const m of mainFloors) m.material = fm; applyRoomFloors();
+  invalidate(6); liteClean(); const fm = mainFloorMat(); for (const m of mainFloors) m.material = fm; applyRoomFloors();
 }
 // 手機連續點好幾個材質時，只套用最後一次（避免大螢幕連續重做而卡住）
 const pendFx = new Set(); let pendT = 0;
 function later(fn) { pendFx.add(fn); if (!pendT) pendT = setTimeout(() => { pendT = 0; const a = [...pendFx]; pendFx.clear(); for (const f of a) f(); }, 40); }
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
+  liteClean();
   invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
   for (const m of wallMeshes) m.material = wm; for (const m of mainFloors) m.material = fm; applyRoomFloors(); applyWallFinishes();
@@ -253,6 +259,19 @@ function sigOf(it, people, used) {
   return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (lenRange(spec) ? '~L' + spec.w : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
+// 平板：畫面上沒在用的家具模型、紋路材質釋放掉（換地板、牆面、風格、家具後 1 秒做一次）
+let cleanT = 0;
+function liteClean() {
+  if (!LITE) return; clearTimeout(cleanT);
+  cleanT = setTimeout(() => {
+    const used = new Set([...objs.values()].map((e) => e.sig)), inUse = new Set();
+    for (const [sig, o] of [...protos]) if (!used.has(sig)) { o.traverse((n) => { if (n.geometry) n.geometry.dispose(); }); protos.delete(sig); }
+    scene.traverse((n) => { if (n.material) for (const m of [].concat(n.material)) inUse.add(m); });
+    for (const o of protos.values()) o.traverse((n) => { if (n.material) for (const m of [].concat(n.material)) inUse.add(m); });
+    for (const [orig, cl] of [...dblCache]) { if (inUse.has(cl)) inUse.add(orig); else { cl.dispose(); dblCache.delete(orig); } }
+    MT.purge(inUse); invalidate(2);
+  }, 1000);
+}
 function syncItems() {
   invalidate();
   for (const it of state.items) if (it.key.startsWith('person:')) keepOffBeds(it, state.items);   // 人偶不能和床重疊
@@ -267,6 +286,7 @@ function syncItems() {
   }
   for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); objs.delete(id); }
   if (state.mode === 'tour') setScreens(true);   // 導覽中新增／刪除電視：重新決定要不要播
+  liteClean();
 }
 // 閒置時先把其他風格的材質與預設家具準備好，之後切換風格就不用現算
 const warm = []; let warming = false, camMoving = false;
@@ -283,6 +303,7 @@ function texJobs() {   // 所有地板、牆面材質的貼圖，閒置時分小
   return makers.map((make) => () => { const job = MT.prepJob(make); if (!job) return null; return (function* () { yield* job; const m = make(); for (const t of [m.map, m.normalMap]) if (t) renderer.initTexture(t); })(); });
 }
 function queueWarm() {
+  if (LITE) return;   // 平板：不預先準備（太佔記憶體），用到才畫
   warm.unshift(...texJobs());
   for (const u of UNITS) if (u.plan !== PLAN) for (const d of u.plan.defaults) warm.push(() => warmProto(d.key, state.style));
   for (const sk of Object.keys(STYLES)) {
@@ -409,7 +430,7 @@ function resize() {
 }
 // 後製：接觸陰影（AO）。電腦跑不動時會自動關閉，再不行就降低解析度
 const Q0 = new URLSearchParams(location.search).get('q');   // 網址加 ?q=0／1／2 可以手動指定畫質
-let composer = null, aoPass = null, quality = Q0 === null ? 2 : Math.max(0, Math.min(2, +Q0 || 0)), slow = 0, fast = 0;
+let composer = null, aoPass = null, quality = Q0 === null ? (LITE ? 1 : 2) : Math.max(0, Math.min(2, +Q0 || 0)), slow = 0, fast = 0;
 function setupComposer() {
   const w = canvas.width, h = canvas.height;
   composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }));
@@ -604,7 +625,7 @@ function makeShots(entry, tok) {   // 拍照時暫時把畫布改成固定大小
     state.mode = 'tour'; applyMode();
     const ph = shots.map((s) => grab(1600, 900, () => { camera.fov = 2 * Math.atan(Math.tan((s.hfov || SHOT_HFOV) * Math.PI / 360) / camera.aspect) * 180 / Math.PI; camera.position.set(s.x, EYE, s.z); camera.lookAt(s.x + Math.cos(s.yaw), EYE, s.z + Math.sin(s.yaw)); }));
     state.mode = 'overview'; applyMode();
-    const bird = grab(2400, 1350, () => {
+    const bird = grab(LITE ? 1920 : 2400, LITE ? 1080 : 1350, () => {
       camera.fov = 34; const el = 1.22, v = camera.fov * Math.PI / 360, hh = Math.atan(Math.tan(v) * camera.aspect), Wm = PLAN.W * cm, Dm = PLAN.D * cm;
       const dist = Math.max((Dm * Math.sin(el) + 1.9 * Math.cos(el)) / 2 / Math.tan(v), Wm / 2 / Math.tan(hh)) * 1.08 + 1.5;
       camera.position.set(CX, Math.sin(el) * dist, CZ + Math.cos(el) * dist); camera.lookAt(CX, 0.4, CZ);
@@ -820,4 +841,4 @@ wallsFull.visible = ceiling.visible = true; try { renderer.compile(scene, camera
 if (quality === 2) setTimeout(() => { try { resize(); if (!composer) setupComposer(); composer.render(); invalidate(2); } catch (e) { /* 忽略 */ } }, 300);
 queueWarm();
 requestAnimationFrame(frame);
-window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders, pickShots, screens: () => screenPos.length };   // 給測試用
+window.__app = { state, tour, joy, onMsg, show, view, goal, warm, useUnit, tvVideo, doorState, cols: () => colliders, pickShots, screens: () => screenPos.length, mem: () => ({ ...renderer.info.memory, lite: LITE, pr: renderer.getPixelRatio(), q: quality }) };   // 給測試用
