@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115c';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115c';
-import * as ART from './planart.js?v=20261115c';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261115d';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261115d';
+import * as ART from './planart.js?v=20261115d';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -211,7 +211,11 @@ $('main').addEventListener('click', (e) => {
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
-  else if (a === 'tour') send({ t: 'tour', on: !!b.dataset.on });
+  else if (a === 'tour') {
+    send({ t: 'tour', on: !!b.dataset.on });
+    // 結束導覽：手機馬上回到一般畫面（上方標題、下方分頁都回來），不用等大螢幕回覆；大螢幕慢或卡住時也不會被困在導覽畫面
+    if (!b.dataset.on && S.st && S.st.mode === 'tour') { S.st = Object.assign({}, S.st, { mode: 'overview', tourBy: null }); J.f = J.s = J.tn = J.p = 0; document.body.classList.remove('tourL'); }
+  }
   else if (a === 'shot') { S.shots = { busy: true, imgs: [] }; S.shotTok = Math.random().toString(36).slice(2, 10); const tk = S.shotTok; send({ t: 'shot', tok: tk }); setTimeout(() => { if (S.shotTok === tk && S.shots && S.shots.busy && !(S.shots.imgs || []).some(Boolean)) { S.shots = { err: true }; update(); } }, 45000); update(); return; }
   else if (a === 'shotclose') { S.shots = null; update(); return; }
   else if (a === 'shotsave') { saveShots(); return; }
@@ -390,7 +394,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261115c').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261115d').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -401,7 +405,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115d'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -434,7 +438,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115c'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261115d'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
@@ -525,7 +529,7 @@ function moveMe() {
   const go = p.go && p.go.length ? p.go : null; tg.style.display = go ? '' : 'none'; chip.style.display = go ? '' : 'none';
   if (go) { tg.setAttribute('transform', `translate(${go[0]} ${go[1]})`); const r = roomAt(go[0], go[1], 0); chip.textContent = r ? `前往${r.n}中…` : '前往中…'; }
 }
-addEventListener('resize', () => update());
+addEventListener('resize', () => { if (scrollX || scrollY) scrollTo(0, 0); update(); });   // iPhone 轉向後畫面偶爾會偏移，點不到按鈕：轉完拉回原位
 setInterval(() => {   // 等設計圖時，每 4 秒問一次大螢幕（拍照時大螢幕畫面會停住，手機可能因此重新連線而錯過）
   const sh = S.shots; if (sh && S.shotTok && !sh.err && (sh.imgs || []).filter(Boolean).length < (sh.n || 2) && S.net === 'ok') send({ t: 'shotget', tok: S.shotTok });
 }, 4000);
