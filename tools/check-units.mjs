@@ -38,6 +38,9 @@ for (const f of files) {
 }
 if (versions.size > 1) errs.push('版本號不一致：\n' + [...versions].map(([v, l]) => `  v=${v}：\n    ` + l.join('\n    ')).join('\n'));
 
+// 1b. index.html 的 importmap 指到的檔案都要存在（擬真導覽的套件靠它載入）
+{ const im = read('index.html').match(/<script type="importmap">(.*?)<\/script>/s); if (im) for (const [k, v] of Object.entries(JSON.parse(im[1]).imports)) if (!v.endsWith('/')) { try { readFileSync(join(ROOT, v)); } catch (e) { errs.push(`importmap 的 ${k} 指到不存在的檔案 ${v}`); } } }
+
 // 2. 每個 plan-*.js 都要被 plan.js import
 const planSrc = read('js/plan.js');
 for (const f of readdirSync(join(ROOT, 'js')).filter((f) => /^plan-.+\.js$/.test(f)))

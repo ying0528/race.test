@@ -1,0 +1,2 @@
+v0.0.23 (gkjohnson/three-gpu-pathtracer, MIT) — 原始碼未經打包，供 importmap 直接載入
+本專案修改 2 處（都有註解）：src/core/PathTracingRenderer.js 的 stratifiedTexture.init；src/materials/pathtracing/PhysicalPathTracingMaterial.js 結尾的取樣亮度上限

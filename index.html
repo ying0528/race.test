@@ -6,7 +6,7 @@
 <title>打造我的家</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three-mesh-bvh": "./vendor/three-mesh-bvh/src/index.js", "three/examples/jsm/": "./vendor/jsm/" } }</script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #E9ECEF; color: #1D2129;
@@ -22,6 +22,11 @@
     font-family: inherit; cursor: pointer; box-shadow: 0 12px 30px rgba(160, 103, 58, 0.35); }
   .btn:hover { background: #8A5630; }
   .ghost { background: none; border: none; color: #4E5561; font-family: inherit; font-size: 15px; cursor: pointer; text-decoration: underline; }
+  #panoHud { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(30, 28, 26, 0.28); z-index: 5; pointer-events: none; }
+  #panoHud .card { background: rgba(255, 255, 255, 0.96); border-radius: 22px; padding: 26px 34px; min-width: 380px; text-align: center; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); }
+  #panoHud b { font-size: 24px; } #panoHud #panoMsg { margin: 8px 0 14px; color: #5B6068; font-size: 16px; } #panoHud small { display: block; margin-top: 12px; color: #8A8F97; font-size: 13.5px; }
+  #panoHud .bar { height: 10px; border-radius: 6px; background: #E6E2DA; overflow: hidden; } #panoHud .bar i { display: block; height: 100%; width: 0; background: #A0673A; border-radius: 6px; transition: width 0.3s; }
+  #panoChip { position: fixed; left: 20px; bottom: 64px; z-index: 5; background: rgba(40, 36, 32, 0.66); color: #fff; border-radius: 999px; padding: 8px 16px; font-size: 14px; pointer-events: none; }
   #select { justify-content: safe center; overflow-y: auto; }   /* 戶型多到超過一頁時可以捲動，不會被切掉 */
   .units { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1360px; }
   .unit { width: 300px; padding: 22px; border-radius: 22px; background: #fff; border: 2px solid transparent; text-align: left; font-family: inherit; color: inherit;
@@ -71,6 +76,8 @@
   <button class="ghost" id="backBtn">回到開始頁</button>
 </div>
 
+<div id="panoHud" class="hidden"><div class="card"><b>擬真畫面製作中</b><div id="panoMsg">正在計算光線與陰影…</div><div class="bar"><i id="panoBar"></i></div><small>約 10 秒，完成後就能 360° 環看、點圓圈換位置</small></div></div>
+<div id="panoChip" class="hidden"></div>
 <div id="hud" class="hidden">
   <div id="titleWrap"><div id="title" class="card"><div><b id="unitName"></b><br><span id="unitSpec"></span></div><div id="modeChip">全戶鳥瞰</div></div><button id="reselectBtn">← 重選戶型</button></div>
   <div id="panel" class="card">
@@ -85,6 +92,6 @@
   <div id="tip" class="card">3D 畫面為示意，家具與裝潢非交屋附贈，實際以合約為準。</div>
 </div>
 
-<script type="module" src="./js/host.js?v=20261116a"></script>
+<script type="module" src="./js/host.js?v=20261116p"></script>
 </body>
 </html>

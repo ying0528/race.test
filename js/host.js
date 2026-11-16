@@ -1,10 +1,11 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261116a';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261116a';
-import { buildItem, buildPerson, M } from './models.js?v=20261116a';
-import * as MT from './mats.js?v=20261116a';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261116p';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261116p';
+import { buildItem, buildPerson, M } from './models.js?v=20261116p';
+import * as MT from './mats.js?v=20261116p';
+import { Pano, loadLib } from './pano.js?v=20261116p';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -420,6 +421,149 @@ function collide(p) {
   }
 }
 
+
+// ================= 擬真導覽（光線追蹤全景）：是 3D 導覽的一種模式 =================
+// 按下後：每個房間選一個站點，用光線追蹤各算一張 360° 全景；第一站好了就能看，其餘在背景繼續算。
+// 算好的全景只是一張貼圖，所以轉頭、跳站都很順。家具有變動（離開導覽）就整批作廢重算。
+const QS = new URLSearchParams(location.search);
+const panoOk = () => !LITE && renderer.capabilities.isWebGL2 && (!!UNIT.pano || QS.get('pano') === '1');
+const pano = new Pano(renderer); pano.debug = QS.get('test') === '1'; pano.exposure = +(QS.get('panoexp') || 1);
+const PN = { on: false, fwd: false, lastJump: 0, bT: 0, drag: null };
+pano.onUpdate = () => { const now = performance.now(); if (now - PN.bT > 350) { PN.bT = now; broadcast(); } };
+const solidCols = () => colliders.filter((c) => !c[4]);
+function panoStations() {   // 每個房間（陽台除外）放一站：離牆和家具遠一點、盡量靠房間中央；大的客餐廳放兩站
+  const items = itemRects(35).map((o) => o.r), cols = [...solidCols(), ...items], out = [];
+  const clear = (x, z) => { let m = 9; for (const [x1, z1, x2, z2] of cols) { const nx = Math.max(x1, Math.min(x, x2)), nz = Math.max(z1, Math.min(z, z2)); m = Math.min(m, Math.hypot(x - nx, z - nz)); } return m; };
+  for (const q of PLAN.rooms) {
+    if (q.id.startsWith('balc')) continue;
+    const area = q.rs.reduce((t, r) => t + (r[2] - r[0]) * (r[3] - r[1]), 0) * cm * cm, cand = [], mine = [];
+    const big = q.rs.reduce((m, r) => ((r[2] - r[0]) * (r[3] - r[1]) > (m[2] - m[0]) * (m[3] - m[1]) ? r : m)), cx = (big[0] + big[2]) / 2 * cm, cz = (big[1] + big[3]) / 2 * cm;
+    for (let y = q.r[1] + 8; y <= q.r[3] - 8; y += 12) for (let x = q.r[0] + 8; x <= q.r[2] - 8; x += 12) {
+      if (!q.rs.some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) continue;
+      const X = x * cm, Z = y * cm, c = clear(X, Z); if (c >= 0.2) cand.push({ x: X, z: Z, c });
+    }
+    for (let n = 0; n < (area > 12 ? 2 : 1); n++) {
+      let best = null;
+      for (const p of cand) { if (mine.some((s) => Math.hypot(s.x - p.x, s.z - p.z) < 2.2)) continue;
+        const sc = Math.min(p.c, 0.7) - (n ? 0 : 0.3 * Math.hypot(p.x - cx, p.z - cz)); if (!best || sc > best.sc) best = { sc, x: p.x, z: p.z }; }
+      if (!best || (n && best.sc < 0.35)) break;
+      mine.push(best); out.push({ x: best.x, z: best.z, y: EYE, label: q.n + (n ? ' ' + (n + 1) : ''), room: q.id, area: area });
+    }
+    for (const s of out) if (s.room === q.id) s.area = area / mine.length;
+  }
+  return out;
+}
+// 給光線追蹤用的場景：把目前導覽看到的東西複製一份（共用模型與材質），換成它支援的燈光
+function buildPtScene(stations) {
+  const s = new THREE.Scene(), L = pano.L, kill = [];
+  for (const ch of shell.children) if (ch !== wallsCut) { const c = ch.clone(true); c.visible = true; s.add(c); }
+  s.add(roomFloors.clone(true), furn.clone(true));
+  const screenMat = new THREE.MeshStandardMaterial({ color: '#08080A', roughness: 0.12 });
+  s.traverse((n) => {
+    if (n.isLight || n.isSprite || n.isLine || n.isPoints) { kill.push(n); return; }
+    if (!n.isMesh) return;
+    if (!n.visible || !n.geometry || !n.geometry.attributes.position) { kill.push(n); return; }
+    const fix = (m) => {
+      if (n.userData.screen) return screenMat;
+      if (m.isMeshBasicMaterial) { if (m.transparent && m.depthWrite === false) return null; return new THREE.MeshStandardMaterial({ color: m.color, map: m.map, transparent: m.transparent, opacity: m.opacity, roughness: 0.8 }); }
+      return m;
+    };
+    const m = Array.isArray(n.material) ? n.material.map(fix) : fix(n.material);
+    if (!m || (Array.isArray(m) && m.some((x) => !x))) kill.push(n); else n.material = m;
+  });
+  for (const n of kill) n.removeFromParent();
+  if (QS.get('panonoemit') === '1') s.traverse((n) => { if (n.isMesh && n.material.emissiveIntensity > 0 && n.material.emissive && n.material.emissive.getHex()) { n.material = n.material.clone(); n.material.emissiveIntensity = 0; } });
+  // 天空（從窗戶進來的自然光）
+  const env = new L.GradientEquirectTexture(64); env.topColor.set('#E6F1FF'); env.bottomColor.set('#B9C2CC'); env.update();
+  s.environment = env; s.background = env; s.environmentIntensity = +(QS.get('panosky') || 2.2); s.backgroundIntensity = 1.6;
+  // 室內燈：每一站正上方的天花板一片發光燈板（像嵌入式平板燈），亮度跟房間大小成正比
+  const LI = +(QS.get('panolight') || 9), H = PLAN.H * cm; s.userData.lights = [];
+  for (const q of stations) {
+    const lw = 0.6, al = new THREE.RectAreaLight(q.room.startsWith('bath') ? '#FFF6EA' : '#FFEBD3', LI * q.area / (lw * lw) / 6, lw, lw);
+    al.position.set(q.x, H - 0.006, q.z); al.rotation.x = -Math.PI / 2; al.userData.room = q.room; s.add(al); s.userData.lights.push(al);
+  }
+  addCurtains(s);
+  return s;
+}
+// 窗簾（只出現在擬真畫面）：臥室、客廳的窗戶兩側各一片亞麻簾＋一片白紗
+function addCurtains(s) {
+  const drape = MT.fabric('#8D8377', 5).clone(); drape.side = THREE.DoubleSide;
+  const sheer = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 1, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+  const rod = MT.metal('#3A3A3C', 0.4), top = (PLAN.H - 14) * cm;
+  const sheet = (len, mat, amp, pleat) => { const n = Math.max(8, Math.round(len / 0.02)), g = new THREE.PlaneGeometry(len, top - 0.03, n, 1), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setZ(i, amp * Math.sin(p.getX(i) / pleat * Math.PI * 2)); g.computeVertexNormals(); return new THREE.Mesh(g, mat); };
+  for (const q of PLAN.rooms) {
+    if (q.id.startsWith('bath') || q.id.startsWith('balc')) continue;
+    const [rx1, ry1, rx2, ry2] = q.r, sides = {};
+    for (const [x1, y1, x2, y2] of PLAN.wins) {
+      const hz = x2 - x1 > y2 - y1;
+      if (hz) { const a = Math.max(x1, rx1), b = Math.min(x2, rx2); if (b - a < 20) continue; const k = Math.abs(y1 - ry2) < 35 || Math.abs(y2 - ry2) < 35 ? 'S' : Math.abs(y2 - ry1) < 35 || Math.abs(y1 - ry1) < 35 ? 'N' : null; if (!k) continue; const o = sides[k] || (sides[k] = [1e9, -1e9]); o[0] = Math.min(o[0], a); o[1] = Math.max(o[1], b); }
+      else { const a = Math.max(y1, ry1), b = Math.min(y2, ry2); if (b - a < 20) continue; const k = Math.abs(x1 - rx2) < 35 || Math.abs(x2 - rx2) < 35 ? 'E' : Math.abs(x2 - rx1) < 35 || Math.abs(x1 - rx1) < 35 ? 'W' : null; if (!k) continue; const o = sides[k] || (sides[k] = [1e9, -1e9]); o[0] = Math.min(o[0], a); o[1] = Math.max(o[1], b); }
+    }
+    for (const [k, [a0, b0]] of Object.entries(sides)) {
+      const hz = k === 'N' || k === 'S', lo = hz ? rx1 : ry1, hi = hz ? rx2 : ry2, a = Math.max(lo + 2, a0 - 15), b = Math.min(hi - 2, b0 + 15), span = (b - a) * cm; if (span < 0.8) continue;
+      const off = 0.1, base = k === 'S' ? ry2 * cm - off : k === 'N' ? ry1 * cm + off : k === 'E' ? rx2 * cm - off : rx1 * cm + off;
+      const place = (m, c, dOff) => { m.position.y = 0.03 + (top - 0.03) / 2; if (hz) m.position.set(c, m.position.y, base + (k === 'S' ? -dOff : dOff)); else { m.rotation.y = Math.PI / 2; m.position.set(base + (k === 'E' ? -dOff : dOff), m.position.y, c); } s.add(m); };
+      const dw = Math.min(0.6, span * 0.2), sw = Math.min(0.75, span * 0.24);
+      place(sheet(dw, drape, 0.035, 0.11), a * cm + dw / 2, 0); place(sheet(dw, drape, 0.035, 0.11), b * cm - dw / 2, 0);
+      place(sheet(sw, sheer, 0.02, 0.085), a * cm + dw + sw / 2 - 0.04, -0.05); place(sheet(sw, sheer, 0.02, 0.085), b * cm - dw - sw / 2 + 0.04, -0.05);
+      const r = new THREE.Mesh(new THREE.BoxGeometry(hz ? span : 0.025, 0.025, hz ? 0.025 : span), rod); r.position.set(hz ? (a + b) / 2 * cm : base, top + 0.012, hz ? base : (a + b) / 2 * cm); s.add(r);
+    }
+  }
+}
+function roomLinks() {   // 哪些房間之間有門洞相通（門洞 = 上方有門楣的開口；兩側 25 cm 內各是哪個房間）
+  const set = new Set(), at = (x, y) => { const q = PLAN.rooms.find((q) => q.rs.some((r) => x >= r[0] - 2 && x <= r[2] + 2 && y >= r[1] - 2 && y <= r[3] + 2)); return q && q.id; };
+  for (const [x1, y1, x2, y2, z1] of PLAN.walls) { if (z1 < 200) continue; const hz = x2 - x1 > y2 - y1, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const a = hz ? at(mx, y1 - 25) : at(x1 - 25, my), b = hz ? at(mx, y2 + 25) : at(x2 + 25, my); if (a && b && a !== b) { set.add(a + '|' + b); set.add(b + '|' + a); } }
+  return set;
+}
+async function panoStart() {
+  if (PN.on || state.mode !== 'tour' || !panoOk()) return;
+  PN.on = true; PN.fwd = false; auto = null; buildColliders();
+  const st = panoStations(); if (!st.length) { PN.on = false; return; }
+  let cur = 0, bd = 1e9; st.forEach((q, i) => { const d = Math.hypot(q.x - tour.x, q.z - tour.z); if (d < bd) { bd = d; cur = i; } });
+  if (QS.get('panocur') && st[+QS.get('panocur')]) cur = +QS.get('panocur');   // 測試用：指定從哪一站開始
+  PN.vis = st.map((a, i) => st.map((b, j) => { if (i === j) return false; const d = Math.hypot(b.x - a.x, b.z - a.z); return rayHit(a.x, a.z, Math.atan2(b.z - a.z, b.x - a.x), solidCols(), d + 1) >= d - 0.05; }));
+  panoHud(); broadcast();
+  try {
+    if (!pano.L) pano._make(await loadLib());
+    if (!PN.on) return;
+    const ps = buildPtScene(st), adj = roomLinks();
+    // 每一站只開「自己房間＋隔壁相通房間」的燈：燈越少，雜訊收斂越快；隔兩間以上的燈幾乎照不到這裡
+    const lights = (i) => { const r = st[i].room; for (const l of ps.userData.lights) l.visible = l.userData.room === r || adj.has(r + '|' + l.userData.room); };
+    await pano.start(ps, st, { cur, lights, size: +QS.get('panosize') || 0, spp: +QS.get('panospp') || 0 });
+  } catch (e) { console.error('擬真導覽失敗', e); PN.err = true; panoStop(); }
+}
+function panoStop() { if (!PN.on) return; PN.on = false; pano.stop(); $('panoHud').classList.add('hidden'); $('panoChip').classList.add('hidden'); camera.fov = tourFov(); camera.updateProjectionMatrix(); invalidate(4); broadcast(); }
+function panoJump(i) { if (i < 0 || i === pano.cur || !pano.stations[i]) return; PN.lastJump = performance.now(); pano.jump(i); const s = pano.stations[i]; tour.x = s.x; tour.z = s.z; }
+function panoGoto(xcm, ycm) {   // 手機點平面圖：跳到離那一點最近的站
+  let best = -1, bd = 1e9; pano.stations.forEach((s, i) => { const d = Math.hypot(s.x - xcm * cm, s.z - ycm * cm); if (d < bd) { bd = d; best = i; } }); panoJump(best);
+}
+function panoForward() {   // 搖桿往前推：跳到視線方向上、看得到的那一站
+  const c = pano.stations[pano.cur]; if (!c) return; let best = -1, bs = 0.9;
+  pano.stations.forEach((s, i) => { if (i === pano.cur || !PN.vis[pano.cur][i]) return; const a = Math.abs(angDiff(Math.atan2(s.z - c.z, s.x - c.x), tour.yaw)); if (a < bs) { bs = a; best = i; } });
+  if (best >= 0) panoJump(best);
+}
+function panoHud() {
+  const P = pano.progress(), wait = PN.on && !pano.viewing && !pano.fade, hud = $('panoHud'), chip = $('panoChip');
+  hud.classList.toggle('hidden', !wait); chip.classList.toggle('hidden', !PN.on || wait || P.fine >= P.total);
+  if (wait) { $('panoBar').style.width = Math.round((pano.pending ? 0.5 : P.first) * 100) + '%'; $('panoMsg').textContent = pano.pending ? '這個房間的擬真畫面快好了…' : P.info || '正在計算光線與陰影…'; }
+  else if (PN.on) chip.textContent = P.done < P.total ? `其他房間製作中 ${P.done}／${P.total}` : `畫質提升中 ${P.fine}／${P.total}`;
+}
+const panoSnap = () => { const ok = panoOk(); if (!ok) return { ok: false }; const P = PN.on ? pano.progress() : null; return { ok, on: PN.on, ready: PN.on && pano.viewing, p: P ? Math.round(P.first * 100) : 0, done: P ? P.done : 0, total: P ? P.total : 0 }; };
+// 大螢幕上也可以直接用滑鼠／手指：拖曳轉頭、點地上的圓圈跳過去
+canvas.addEventListener('pointerdown', (e) => { if (PN.on) PN.drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
+addEventListener('pointermove', (e) => { const d = PN.drag; if (!d || !PN.on) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY; d.moved += Math.abs(dx) + Math.abs(dy);
+  const k = camera.fov * Math.PI / 180 / canvas.clientHeight; tour.yaw -= dx * k; tour.pitch = Math.max(-1.1, Math.min(1.1, tour.pitch + dy * k)); });
+addEventListener('pointerup', (e) => { const d = PN.drag; PN.drag = null; if (!d || !PN.on || d.moved > 8 || !pano.viewing) return;
+  const v = new THREE.Vector3(); let best = -1, bd = 90;
+  pano.stations.forEach((s, i) => { if (i === pano.cur || !PN.vis[pano.cur][i]) return; v.set(s.x, 0.03, s.z).project(camera); if (v.z > 1) return;
+    const px = (v.x + 1) / 2 * canvas.clientWidth, py = (1 - v.y) / 2 * canvas.clientHeight, dd = Math.hypot(px - e.clientX, py - e.clientY); if (dd < bd) { bd = dd; best = i; } });
+  if (best >= 0) panoJump(best); });
+if (QS.get('test') === '1') window.__test = { pano, PN, state, tour, stations: () => { buildColliders(); return panoStations(); }, cols: () => colliders, items: () => itemRects(35).map((o) => o.r), start() { state.mode = 'tour'; state.tourBy = 'test'; Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 }); buildColliders(); applyMode(); return panoStart(); }, jump: (i) => panoJump(i), stop: () => endTour() };
+let warmPanoT = 0;
+function warmPano() { clearTimeout(warmPanoT); if (panoOk()) warmPanoT = setTimeout(() => { if (screen === 'play' && panoOk() && !PN.on) pano.warm(); }, 2500); }
+
 // ================= 主迴圈 =================
 // 3D 導覽固定左右視角 105°，上下視角依螢幕比例換算（16:9 約 72°）
 const TOUR_HFOV = 105, tourFov = () => 2 * Math.atan(Math.tan(TOUR_HFOV * Math.PI / 360) / Math.max(0.5, camera.aspect)) * 180 / Math.PI;
@@ -650,6 +794,15 @@ function frame(now) {
     for (const j of joy.values()) { f += j.f; s += j.s; t += j.t; p += j.p; }
     const cl = (v) => Math.max(-1, Math.min(1, v)); f = cl(f); s = cl(s); t = cl(t); p = cl(p);
     if (Math.abs(t) > 0.05) lastTurn = now;
+    if (PN.on) {   // 擬真導覽：站在站點上轉頭；搖桿往前推＝跳到前面那一站
+      tour.yaw += t * 0.8 * dt; tour.pitch = Math.max(-1.1, Math.min(1.1, tour.pitch + p * 0.48 * dt));
+      if (f > 0.6 && !PN.fwd && now - PN.lastJump > 700 && pano.viewing) panoForward(); PN.fwd = f > 0.6;
+      const c = pano.stations[pano.cur]; if (c) { tour.x = c.x; tour.z = c.z; } sendPos(now);
+      camera.position.set(tour.x, EYE, tour.z); const dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw);
+      camera.lookAt(tour.x + dx * Math.cos(tour.pitch), EYE + Math.sin(tour.pitch), tour.z + dz * Math.cos(tour.pitch));
+      if (pano.viewing || pano.fade) { if (renderer.getPixelRatio() !== BASE_PR) { renderer.setPixelRatio(BASE_PR); resize(); } pano.render(camera, dt, (i) => PN.vis[pano.cur][i]); }   // 還沒算好第一張時，畫面停在原本的導覽畫面
+      panoHud(); requestAnimationFrame(frame); return;
+    }
     if (auto && Math.abs(f) + Math.abs(s) > 0.15) { auto = null; posT = 0; }   // 自己動搖桿就取消自動走
     tour.yaw += t * 0.8 * dt; tour.pitch = Math.max(-0.5, Math.min(0.4, tour.pitch + p * 0.48 * dt));   // 轉頭（左右、抬頭低頭）再慢 20%；走路速度不變
     let dx = Math.cos(tour.yaw), dz = Math.sin(tour.yaw), sp = 1.0 * dt;
@@ -694,13 +847,14 @@ function useUnit(id) {
   CX = PLAN.W * cm / 2; CZ = PLAN.D * cm / 2; sun.target.position.set(CX, 0, CZ); state.vrot = 0;
   Object.assign(view, { tx: CX, tz: CZ }); Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 });
   for (const e of objs.values()) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } objs.clear();
-  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = {}; state.walls = {}; state.cut = [];
+  state.items = PLAN.defaults.map((d) => ({ ...d })); state.floors = { ...((PLAN.look || {}).floors || {}) }; state.walls = { ...((PLAN.look || {}).walls || {}) }; state.floor = (PLAN.look || {}).floor || null; state.wall = (PLAN.look || {}).wall || null; state.cut = [];
+  if (PLAN.look && STYLES[PLAN.look.style]) state.style = PLAN.look.style;   // 這一戶有預設的風格與各區材質
   buildShell(); syncItems(); warm.length = 0; queueWarm();
   try { renderer.compile(scene, camera); } catch (e) { /* 忽略 */ }
 }
 $('units').addEventListener('click', (e) => {
   const b = e.target.closest('[data-unit]'); if (!b || b.disabled) return;
-  useUnit(b.dataset.unit); show('play'); broadcast();
+  useUnit(b.dataset.unit); show('play'); broadcast(); warmPano();
 });
 $('backBtn').addEventListener('click', () => show('start'));
 $('reselectBtn').addEventListener('click', () => { if (state.mode === 'tour') endTour(); show('select'); broadcast(); });
@@ -722,7 +876,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size, vrot: state.vrot }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size, vrot: state.vrot, pano: panoSnap() }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -749,7 +903,7 @@ function startPeer(code) {
     if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) setNet('連不上配對伺服器（' + err.type + '），可能被網路擋住', false);
   });
 }
-function endTour() { auto = null; state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
+function endTour() { panoStop(); auto = null; state.mode = 'overview'; state.tourBy = null; joy.clear(); applyMode(); }
 // 同一支手機（cid 相同）重新連線：接手舊連線，導覽主控權也一起轉過來
 const lostTour = { cid: null, id: null };
 function claim(entry, cid) {
@@ -779,12 +933,14 @@ function onMsg(entry, m) {
   if (m.t === 'vrot') { state.vrot = ((Math.round(+m.r || 0) % 4) + 4) % 4; setGoal(); invalidate(4); broadcast(); return; }   // 手機旋轉平面圖／回到預設視角
   if (m.t === 'shotget') { if (lastShots && lastShots.tok === m.tok) lastShots.imgs.forEach((img, i) => send(entry.conn, { t: 'shot', tok: m.tok, i, n: lastShots.imgs.length, img })); return; }
   if (m.t === 'shot') { const tok = String(m.tok || '').slice(0, 20); if (screen === 'play') setTimeout(() => makeShots(entry, tok), 30); else send(entry.conn, { t: 'shot', tok, err: 'not-ready' }); return; }
+  if (m.t === 'pano') { if (state.mode === 'tour' && state.tourBy === entry.id) { if (m.on) panoStart(); else { panoStop(); applyMode(); } } return broadcast(); }
+  if (m.t === 'goto' && PN.on) { if (state.tourBy === entry.id && pano.viewing) panoGoto(num(m.x, 0, PLAN.W), num(m.y, 0, PLAN.D)); return; }
   if (m.t === 'goto') { if (state.mode === 'tour' && state.tourBy === entry.id) startAuto(num(m.x, 0, PLAN.W), num(m.y, 0, PLAN.D)); return; }
-  if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { lastTurn = performance.now(); tour.yaw += num(m.dx, -2, 2); tour.pitch = Math.max(-0.6, Math.min(0.5, tour.pitch + num(m.dy, -1, 1))); } return; }
+  if (m.t === 'look') { if (state.mode === 'tour' && state.tourBy === entry.id) { lastTurn = performance.now(); tour.yaw += num(m.dx, -2, 2); const lim = PN.on ? 1.1 : 0; tour.pitch = Math.max(-0.6 - lim / 2, Math.min(0.5 + lim / 2, tour.pitch + num(m.dy, -1, 1))); } return; }
   if (m.t === 'tour') {
     if (m.on && state.mode !== 'tour') {
       state.mode = 'tour'; state.tourBy = entry.id;
-      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 }); buildColliders(); joy.clear(); applyMode();
+      Object.assign(tour, { x: PLAN.start[0] * cm, z: PLAN.start[1] * cm, yaw: PLAN.yaw ?? Math.PI, pitch: -0.04 }); buildColliders(); joy.clear(); applyMode(); if (m.pano) panoStart();
     } else if (!m.on && state.tourBy === entry.id) endTour();
     return broadcast();
   }
