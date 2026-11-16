@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261116p';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261116p';
-import * as ART from './planart.js?v=20261116p';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261116q';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261116q';
+import * as ART from './planart.js?v=20261116q';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -98,7 +98,7 @@ const inRoom = (r, it) => roomAt(it.x, it.y) === r || r.rs.some(([a, b, c, d]) =
 const isPerson = (it) => it.key.startsWith('person:');
 const peopleIn = (r) => S.st.items.filter((i) => isPerson(i) && inRoom(r, i)).length;
 function update() {
-  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm, st && st.vrot, S.pick, S.areaOpen, S.resetSty, st && st.pano && [st.pano.ok, st.pano.on, st.pano.ready].join()].join('|');
+  const st = S.st, key = [S.shots ? (S.shots.err ? 'e' : S.shots.busy ? 'b' : (S.shots.imgs || []).filter(Boolean).length) : 0, innerWidth > innerHeight, S.tab, S.net, UNIT.id, st && st.ready, st && st.mode, st && st.tourBy, S.room, st && st.style, st && st.floor, st && JSON.stringify(st.floors), st && st.wall, st && JSON.stringify(st.walls), S.fk, S.wg, S.wo, S.walt, S.fg, S.fr, S.resetArm, st && st.vrot, S.pick, S.areaOpen, S.resetSty].join('|');
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (key !== lastKey) { lastKey = key; renderMain(); }
   if (S.tab === 'edit' && st && st.mode !== 'tour' && curRoom() && !S.drag) { drawPlan(); updateSel(); }
@@ -218,7 +218,6 @@ function renderMain() {
       '<div class="shotList">' + sh.imgs.map((u, i) => `<img src="${u}" alt="設計圖 ${i + 1}">`).join('') + '</div>' +
       '<button class="primary" data-act="shotsave">⬇ 儲存／分享這 2 張圖</button><div class="muted" style="text-align:center;font-size:12.5px">iPhone 也可以長按圖片 →「加入照片」</div>';
     else if (!touring) el.innerHTML = '<div><h2>3D 導覽</h2><div class="muted">用第一人稱走進你的新家，大螢幕會變成你的視角。導覽期間，其他手機會暫停編輯。</div></div><button class="primary" data-act="tour" data-on="1">開始 3D 導覽</button>' +
-      (st.pano && st.pano.ok ? '<div style="height:10px"></div><div><h2>擬真導覽</h2><div class="muted">大螢幕用光線追蹤算出照片般的光影，約 10 秒後就能 360° 環看每個房間（站在定點看、點平面圖換位置）。</div></div><button class="primary alt" data-act="tour" data-on="1" data-pano="1">✨ 開始擬真導覽</button>' : '') +
       '<div style="height:10px"></div><div><h2>帶走我的設計</h2><div class="muted">把這次的佈置做成 2 張圖（全戶鳥瞰＋室內），存到手機或分享給家人。</div></div><button class="second dl" data-act="shot">⬇ 下載我的設計</button>';
     else if (!mine) el.innerHTML = '<h2>3D 導覽中</h2><div class="muted">另一支手機正在操作導覽，請看大螢幕。</div>';
     else if (innerWidth <= innerHeight) {   // 導覽時要橫拿
@@ -229,11 +228,9 @@ function renderMain() {
       for (const it of S.st.items) { const sp = getItem(it.key, it.st || S.st.style, it); if (sp && sp.t !== 'person') h += `<g transform="translate(${it.x} ${it.y}) rotate(${it.r})" pointer-events="none">${ART.itemArt(sp)}</g>`; }
       h += planWalls() + '<g id="tgt" style="display:none"><circle r="46" fill="rgba(46,125,79,.18)" stroke="#2E7D4F" stroke-width="10"/><circle r="12" fill="#2E7D4F"/></g>' +
         '<g id="me"><path d="M0 0 L190 -95 A212 212 0 0 1 190 95 Z" fill="rgba(160,103,58,.24)"/><circle r="30" fill="#A0673A" stroke="#fff" stroke-width="10"/></g>';
-      const pn = st.pano || {}, pOn = pn.ok && pn.on;
-      el.innerHTML = `<div class="tl"><div class="tlTop"><span class="tlPill">${pOn ? (pn.ready ? '● 擬真導覽中' : '● 擬真畫面製作中…') : '● 3D 導覽中'}</span><span class="goChip" id="goChip" style="display:none"></span>` +
-        (pn.ok ? `<button class="second" data-act="pano" data-on="${pOn ? '' : '1'}">${pOn ? '回一般畫面' : '✨ 擬真畫面'}</button>` : '') + '<button class="second" data-act="tour" data-on="">結束導覽</button></div>' +
-        `<div class="tlBody"><div class="zone move" id="moveZone"><b>${pOn ? '前進' : '走路'}</b><div class="stick rest" id="stick"><i></i></div></div>` +
-        `<div class="tlPlan"><svg id="tplan" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${h}</svg><div class="tlCap">${pOn ? '點平面圖，跳到最近的站點' : '點平面圖任一處，快速走過去'}</div></div>` +
+      el.innerHTML = '<div class="tl"><div class="tlTop"><span class="tlPill">● 3D 導覽中</span><span class="goChip" id="goChip" style="display:none"></span><button class="second" data-act="tour" data-on="">結束導覽</button></div>' +
+        '<div class="tlBody"><div class="zone move" id="moveZone"><b>走路</b><div class="stick rest" id="stick"><i></i></div></div>' +
+        `<div class="tlPlan"><svg id="tplan" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${h}</svg><div class="tlCap">點平面圖任一處，快速走過去</div></div>` +
         '<div class="zone look" id="lookZone"><b>轉頭</b><div class="stick rest" id="lstick"><i></i></div></div></div></div>';
       bindPads(); bindTourPlan(); moveMe();
     }
@@ -261,9 +258,8 @@ $('main').addEventListener('click', (e) => {
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
   else if (a === 'reset') { if (S.resetArm) { send({ t: 'reset' }); S.resetArm = false; } else S.resetArm = true; }
-  else if (a === 'pano') send({ t: 'pano', on: !!b.dataset.on });
   else if (a === 'tour') {
-    send({ t: 'tour', on: !!b.dataset.on, pano: !!b.dataset.pano });
+    send({ t: 'tour', on: !!b.dataset.on });
     // 結束導覽：手機馬上回到一般畫面（上方標題、下方分頁都回來），不用等大螢幕回覆；大螢幕慢或卡住時也不會被困在導覽畫面
     if (!b.dataset.on && S.st && S.st.mode === 'tour') { S.st = Object.assign({}, S.st, { mode: 'overview', tourBy: null }); J.f = J.s = J.tn = J.p = 0; document.body.classList.remove('tourL'); }
   }
@@ -456,7 +452,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261116p'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261116q'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -489,7 +485,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261116p'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261116q'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
