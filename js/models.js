@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261116q';
-import * as MT from './mats.js?v=20261116q';
+import { WOODS, FINISH } from './catalog.js?v=20261117a';
+import * as MT from './mats.js?v=20261117a';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -405,6 +405,7 @@ function builtKit(g, it) {
 }
 B.built = (g, it, P, o) => {
   const { w: W, h: H, v } = it, K = builtKit(g, it), { D, main, white, b, door, drawer, books, pot } = K, dec = o.decor !== false, fabric = MT.fabric('#B8AC98', 4);
+  if (extraBuilt(g, it, K, P, dec)) return;
   if (v === 'dress') { dressWall(g, it, b, D, W, dec); return; }
   if (v === 'ward') { const n = Math.max(2, Math.round(W / 60)), dw = W / n; b(W, H, D - 2, main, 0, 0, 0); b(W - 4, 8, D - 6, DARK(), 0, 0, 0); for (let i = 0; i < n; i++) { const x = -W / 2 + dw * (i + 0.5); door(dw, H - 58, main, x, 8, D - 2, i % 2 ? -1 : 1); door(dw, 50, main, x, H - 50, D - 2); } return; }
   if (v === 'tvwall') { const R = W - 60, cx = 30, n = Math.max(2, Math.round(R / 80)), dw = R / n;
@@ -442,6 +443,7 @@ B.built = (g, it, P, o) => {
 };
 B.wshelf = (g, it, P, o) => {
   const { w: W, h: H, v } = it, K = builtKit(g, it), { D, main, b, books, pot } = K, dec = o.decor !== false;
+  if (extraWall(g, it, K, P, dec)) return;
   if (v === 'planks') { [0, 40, 80].forEach((y, j) => { b(W, 4, D, main, 0, y, 0); if (!dec) return; if (j === 0) { books(-W * 0.25, y + 4, 0, W * 0.4, 8, 1); pot(W * 0.33, y + 4, 11); } if (j === 1) { b(Math.min(30, W * 0.25), 16, 16, MT.flat('#B9B4A8', 0.6), -W * 0.3, y + 4, 3); books(W * 0.2, y + 4, 0, W * 0.4, 7, 4); } if (j === 2 && H > 90) { pot(-W * 0.33, y + 4, 11); } }); return; }
   if (v === 'cubes') { const cube = (x, y) => { b(30, 2, D, main, x, y, 0); b(30, 2, D, main, x, y + 28, 0); b(2, 30, D, main, x - 14, y, 0); b(2, 30, D, main, x + 14, y, 0); };
     [[100, -1, 1], [50, 1, 2], [0, -1, 3]].forEach(([y, s, k]) => { const cx = s * (W / 2 - 15), px = -s * 15; cube(cx, s < 0 ? y : y + 12); b(W - 30, 3, D, main, px, y + 12, 0); if (dec) { books(px - s * W * 0.12, y + 15, 0, W * 0.3, 7, k); pot(px + s * W * 0.1, y + 15, 10); } }); return; }
@@ -777,6 +779,310 @@ B.cab = (g, it, P, o) => {
 
 const CABS = { tvcab: 1, nstand: 1, chest: 1, shoe: 1, shelf: 1 };
 // 建立一件家具。style = STYLES[風格]；opts.decor = 是否附上抱枕、毯子、花瓶等擺飾
+
+// =====================================================================================
+// 參考實景補的款式：弧形抽屜玄關櫃、廚房吊櫃、壁龕書桌牆、圓形把手衣櫃、開放衣帽櫃、床頭腰牆、懸浮化妝台、
+// 窗簾、毛巾架、衛生紙架、吊燈、桌上擺飾、掛畫。背面都在 z = -d/2（貼牆），單位 cm
+// =====================================================================================
+const SAGE = '#B7BE8C', CREAM = '#E4D9C4';
+const lacquer = (c) => MT.flat(c, 0.36), EMIT = () => MT.emit('#FFE2B0');
+// 手機上選的「木紋／烤漆＋顏色」：木紋用直向木皮，烤漆是半霧面
+const body2 = (it, def) => { const c = it.color && it.color[0] === '#' ? it.color : def; return it.fin === 'veneer' ? MT.wood(c, { rings: 16, warp: 0.35, vert: true, gloss: 0.1 }) : lacquer(c); };
+const darker = (it, def) => { const c = new THREE.Color(it.color && it.color[0] === '#' ? it.color : def), hsl = {}; c.getHSL(hsl); return hsl.l > 0.45; };
+// 燈條＋打在背板上的光暈：x 置中、y 為燈條高度、z 從背牆算起；dir = -1 往下照、+1 往上照
+function ledStrip(g, D, w, x, y, z0, fall = 34, dir = -1) {
+  box(g, w, 0.7, 1.4, EMIT(), x, y, -D / 2 + z0).castShadow = false;
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, fall), glowMat(0.55)); p.position.set(x, y + dir * fall / 2, -D / 2 + 2.3); if (dir > 0) p.rotation.z = Math.PI; g.add(p);
+}
+// 一束花：莖、葉、橘色球花與白色百合
+function bouquet(g, x, y, z, s = 1) {
+  const stem = MT.flat('#5E7A45', 0.7), leafM = [MT.flat('#55803F', 0.6), MT.flat('#6C9655', 0.6), MT.flat('#3F6B3A', 0.6)];
+  const R = rnd(71);
+  for (let i = 0; i < 11; i++) {
+    const a = i * 2.39996, t = 0.12 + R() * 0.3, L = (26 + R() * 16) * s, dx = Math.cos(a) * Math.sin(t), dz = Math.sin(a) * Math.sin(t), dy = Math.cos(t);
+    const st = mesh(g, new THREE.CylinderGeometry(0.22 * s, 0.3 * s, L, 5), stem, x + dx * L / 2, y + dy * L / 2, z + dz * L / 2); st.rotation.set(Math.atan2(dz, dy), 0, -Math.atan2(dx, Math.hypot(dy, dz)));
+    const tx = x + dx * L, ty = y + dy * L, tz = z + dz * L;
+    if (i % 3 === 0) { const b = mesh(g, new THREE.IcosahedronGeometry(3.6 * s, 2), MT.flat(i % 2 ? '#E8932F' : '#F0A63C', 0.75), tx, ty, tz); const p = b.geometry.attributes.position; for (let k = 0; k < p.count; k++) { const q = 1 + 0.12 * Math.sin(p.getX(k) * 5.1) * Math.cos(p.getY(k) * 4.7 + p.getZ(k) * 3.3); p.setXYZ(k, p.getX(k) * q, p.getY(k) * q * 0.9, p.getZ(k) * q); } b.geometry.computeVertexNormals(); }
+    else if (i % 3 === 1) { for (let k = 0; k < 5; k++) { const pa = k / 5 * Math.PI * 2, pt = mesh(g, new THREE.SphereGeometry(2.3 * s, 10, 8), MT.flat('#F7F3EA', 0.6), tx + Math.cos(pa) * 2.1 * s, ty + 0.6 * s, tz + Math.sin(pa) * 2.1 * s); pt.scale.set(1, 0.22, 0.48); pt.rotation.set(0, -pa, 0.55); }
+      mesh(g, new THREE.SphereGeometry(0.9 * s, 8, 6), MT.flat('#E0B84A', 0.6), tx, ty + 0.9 * s, tz); }
+    else for (let k = 0; k < 4; k++) { const lf = mesh(g, new THREE.SphereGeometry(2.8 * s, 8, 6), leafM[(i + k) % 3], x + dx * L * (0.5 + k * 0.15) + Math.cos(a + k * 2) * 2.4 * s, y + dy * L * (0.5 + k * 0.15), z + dz * L * (0.5 + k * 0.15) + Math.sin(a + k * 2) * 2.4 * s); lf.scale.set(1, 0.16, 0.42); lf.rotation.set(0.5 * Math.sin(k + i), a + k * 2, 0.6); }
+  }
+}
+// 玻璃花瓶（有水）＋花
+function glassVase(g, x, y, z, s = 1) {
+  const prof = [[0.1, 0], [5.2, 0], [6.2, 1.2], [6.6, 9], [5.6, 15], [4.2, 19], [4.6, 21]].map(([r, yy]) => [r * s, yy * s]);
+  const gl = memoMat('vaseGlass', () => new THREE.MeshStandardMaterial({ color: '#DCEBEA', roughness: 0.05, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide }));
+  lathe(g, prof, gl, x, y, z).castShadow = false;
+  lathe(g, [[0.1, 0.6], [5.6, 0.6], [6.1, 8], [0.1, 8]].map(([r, yy]) => [r * s, yy * s]), memoMat('vaseWater', () => new THREE.MeshStandardMaterial({ color: '#B9D6D2', roughness: 0.08, transparent: true, opacity: 0.45, depthWrite: false })), x, y, z).castShadow = false;
+  bouquet(g, x, y + 4 * s, z, s);
+}
+// 仙人掌盆：石紋圓缽＋幾株高低不同的仙人掌
+function cactusBowl(g, x, y, z, s = 1) {
+  lathe(g, [[0.1, 0], [5, 0], [8.6, 2.2], [9.6, 5.6], [8.8, 8.6], [7.8, 9], [7.8, 8.2], [0.1, 8.2]].map(([r, yy]) => [r * s, yy * s]), MT.terrazzo('#E3DFD6'), x, y, z);
+  mesh(g, new THREE.CylinderGeometry(7.7 * s, 7.7 * s, 0.6 * s, 20), MT.flat('#6A5A48', 0.95), x, y + 8.3 * s, z);
+  for (const [dx, dz, h, r] of [[-3, 0.6, 12, 1.9], [0.4, -1.4, 16, 2.2], [3.4, 1, 10, 1.7], [1.2, 2.6, 7, 1.5], [-1.4, -2.8, 9, 1.6]]) {
+    const c = mesh(g, new THREE.CapsuleGeometry(r * s, (h - 2 * r) * s, 5, 10), MT.flat('#4F7B4A', 0.75), x + dx * s, y + (8.4 + h / 2) * s, z + dz * s), p = c.geometry.attributes.position;
+    for (let k = 0; k < p.count; k++) { const a = Math.atan2(p.getZ(k), p.getX(k)), q = 1 + 0.1 * Math.cos(a * 10); p.setX(k, p.getX(k) * q); p.setZ(k, p.getZ(k) * q); } c.geometry.computeVertexNormals();
+  }
+}
+// 橫放的書堆（書背有燙字條）
+function bookStack(g, x, y, z, n = 3, ry = 0, cols = ['#2B2C2E', '#3A3B3E', '#232426']) {
+  for (let i = 0; i < n; i++) { const w = 27 - i * 1.5, d = 19 - i * 0.8, bk = new THREE.Group(); bk.position.set(x, y + 1.6 + i * 3.2, z); bk.rotation.y = ry + (i % 2 ? 0.07 : -0.05); g.add(bk);
+    rbox(bk, w, 3, d, MT.flat(cols[i % cols.length], 0.7), 0, 0, 0, 0.4); box(bk, w - 1.2, 2.2, d - 0.6, MT.flat('#EFEADF', 0.9), 0.5, 0, 0.4); box(bk, w * 0.5, 0.5, 0.2, MT.flat('#D8D2C4', 0.6), -w * 0.1, 0, d / 2 + 0.05); }
+  return y + n * 3.2;
+}
+// 畫布：用程式畫一張原創的畫（回傳材質）
+function artMat(key, draw, w = 512, h = 640) {
+  return memoMat('art' + key, () => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); draw(x, w, h);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); });
+}
+function paperGrain(x, w, h, a = 0.05) { const R = rnd(9); for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(${R() > 0.5 ? 255 : 90},${R() > 0.5 ? 250 : 80},${R() > 0.5 ? 240 : 70},${a * R()})`; x.fillRect(R() * w, R() * h, 1 + R() * 2, 1 + R() * 2); } }
+// 畫框：外框＋襯紙＋畫心；回傳畫心的 z（從背牆算起）
+function framed(g, W, H, D, frameM, mat, artM, y0 = 0, matW = 0) {
+  const f = 2.4, z = -D / 2;
+  box(g, W, H, 1, MT.flat('#D9D4CA', 0.9), 0, y0 + H / 2, z + 0.5);
+  for (const s of [-1, 1]) { box(g, f, H, D, frameM, s * (W / 2 - f / 2), y0 + H / 2, 0); box(g, W - 2 * f, f, D, frameM, 0, y0 + H / 2 + s * (H / 2 - f / 2), 0); }
+  if (matW) box(g, W - 2 * f, H - 2 * f, 0.4, mat, 0, y0 + H / 2, z + 1.6);
+  const p = mesh(g, new THREE.PlaneGeometry(W - 2 * f - 2 * matW, H - 2 * f - 2 * matW), artM, 0, y0 + H / 2, z + (matW ? 1.85 : 1.4)); p.castShadow = false; return p;
+}
+
+function extraBuilt(g, it, K, P, dec) {
+  const { w: W, h: H, v } = it, { D, main, white, hm, b, door, drawer } = K, plinth = () => b(W - 4, 7, D - 6, DARK(), 0, 0, 0);
+  // ── 弧形抽屜玄關櫃：奶油色烤漆、黑色檯面，抽屜面板有一道圓弧浮雕，黑色蘑菇把手
+  if (v === 'curve') {
+    const body = body2(it, CREAM), light = darker(it, CREAM), topM = MT.flat(light ? '#1D1D1F' : '#EFEBE5', 0.32), knob = MT.gloss(light ? '#141416' : '#B8955A');
+    const n = Math.max(1, Math.round(W / 82)), cw = W / n, rows = 3, bh = H - 7 - 3.2, rh = bh / rows;
+    plinth(); b(W, bh, D - 2.4, body, 0, 7, 0);
+    rbox(g, W + 2.4, 3.2, D + 1.4, topM, 0, H - 1.6, 0.4, 1.2);
+    for (let i = 0; i < n; i++) for (let j = 0; j < rows; j++) {
+      const x = -W / 2 + cw * (i + 0.5), y0 = 7 + j * rh, fw = cw - 1, fh = rh - 1, flip = (i + j) % 2 ? -1 : 1, zf = -D / 2 + D - 2.4;
+      box(g, fw, fh, 1.6, body, x, y0 + rh / 2, zf + 0.8);
+      // 浮雕：一片厚一點的面板，尾端收成大圓弧
+      const r = fh / 2 - 0.2, len = fw * 0.56, sh = new THREE.Shape(); sh.moveTo(-fw / 2, -r); sh.lineTo(-fw / 2 + len - r, -r); sh.absarc(-fw / 2 + len - r, 0, r, -Math.PI / 2, Math.PI / 2, false); sh.lineTo(-fw / 2, r); sh.closePath();
+      const rg = new THREE.ExtrudeGeometry(sh, { depth: 1.5, bevelEnabled: true, bevelSize: 0.7, bevelThickness: 0.7, bevelSegments: 4, curveSegments: 28 }), rm = mesh(g, rg, body, x, y0 + rh / 2, zf + 1.6); rm.scale.x = flip;
+      const kx = x + flip * (-fw / 2 + len - r * 0.2 + 7.5);
+      cyl(g, 1, 1.3, 2.4, knob, kx, y0 + rh / 2, zf + 2.8, 14).rotation.x = Math.PI / 2;
+      const kb = mesh(g, new THREE.SphereGeometry(3.3, 22, 16), knob, kx, y0 + rh / 2, zf + 4.6); kb.scale.z = 0.62;
+    }
+    if (dec) { glassVase(g, -W * 0.3, H, 0, 1); const ty = bookStack(g, W * 0.12, H, 2, 3, 0.08); cactusBowl(g, W * 0.12, ty, 2, 0.92);
+      if (W >= 150) { const fr = new THREE.Group(); fr.position.set(W * 0.37, H + 23, -D / 2 + 5.5); fr.rotation.x = -0.11; g.add(fr); framed(fr, 34, 46, 2.4, MT.wood('#B98A58', { rings: 10 }), MT.flat('#F4F0E8', 0.9), ART.poster(), -23, 4); } }
+    return true;
+  }
+  // ── 壁龕書桌展示牆：上方白色吊櫃、開心果綠壁龕層格（每層有燈條）、懸浮桌面與圓弧抽屜
+  if (v === 'niche') {
+    const green = body2(it, SAGE), topH = 46, sh0 = 132, shD = 30, nw = Math.min(46, W * 0.28), mx = nw / 2, mw = W - nw, n = Math.max(2, Math.round(W / 55)), dw = W / n;
+    b(W, H, 2, green, 0, 0, 0);
+    b(W, topH, 36, white, 0, H - topH, 0); for (let i = 0; i < n; i++) door(dw, topH, white, -W / 2 + dw * (i + 0.5), H - topH, 36);
+    for (const s of [-1, 1]) b(2.6, H - topH - sh0, shD, green, s * (W / 2 - 1.3), sh0, 2);
+    b(2.6, H - topH - sh0, shD, green, -W / 2 + nw, sh0, 2); b(W, 3, shD + 2, green, 0, sh0 - 3, 2);
+    const mid = sh0 + (H - topH - sh0) * 0.52; b(mw - 2.6, 2.6, shD, green, mx, mid, 2); b(nw - 2.6, 2.6, shD, green, -W / 2 + nw / 2, sh0 + (H - topH - sh0) * 0.36, 2);
+    ledStrip(g, D, mw - 10, mx, H - topH - 0.5, shD - 2, 30); ledStrip(g, D, mw - 10, mx, mid - 0.5, shD - 2, 30); ledStrip(g, D, W - 12, 0, sh0 - 3.6, shD - 1, 40);
+    // 桌面：前緣收圓；抽屜箱懸在桌面下，正面一片圓弧絨布面板
+    rbox(g, W, 4.4, D, green, 0, 74.2, 0, 2);
+    const dwid = Math.min(96, W * 0.6), dx = W / 2 - dwid / 2 - 14; rbox(g, dwid, 13, D - 8, lacquer('#F3EFE7'), dx, 65.4, -1, 5.5); rbox(g, dwid * 0.5, 9, 2, MT.fabric('#D6CDBD', 3, 'boucle'), dx, 65.4, D / 2 - 4.6, 4);
+    b(3, 72, D - 6, green, -W / 2 + 1.5, 0, 0);
+    if (dec) {
+      const cy = 76.4, zc = -D / 2;
+      // 一體式電腦（原創外型：黑色螢幕、白色下巴、L 形腳架）
+      const mxp = mx - 6; rbox(g, 56, 34, 1.6, MT.flat('#101113', 0.25), mxp, cy + 28, zc + 20, 0.8); mesh(g, new THREE.PlaneGeometry(53, 31), ART.clock(), mxp, cy + 28.4, zc + 20.9).castShadow = false; rbox(g, 56, 7, 1.6, lacquer('#E9E9E6'), mxp, cy + 8.6, zc + 20, 0.8);
+      const st = box(g, 12, 9, 1.2, MT.metal('#C9CCD0', 0.35), mxp, cy + 4.2, zc + 17.6); st.rotation.x = 0.28; rbox(g, 18, 0.8, 14, MT.metal('#C9CCD0', 0.35), mxp, cy + 0.4, zc + 19, 0.3);
+      rbox(g, 30, 1.2, 10.5, MT.flat('#2A2B2D', 0.5), mxp, cy + 0.6, zc + 36, 0.5); const ms = mesh(g, new THREE.SphereGeometry(2.6, 14, 10), lacquer('#E9E9E6'), mxp + 24, cy + 0.9, zc + 36); ms.scale.set(1, 0.42, 1.5);
+      // 幾本直立的書＋書擋
+      let px = mx - mw / 2 + 12; for (let i = 0; i < 5; i++) { const t = 2.2 + (i * 7 % 3), hh = 19 + (i * 5 % 6); box(g, t, hh, 14, MT.flat(['#EFEADF', '#1F2022', '#EFEADF', '#8E9AA6', '#1F2022'][i], 0.75), px + t / 2, cy + hh / 2, zc + 12); px += t + 0.3; }
+      // 層格上的擺飾：木紋小音箱、坐姿雕像、抽象雕塑、書
+      const r1 = sh0 + 0.2, r2 = mid + 2.6, rx = mx + mw * 0.22;
+      rbox(g, 22, 16, 11, MT.wood('#8A5A3A', { rings: 10 }), rx, r1 + 8, zc + 14, 1.6); box(g, 17, 11, 0.5, MT.flat('#2A211D', 0.9), rx, r1 + 8, zc + 19.6); for (let i = 0; i < 6; i++) box(g, 17, 0.5, 0.4, MT.flat('#B98A58', 0.6), rx, r1 + 3.6 + i * 1.8, zc + 19.9);
+      const fig = MT.flat('#F2F0EB', 0.5), fx = mx - mw * 0.18; mesh(g, new THREE.SphereGeometry(2.6, 16, 12), fig, fx, r1 + 21.5, zc + 14); rbox(g, 4.6, 10, 4, fig, fx, r1 + 13.5, zc + 14, 1.8); const lg = rbox(g, 3.4, 12, 3.6, MT.flat('#1F2022', 0.5), fx + 1.6, r1 + 5.4, zc + 15, 1.5); lg.rotation.z = -0.5; rbox(g, 8, 3, 6, fig, fx, r1 + 1.5, zc + 14, 1);
+      const sc = MT.metal('#B9B2A6', 0.45), sx = -W / 2 + nw / 2; cyl(g, 4.4, 5, 2.4, MT.marble('#3A3A3C'), sx, r2 + 28, zc + 15, 18);   // 窄格：抽象雕塑
+      const tw = mesh(g, new THREE.TorusKnotGeometry(4.2, 1.1, 60, 8, 2, 3), sc, sx, r2 + 40, zc + 15); tw.scale.set(0.8, 1.5, 0.8);
+      bookStack(g, sx, sh0 + 0.2, zc + 15, 3, 0.3, ['#C96F4A', '#EFEADF', '#2F3E5C']); bookStack(g, mx + mw * 0.1, r2, zc + 14, 2, -0.1, ['#EFEADF', '#C9B8A0']);
+    }
+    return true;
+  }
+  // ── 圓形把手衣櫃：白色平門，每兩片門共用一個內凹的圓形把手（開心果綠）
+  if (v === 'circ') {
+    const n = Math.max(2, Math.round(W / 50) + (Math.round(W / 50) % 2)), dw = W / n, topH = 52, lowH = H - 8 - topH, zf = -D / 2 + D, main = body2(it, '#F3EFE7'), acc = lacquer(it.color === SAGE ? '#F3EFE7' : SAGE);
+    b(W, H, D - 2, main, 0, 0, 0); b(W - 4, 8, D - 6, DARK(), 0, 0, 0);
+    for (let i = 0; i < n; i++) { const x = -W / 2 + dw * (i + 0.5); b(dw - 0.8, lowH - 0.8, 2, main, x, 8.4, D - 2); b(dw - 0.8, topH - 0.8, 2, main, x, H - topH + 0.4, D - 2); }
+    const half = (x, y, r, s) => {   // 半圓把手：內凹的色盤＋外圈一道細溝
+      const disc = mesh(g, new THREE.CylinderGeometry(r, r, 0.5, 40, 1, false, s > 0 ? 0 : Math.PI, Math.PI), acc, x + s * 0.4, y, zf + 0.26); disc.rotation.x = Math.PI / 2; disc.castShadow = false;
+      const ring = mesh(g, new THREE.TorusGeometry(r, 0.38, 6, 40, Math.PI), MT.flat('#8E956A', 0.6), x + s * 0.4, y, zf + 0.4); ring.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2; ring.castShadow = false;
+      box(g, 0.5, r * 1.3, 2.2, MT.flat('#7F865E', 0.5), x + s * 2.4, y, zf - 0.2); };
+    for (let i = 0; i + 1 < n; i += 2) { const x = -W / 2 + dw * (i + 1); half(x, 8 + lowH * 0.5, Math.min(23, dw * 0.46), -1); half(x, 8 + lowH * 0.5, Math.min(23, dw * 0.46), 1); half(x, H - topH + 18, Math.min(13, dw * 0.26), -1); half(x, H - topH + 18, Math.min(13, dw * 0.26), 1); }
+    return true;
+  }
+  // ── 開放衣帽櫃：深色細框、吊衣桿、上方收納層板與收納箱、下方抽屜
+  if (v === 'openw') {
+    const fr = body2(it, '#2E2F31'), wd = MT.wood('#7A5236', { rings: 14, warp: 0.35, vert: true, gloss: 0.1 }), n = Math.max(1, Math.round(W / 85)), cw = (W - 3) / n, dh = 44;
+    b(W, H, 1.6, wd, 0, 0, 0); for (let i = 0; i <= n; i++) b(3, H, D, fr, -W / 2 + 1.5 + cw * i, 0, 0);
+    for (const y of [0, dh, H - 76, H - 40, H - 3]) b(W, 3, D, fr, 0, y, 0);
+    for (let i = 0; i < n; i++) { const x = -W / 2 + 1.5 + cw * (i + 0.5), iw = cw - 3;
+      drawer(iw, 20, wd, x, 3, D - 2); drawer(iw, 21, wd, x, 23, D - 2);
+      const rod = cyl(g, 1.1, 1.1, iw, BRASS(), x, H - 82, -D / 2 + D * 0.5, 12); rod.rotation.z = Math.PI / 2;
+      ledStrip(g, D, iw - 8, x, H - 76.6, D - 6, 46);
+      if (dec) { const cols = ['#EFE7D8', '#C9B8A0', '#8E9AA6', '#F6F1E8', '#B5673A', '#3F5A54', '#DDD3C2'], m = Math.max(3, Math.floor(iw / 11));
+        for (let k = 0; k < m; k++) { const hx = x - iw / 2 + 7 + k * (iw - 14) / Math.max(1, m - 1), len = 62 + (k * 13 % 5) * 9, col = cols[(k + i * 3) % cols.length];
+          const hk = mesh(g, new THREE.TorusGeometry(1.5, 0.22, 5, 12, Math.PI * 1.4), CHROME(), hx, H - 84.2, -D / 2 + D * 0.5); hk.rotation.y = Math.PI / 2;
+          const shp = new THREE.Shape(); shp.moveTo(-19, 0); shp.quadraticCurveTo(-8, 5, 0, 5.5); shp.quadraticCurveTo(8, 5, 19, 0); shp.lineTo(17.5, -len); shp.lineTo(-17.5, -len); shp.closePath();
+          const cl = mesh(g, new THREE.ExtrudeGeometry(shp, { depth: 2.6, bevelEnabled: true, bevelSize: 1.2, bevelThickness: 1.2, bevelSegments: 2 }), MT.fabric(col, 3), hx - 1.3, H - 91, -D / 2 + D * 0.5); cl.rotation.y = Math.PI / 2; }
+        // 上層：收納箱與摺好的衣物
+        rbox(g, Math.min(36, iw * 0.42), 24, D - 14, MT.fabric('#CFC6B5', 3, 'linen'), x - iw * 0.24, H - 73 + 12 + 24 - 24, 0, 1.6); box(g, 8, 1, 0.6, MT.leather('#8A5A3A'), x - iw * 0.24, H - 61, D / 2 - 6.6);
+        for (let k = 0; k < 4; k++) rbox(g, 30, 4.2, 26, MT.fabric(['#E8DFCF', '#8E9AA6', '#F6F1E8', '#C96F4A'][k], 3), x + iw * 0.22, H - 73 + 2.1 + k * 4.3, 0, 1.6);
+        rbox(g, Math.min(40, iw * 0.46), 26, D - 12, MT.fabric('#B8AC98', 3, 'linen'), x + iw * 0.2, H - 37 + 13, 0, 1.6); rbox(g, Math.min(30, iw * 0.34), 20, D - 16, MT.flat('#EFEADF', 0.8), x - iw * 0.24, H - 37 + 10, 0, 1.2);
+        // 下層開放格：兩雙鞋
+        for (const s of [-1, 1]) for (const t of [-1, 1]) { const sh = rbox(g, 9, 6, 25, MT.leather(s < 0 ? '#EDE8DF' : '#5A4636'), x + s * iw * 0.24 + t * 5.6, dh + 6, 2, 2.6); sh.scale.y = 0.9; } }
+    }
+    return true;
+  }
+  // ── 床頭半高腰牆：木皮飾板（細溝分割）＋上緣平台與往下打的燈條
+  if (v === 'wains') {
+    const n = Math.max(2, Math.round(W / 60)), pw = W / n, ven = it.fin === 'matte' ? lacquer(it.color && it.color[0] === '#' ? it.color : '#D9C2A3') : MT.wood(it.color && it.color[0] === '#' ? it.color : '#D9C2A3', { rings: 22, warp: 0.12, vert: true, gloss: 0.12 });
+    b(W, H - 3, 3, ven, 0, 0, 0); for (let i = 1; i < n; i++) b(0.5, H - 3, 0.5, MT.flat('#6E5A43', 0.9), -W / 2 + pw * i, 0, 2.8);
+    b(W, 9, 4.2, ven, 0, 0, 0); rbox(g, W, 3, D, ven, 0, H - 1.5, 0, 0.9); ledStrip(g, D, W - 10, 0, H - 3.6, D - 2, 26);
+    if (dec) { const fr = new THREE.Group(); fr.position.set(-W * 0.3, H + 13, -D / 2 + 4.2); fr.rotation.x = -0.1; g.add(fr); framed(fr, 20, 26, 1.8, MT.metal('#B8955A', 0.3), MT.flat('#F4F0E8', 0.9), ART.poster(), -13, 2.6);
+      lathe(g, [[0.1, 0], [3.2, 0], [4.4, 5], [3.4, 11], [1.5, 15], [1.9, 17]], MT.flat('#2A2B2D', 0.55), W * 0.32, H, 0); for (let k = 0; k < 5; k++) { const st = cyl(g, 0.14, 0.2, 30 + k * 3, MT.flat('#9A8466', 0.8), W * 0.32 + (k - 2) * 1.5, H + 30, (k % 2) * 1.2 - 0.6, 5); st.rotation.z = (k - 2) * -0.09; } }
+    return true;
+  }
+  // ── 懸浮化妝台：白色桌面與雙抽屜、金色把手、斜板桌腳，牆上是環形燈鏡，前面一張皮革圓凳
+  if (v === 'vanity2') {
+    const wh = body2(it, '#F3EFE7'), Z = -D / 2, tw = W;
+    rbox(g, tw, 4, D, wh, 0, 76, 0, 1.6); rbox(g, tw - 14, 13, D - 5, wh, 0, 67.5, -1, 1.2);
+    for (const s of [-1, 1]) { const dx = s * (tw - 14) / 4; rbox(g, (tw - 14) / 2 - 1.2, 11, 1.6, wh, dx, 67.5, D / 2 - 2.6, 0.5); rbox(g, 15, 1.1, 1.3, BRASS(), dx, 67.5, D / 2 - 1.4, 0.5); for (const e of [-1, 1]) cyl(g, 0.45, 0.45, 1.6, BRASS(), dx + e * 6, 67.5, D / 2 - 2.2, 8).rotation.x = Math.PI / 2; }
+    for (const s of [-1, 1]) { const lg = rbox(g, 3, 76, D - 8, wh, s * (tw / 2 - 8), 37, -1, 1); lg.rotation.z = s * 0.075; }
+    // 環形燈鏡
+    const my = Math.min(H - 30, 128), r = Math.min(27, W * 0.26);
+    const mr = mesh(g, new THREE.CylinderGeometry(r, r, 1.6, 56), mirrorMat(), 0, my, Z + 1.6); mr.rotation.x = Math.PI / 2;
+    mesh(g, new THREE.TorusGeometry(r, 0.9, 10, 64), BRASS(), 0, my, Z + 2).castShadow = false;
+    const ring = mesh(g, new THREE.TorusGeometry(r * 0.8, 0.7, 8, 48, Math.PI * 1.1), EMIT(), 0, my, Z + 2.6); ring.rotation.z = -Math.PI * 0.55; ring.castShadow = false;
+    const gl = new THREE.Mesh(new THREE.RingGeometry(r * 0.62, r * 0.98, 48, 1, -Math.PI * 0.55, Math.PI * 1.1), memoMat('ringGlow', () => new THREE.MeshBasicMaterial({ color: '#FFD9A0', transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }))); gl.position.set(0, my, Z + 2.5); g.add(gl);
+    // 圓凳：上下收圓的皮革墩，中間一圈縫線
+    const st = new THREE.Group(); st.position.set(tw * 0.08, 0, D / 2 + 32); g.add(st); const lm = MT.leather('#EFE6D6');
+    lathe(st, [[0.1, 0], [17, 0], [19.6, 2.5], [20.6, 12], [20.6, 30], [19.4, 39], [15, 43], [0.1, 44]], lm, 0, 0, 0, 40);
+    const seam = mesh(st, new THREE.TorusGeometry(20.7, 0.35, 5, 48), lm, 0, 21, 0); seam.rotation.x = Math.PI / 2; const s2 = mesh(st, new THREE.TorusGeometry(17.6, 0.3, 5, 48), lm, 0, 41.4, 0); s2.rotation.x = Math.PI / 2;
+    if (dec) { const ty = 78, R2 = rnd(5);
+      rbox(g, 26, 1.4, 16, MT.marble('#EFEBE5'), -tw * 0.24, ty + 0.7, -2, 0.6);
+      for (const [dx, hh, rr, col] of [[-6, 14, 2.4, '#D8C8A8'], [0, 9, 3, '#E9D2C0'], [6.5, 11, 2, '#CFE3E6']]) { const bt = cyl(g, rr, rr, hh, memoMat('perf' + col, () => new THREE.MeshStandardMaterial({ color: col, roughness: 0.08, transparent: true, opacity: 0.7 })), -tw * 0.24 + dx, ty + 1.4 + hh / 2, -2 + (R2() - 0.5) * 4, 14); cyl(g, rr * 0.5, rr * 0.5, 2.4, BRASS(), bt.position.x, ty + 1.4 + hh + 1.2, bt.position.z, 10); }
+      lathe(g, [[0.1, 0], [4.6, 0], [5.4, 2.4], [5.2, 5], [0.1, 5.4]], MT.ceramic('#F4F1EA'), tw * 0.16, ty, 4); lathe(g, [[0.1, 0], [3.6, 0], [4.2, 2], [4, 4], [0.1, 4.4]], MT.ceramic('#F4F1EA'), tw * 0.3, ty, 1); mesh(g, new THREE.SphereGeometry(1, 8, 6), BRASS(), tw * 0.16, ty + 5.8, 4); mesh(g, new THREE.SphereGeometry(0.9, 8, 6), BRASS(), tw * 0.3, ty + 4.8, 1);
+      const pf = new THREE.Group(); pf.position.set(tw * 0.38, ty + 8, -D / 2 + 9); pf.rotation.x = -0.14; g.add(pf); framed(pf, 11, 15, 1.2, BRASS(), MT.flat('#F4F0E8', 0.9), ART.poster(), -7.5, 1.6); }
+    return true;
+  }
+  // ── 窗簾：軌道＋兩側亞麻簾（有打褶）＋內側白紗；寬度可伸縮
+  if (v === 'curtain') {
+    const col = it.color && it.color[0] === '#' ? it.color : '#8D8377', lin = twoSided(MT.fabric(col, 5, { linen: 'linen', flannel: 'flannel', weave: 'herring' }[it.fin] || 'linen')), sheer = memoMat('sheer', () => new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 1, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+    const top = H - 4, sheet = (len, mat, amp, pleat, sd) => { const nx = Math.max(12, Math.round(len / 1.4)), geo = new THREE.PlaneGeometry(len, top, nx, 14), p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) { const X = p.getX(i), Y = p.getY(i), t = (Y + top / 2) / top, k = 0.72 + 0.28 * (1 - t);   // 越往下褶子越開
+        p.setZ(i, amp * k * Math.sin(X / pleat * Math.PI * 2 + sd) + amp * 0.35 * (MT.fbm(X * 0.05 + sd, Y * 0.01, 2) - 0.5)); p.setX(i, X * (0.93 + 0.07 * (1 - t))); }
+      geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); m.castShadow = mat !== sheer; m.receiveShadow = true; return m; };
+    const dw = Math.min(62, W * 0.2), sw = Math.min(80, W * 0.27);
+    for (const s of [-1, 1]) { const d1 = sheet(dw, lin, 3.6, 10.5, s * 2); d1.position.set(s * (W / 2 - dw / 2), top / 2, 2); g.add(d1); const s1 = sheet(sw, sheer, 2.2, 8, s * 5); s1.position.set(s * (W / 2 - dw - sw / 2 + 5), top / 2, -3); g.add(s1); }
+    box(g, W + 6, 3.4, 6, lacquer('#F3EFE7'), 0, H - 1.7, 0); box(g, W + 2, 1.2, 9, MT.flat('#3A3A3C', 0.4), 0, H - 3.8, 0);
+    return true;
+  }
+  return false;
+}
+
+// 牆上與吊掛的小物、擺飾、掛畫（y = 0 是這件東西的底；實際離地高度由型錄的 elev 決定）
+function extraWall(g, it, K, P, dec) {
+  const { w: W, h: H, v } = it, { D, main, white, hm, b, door } = K, Z = -D / 2;
+  // ── 廚房吊櫃：白色平門、門下緣內凹的手把溝、底部一整條層板燈
+  if (v === 'kupper') {
+    const n = Math.max(2, Math.round(W / 45)), dw = W / n, body = it.fin === 'veneer' ? main : lacquer(it.color && it.color[0] === '#' ? it.color : '#F3EFE7');
+    b(W, H - 2, D - 2, body, 0, 2, 0); b(W - 1, 2, D - 6, MT.flat('#CFC8BB', 0.6), 0, 0, 0);
+    for (let i = 0; i < n; i++) { const x = -W / 2 + dw * (i + 0.5); b(dw - 0.7, H - 3.4, 2, body, x, 3, D - 2); }
+    b(W, 1.4, 1.6, MT.flat('#2A2B2D', 0.5), 0, 1.7, D - 3.4);
+    ledStrip(g, D, W - 6, 0, -0.4, D - 9, 52); box(g, W - 4, 0.8, 3, MT.metal('#D5D8DC', 0.4), 0, -0.4, Z + D - 9);
+    return true;
+  }
+  // ── 電熱毛巾架：一支支獨立的橫桿固定在牆上（圓形固定座），掛一條摺好的毛巾
+  if (v === 'towel') {
+    const st = MT.metal('#A9A39A', 0.34), n = Math.max(3, Math.round(H / 14));
+    for (let i = 0; i < n; i++) { const y = 3 + i * (H - 6) / (n - 1), tilt = 0.5;
+      const bar = cyl(g, 1.1, 1.1, W, st, 0, y, Z + D - 3, 14); bar.rotation.z = Math.PI / 2; for (const s of [-1, 1]) mesh(g, new THREE.SphereGeometry(1.1, 10, 8), st, s * W / 2, y, Z + D - 3);
+      const arm = cyl(g, 0.9, 0.9, D - 3, st, -W / 2 + 5, y, Z + (D - 3) / 2, 10); arm.rotation.x = Math.PI / 2; const fl = cyl(g, 3.6, 3.6, 1.2, st, -W / 2 + 5, y, Z + 0.6, 22); fl.rotation.x = Math.PI / 2; void tilt; }
+    if (dec) { const tw = W * 0.62, tm = twoSided(MT.fabric('#F4F1EA', 4, 'knit')), top = 3 + (n - 1) * (H - 6) / (n - 1);
+      const geo = new THREE.PlaneGeometry(tw, H * 0.86, 20, 30), p = geo.attributes.position, L = H * 0.86;
+      for (let i = 0; i < p.count; i++) { const X = p.getX(i), Y = p.getY(i), s = (L / 2 - Y), fr = L * 0.34;   // 前面垂得長、後面短，披在最上面那支桿子上
+        const back = s < fr, d = back ? fr - s : s - fr, zz = (back ? -1 : 1) * Math.min(2.2, d * 0.9) + 0.5 * (MT.fbm(X * 0.08, Y * 0.05, 2) - 0.5), yy = top + 1.6 - Math.max(0, d - 1.2);
+        p.setXYZ(i, X, yy, zz); }
+      geo.computeVertexNormals(); mesh(g, geo, tm, W * 0.12, 0, Z + D - 3);
+      const band = new THREE.Mesh(new THREE.PlaneGeometry(tw + 0.2, 5), twoSided(MT.fabric('#D9B8A8', 4, 'knit'))); band.position.set(W * 0.12, top - L * 0.66 + 9, Z + D - 3 + 2.75); g.add(band); }
+    return true;
+  }
+  // ── 捲筒衛生紙架：圓筒蓋＋紙捲
+  if (v === 'tp') {
+    const st = MT.metal('#A9A39A', 0.34); const arm = cyl(g, 1.2, 1.2, D - 5, st, 0, H / 2, Z + (D - 5) / 2, 12); arm.rotation.x = Math.PI / 2; const fl = cyl(g, 3.4, 3.4, 1.2, st, 0, H / 2, Z + 0.6, 20); fl.rotation.x = Math.PI / 2;
+    const roll = cyl(g, 5.4, 5.4, 10.5, MT.flat('#F7F5F0', 0.95), 0, H / 2, Z + D - 6, 26); roll.rotation.z = Math.PI / 2; const core = cyl(g, 2, 2, 10.7, MT.flat('#C9B8A0', 0.9), 0, H / 2, Z + D - 6, 14); core.rotation.z = Math.PI / 2;
+    const cap = mesh(g, new THREE.CylinderGeometry(6.1, 6.1, 11.6, 28, 1, true, Math.PI * 0.15, Math.PI * 1.05), twoSided(st), 0, H / 2, Z + D - 6); cap.rotation.z = Math.PI / 2;
+    box(g, 9.6, 5, 0.25, MT.flat('#F7F5F0', 0.95), 0, H / 2 - 7.6, Z + D - 1.2);
+    for (const s of [-1, 1]) { const e = cyl(g, 6.1, 6.1, 0.6, MT.flat('#4E5A52', 0.5), s * 5.9, H / 2, Z + D - 6, 26); e.rotation.z = Math.PI / 2; }
+    return true;
+  }
+  // ── 床邊玻璃吊燈：細線從天花板垂下，霧面玻璃燈罩（葫蘆形）
+  if (v === 'pendA') {
+    const cord = MT.flat('#1F1F21', 0.6), sh = 34; cyl(g, 4.5, 4.5, 1.6, cord, 0, H - 0.8, 0, 20); cyl(g, 0.22, 0.22, H - sh - 1, cord, 0, sh + (H - sh - 1) / 2, 0, 6);
+    cyl(g, 1.8, 2.2, 3.4, BRASS(), 0, sh + 1.2, 0, 14);
+    const glass = memoMat('pendGlass', () => new THREE.MeshStandardMaterial({ color: '#FFF4E2', emissive: '#FFD9A0', emissiveIntensity: 0.55, roughness: 0.7, transparent: true, opacity: 0.92 }));
+    lathe(g, [[2.2, sh], [6.4, sh - 2], [8, sh - 8], [5.6, sh - 15], [4.6, sh - 18], [5.8, sh - 21], [8.4, sh - 27], [7, sh - 33], [2.4, sh - 34], [0.1, sh - 34]], glass, 0, 0, 0, 36).castShadow = false;
+    return true;
+  }
+  // ── 線型吊燈：兩條細線吊一支金屬長桿，底面整條發光，另外垂三顆小吊燈
+  if (v === 'pendL') {
+    const cord = MT.flat('#1F1F21', 0.6), by = 0;
+    box(g, W * 0.5, 1.6, 5, cord, 0, H - 0.8, 0); for (const s of [-1, 1]) cyl(g, 0.16, 0.16, H - 4, cord, s * W * 0.38, 4 + (H - 4) / 2, 0, 5);
+    rbox(g, W, 2.6, 3.2, BRASS(), 0, by + 2.7, 0, 1.1); box(g, W - 4, 0.6, 2, EMIT(), 0, by + 1.2, 0).castShadow = false;
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(W - 4, 26), glowMat(0.3)); gl.position.set(0, by - 12, 0); g.add(gl);
+    return true;
+  }
+  // ── 桌上擺飾
+  if (v === 'decoA') { glassVase(g, 0, 0, 0, 1.15); return true; }
+  if (v === 'decoB') { const ty = bookStack(g, 0, 0, 0, 3, 0.06); cactusBowl(g, 0, ty, 0, 0.95); return true; }
+  // ── 掛畫（都是原創圖樣）
+  if (v === 'art1') { framed(g, W, H, D, MT.flat('#1F1F21', 0.45), null, ART.lines()); return true; }
+  if (v === 'art3') { framed(g, W, H, D, MT.wood('#C08A52', { rings: 10 }), MT.flat('#F4F0E8', 0.9), ART.arches(), 0, Math.min(7, W * 0.09)); return true; }
+  if (v === 'art2') {   // 立體畫：左半是一排實木圓棒，右上陶土色塊、下半米白亞麻
+    const f = 2.2, oak = MT.wood('#D9C2A3', { rings: 12, vert: true }), iw = W - 2 * f, ih = H - 2 * f, lw = iw * 0.56, n = Math.max(6, Math.round(lw / 4.6)), pw = lw / n, sh = ih * 0.56;
+    box(g, W, H, 1, MT.flat('#CFC8BB', 0.9), 0, H / 2, Z + 0.5); for (const s of [-1, 1]) { box(g, f, H, D, oak, s * (W / 2 - f / 2), H / 2, 0); box(g, iw, f, D, oak, 0, H / 2 + s * (H / 2 - f / 2), 0); }
+    box(g, iw, ih - sh, 1.2, MT.fabric('#EFE9DD', 3, 'linen'), 0, f + (ih - sh) / 2, Z + 1.6);
+    box(g, iw - lw, sh, 1.6, MT.flat('#B9774F', 0.85), -iw / 2 + lw + (iw - lw) / 2, f + ih - sh / 2, Z + 1.8);
+    for (let i = 0; i < n; i++) { const c = cyl(g, pw * 0.44, pw * 0.44, sh, MT.wood(i % 3 === 1 ? '#C9B08C' : '#D9C2A3', { rings: 10, vert: true }), -iw / 2 + pw * (i + 0.5), f + ih - sh / 2, Z + 1 + pw * 0.44, 14); c.scale.z = 0.8; }
+    return true;
+  }
+  return false;
+}
+// 原創圖樣（用 canvas 畫）
+const ART = {
+  // 大色塊＋一筆到底的黑線：橘、磚紅、米白
+  lines: () => artMat('lines', (x, w, h) => {
+    x.fillStyle = '#EFE6D6'; x.fillRect(0, 0, w, h);
+    const blob = (col, pts) => { x.fillStyle = col; x.beginPath(); x.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 6) x.bezierCurveTo(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], pts[i + 4], pts[i + 5]); x.closePath(); x.fill(); };
+    blob('#E0872F', [-20, h * 0.1, w * 0.3, -h * 0.05, w * 0.62, h * 0.1, w * 0.56, h * 0.4, w * 0.5, h * 0.7, w * 0.2, h * 0.86, -20, h * 0.8]);
+    blob('#A8351E', [w * 0.62, -10, w * 0.9, -10, w * 1.05, h * 0.2, w * 1.05, h * 0.46, w * 0.86, h * 0.4, w * 0.7, h * 0.24, w * 0.62, -10]);
+    blob('#D9B58A', [w * 0.5, h * 0.64, w * 0.76, h * 0.52, w * 1.05, h * 0.62, w * 1.05, h * 1.02, w * 0.8, h * 1.03, w * 0.46, h * 0.98, w * 0.5, h * 0.64]);
+    blob('#F6EFE2', [w * 0.16, h * 0.3, w * 0.34, h * 0.2, w * 0.44, h * 0.36, w * 0.36, h * 0.5, w * 0.26, h * 0.6, w * 0.12, h * 0.48, w * 0.16, h * 0.3]);
+    x.strokeStyle = '#1B1A18'; x.lineWidth = w * 0.007; x.lineCap = 'round'; x.beginPath(); x.moveTo(w * 0.08, h * 0.96); x.bezierCurveTo(w * 0.3, h * 0.5, w * 0.1, h * 0.2, w * 0.46, h * 0.12); x.bezierCurveTo(w * 0.86, h * 0.04, w * 0.9, h * 0.5, w * 0.6, h * 0.56); x.bezierCurveTo(w * 0.34, h * 0.62, w * 0.5, h * 0.9, w * 0.94, h * 0.8); x.stroke();
+    x.beginPath(); x.moveTo(w * 0.7, h * 0.06); x.bezierCurveTo(w * 0.62, h * 0.3, w * 0.86, h * 0.34, w * 0.8, h * 0.6); x.stroke(); paperGrain(x, w, h, 0.07);
+  }),
+  // 幾何拱門與圓：陶土、鼠尾草綠、芥末黃
+  arches: () => artMat('arches', (x, w, h) => {
+    x.fillStyle = '#F3EDE1'; x.fillRect(0, 0, w, h);
+    const arch = (cx, by, r, hh, col) => { x.fillStyle = col; x.beginPath(); x.moveTo(cx - r, by); x.lineTo(cx - r, by - hh); x.arc(cx, by - hh, r, Math.PI, 0); x.lineTo(cx + r, by); x.closePath(); x.fill(); };
+    x.fillStyle = '#E3B04B'; x.beginPath(); x.arc(w * 0.7, h * 0.24, w * 0.15, 0, Math.PI * 2); x.fill();
+    arch(w * 0.36, h * 0.9, w * 0.24, h * 0.36, '#B9654A'); arch(w * 0.36, h * 0.9, w * 0.15, h * 0.3, '#F3EDE1'); arch(w * 0.36, h * 0.9, w * 0.075, h * 0.24, '#8E9A78');
+    arch(w * 0.72, h * 0.9, w * 0.16, h * 0.18, '#3F5A54'); x.fillStyle = '#2A2B2D'; x.fillRect(w * 0.1, h * 0.9, w * 0.8, h * 0.006);
+    x.strokeStyle = '#2A2B2D'; x.lineWidth = w * 0.005; for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(w * (0.12 + i * 0.02), h * 0.14); x.lineTo(w * (0.12 + i * 0.02), h * 0.3); x.stroke(); } paperGrain(x, w, h, 0.06);
+  }),
+  // 小幅海報：柔和的山丘與太陽（放在櫃上的小相框用）
+  poster: () => artMat('poster', (x, w, h) => {
+    x.fillStyle = '#F1E7D6'; x.fillRect(0, 0, w, h); x.fillStyle = '#D9824A'; x.beginPath(); x.arc(w * 0.62, h * 0.34, w * 0.17, 0, Math.PI * 2); x.fill();
+    for (const [y, col, a] of [[0.56, '#C9B08C', 0.9], [0.68, '#8E9A78', 1.3], [0.8, '#3F5A54', 0.7]]) { x.fillStyle = col; x.beginPath(); x.moveTo(0, h); x.lineTo(0, h * y); for (let i = 0; i <= 20; i++) x.lineTo(w * i / 20, h * (y + 0.05 * Math.sin(i / 20 * Math.PI * 2 * a + y * 9))); x.lineTo(w, h); x.fill(); } paperGrain(x, w, h, 0.06);
+  }, 256, 340),
+  // 螢幕上的時鐘畫面
+  clock: () => memoMat('artclock', () => { const c = document.createElement('canvas'); c.width = 512; c.height = 300; const x = c.getContext('2d'); x.fillStyle = '#0B0C0E'; x.fillRect(0, 0, 512, 300);
+    x.fillStyle = '#F2F0EB'; x.font = '700 150px "Helvetica Neue",Arial,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('10:24', 256, 156);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshStandardMaterial({ map: t, emissive: '#FFFFFF', emissiveMap: t, emissiveIntensity: 0.5, roughness: 0.2 }); }),
+};
+
+
 export function buildItem(it, style, opts = {}) {
   const g = new THREE.Group(), o = Object.assign({ decor: true }, opts);
   const hex = it.color && it.color[0] === '#';

@@ -142,11 +142,23 @@ export const CATS = [
     ['玄關鞋櫃＋穿鞋椅', 200, 40, 280, '#D9C2A3', 'entry', 'veneer'], ['整面開放書牆', 240, 35, 280, '#D9C2A3', 'books', 'veneer'],
     ['餐邊電器高櫃', 180, 60, 280, '#F1EEE8', 'pantry', 'matte'], ['床頭背牆＋吊櫃', 300, 40, 280, '#D9C2A3', 'bedwall', 'veneer'],
     ['書桌＋上吊櫃', 160, 60, 250, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer'],
-    ['化妝台＋開放更衣牆', 300, 50, 280, '#EFEBE3', 'dress', 'leather']] },
+    ['化妝台＋開放更衣牆', 300, 50, 280, '#EFEBE3', 'dress', 'leather'],
+    ['弧形抽屜玄關櫃', 160, 42, 85, '#E4D9C4', 'curve', 'matte'], ['壁龕書桌展示牆', 180, 55, 250, '#B7BE8C', 'niche', 'matte'],
+    ['圓形把手衣櫃', 200, 60, 250, '#F3EFE7', 'circ', 'matte'], ['開放衣帽櫃', 170, 55, 250, '#2E2F31', 'openw', 'matte'],
+    ['床頭木作腰牆', 300, 8, 110, '#D9C2A3', 'wains', 'veneer'], ['懸浮化妝台＋環形燈鏡', 100, 45, 160, '#F3EFE7', 'vanity2', 'matte'],
+    ['雙層落地窗簾', 260, 14, 265, '#8D8377', 'curtain', 'linen']] },
   // 牆上置物架：第 8 欄是預設離地高度
   { id: 'wshelf', n: '牆上置物架', g: '裝修櫃', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
-    ['洞洞板置物牆', 100, 16, 120, '#CFC2B2', 'peg', 'matte', 90], ['懸吊玻璃展示櫃', 160, 35, 100, '#D9C2A3', 'glassc', 'veneer', 120]] },
+    ['洞洞板置物牆', 100, 16, 120, '#CFC2B2', 'peg', 'matte', 90], ['懸吊玻璃展示櫃', 160, 35, 100, '#D9C2A3', 'glassc', 'veneer', 120],
+    ['廚房吊櫃（含層板燈）', 180, 35, 75, '#F3EFE7', 'kupper', 'matte', 150]] },
+  // 配件與擺飾：掛在牆上、吊在天花板或放在檯面上；第 8 欄是預設離地高度
+  { id: 'acc', n: '配件擺飾', g: '裝修櫃', t: 'wshelf', items: [
+    ['電熱毛巾架', 50, 12, 90, '#A9A39A', 'towel', 'matte', 90], ['捲筒衛生紙架', 16, 13, 14, '#A9A39A', 'tp', 'matte', 62],
+    ['床邊玻璃吊燈', 22, 22, 120, '#FFF4E2', 'pendA', 'matte', 145], ['線型吊燈', 120, 6, 110, '#B8955A', 'pendL', 'matte', 155],
+    ['玻璃花瓶花束', 30, 30, 50, '#DCEBEA', 'decoA', 'matte', 85], ['書本＋仙人掌盆', 30, 22, 32, '#2B2C2E', 'decoB', 'matte', 85],
+    ['掛畫・流線色塊', 60, 3, 80, '#1F1F21', 'art1', 'matte', 120], ['掛畫・木棒立體畫', 60, 5, 80, '#D9C2A3', 'art2', 'matte', 120],
+    ['掛畫・拱門幾何', 50, 3, 70, '#C08A52', 'art3', 'matte', 130]] },
   // 牆面與拉門：寬＝長度（可在手機上伸縮）、深＝厚度、高＝到天花板。第 6 欄是形式，第 7 欄是預設材質
   { id: 'wall', n: '牆面／拉門', g: '隔間', t: 'wall', items: [
     ['實牆', 200, 10, 280, '#F1EEE8', 'full', 'solid'], ['實牆＋門洞', 240, 10, 280, '#F1EEE8', 'open', 'solid'],
@@ -211,6 +223,11 @@ export const FINISH = {
     colors: [['#C9C9C7', '淺灰'], ['#B8AC98', '米灰'], ['#DDD3C2', '奶油'], ['#B5673A', '焦糖'], ['#7A4E32', '咖啡'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#2E2F31', '黑']] },
   wall: { mats: [['solid', '實牆'], ['glass', '清玻璃'], ['frost', '霧面玻璃']], colors: WCOL, label: '牆面／外框顏色' },
   built: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆'], ['glass', '清玻璃門'], ['frost', '霧面玻璃門']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#F1EEE8', '白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']], label: '櫃體顏色' },
+  // 參考實景補的櫃子（玄關斗櫃、壁龕書桌、圓把手衣櫃、衣帽櫃、化妝台）：木紋或烤漆＋顏色
+  cab2: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆']], label: '櫃體顏色',
+    colors: [['#E4D9C4', '奶油'], ['#F3EFE7', '白'], ['#CFC2B2', '奶茶'], ['#B7BE8C', '開心果綠'], ['#9FA593', '灰綠'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑'], ['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃']] },
+  curtain: { mats: [['linen', '亞麻'], ['flannel', '絨布'], ['weave', '編織布']], mlabel: '布料', label: '窗簾顏色',
+    colors: [['#8D8377', '亞麻灰'], ['#D9CFBF', '米白'], ['#B8AC98', '米灰'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#9FA593', '灰綠'], ['#3F5A54', '墨綠'], ['#B5673A', '焦糖'], ['#2F3E5C', '深藍']] },
   shelf: { mats: [['veneer', '木紋'], ['matte', '霧面烤漆']], colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#F1EEE8', '白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']], label: '層板顏色' },
   slat: { mats: [['slat', '木格柵']], colors: WCOL, label: '格柵顏色' },
   gdoor: { mats: [['glass', '清玻璃'], ['frost', '霧面玻璃']], colors: WCOL, label: '外框顏色' },
@@ -248,7 +265,8 @@ export const FINISH = {
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
 const FIN_CAT = { coffee: 'table', side: 'table', dtable: 'table', desk: 'table', dresser: 'table', tvcab: 'cab', nstand: 'cab', chest: 'cab', shoe: 'cab', shelf: 'cab', bed: 'bed', chair: 'chair', dchair: 'ochair', rug: 'rug', lamp: 'lamp', cook: 'kitchen', sink: 'kitchen', kcab: 'kitchen', tower: 'kitchen', fridge: 'appl', hood: 'appl', washer: 'appl', shower: 'shower' };
-export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : FIN_CAT[s.cat] ? FIN_CAT[s.cat] : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
+const CAB2 = { curve: 1, niche: 1, circ: 1, openw: 1, vanity2: 1 };
+export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : FIN_CAT[s.cat] ? FIN_CAT[s.cat] : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : s.v === 'curtain' ? 'curtain' : CAB2[s.v] ? 'cab2' : s.v === 'wains' ? 'shelf' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0
 // 拉門的開口（門關著時這段被門扇擋住，3D 導覽走近才會滑開）。回傳 [x1, x2] 或 null
 export function doorGap(s) {
