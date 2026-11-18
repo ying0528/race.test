@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261118c';
-import * as MT from './mats.js?v=20261118c';
+import { WOODS, FINISH } from './catalog.js?v=20261118d';
+import * as MT from './mats.js?v=20261118d';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -727,7 +727,7 @@ function branchTree(g, x, y, z, H, seed = 1) {
   seg(new THREE.Vector3(x, y, z), new THREE.Vector3(0.18, 1, 0.06).normalize(), H * 0.3, 1.4, 4);
   const lg = new THREE.PlaneGeometry(3.6, 1.8); lg.translate(1.8, 0, 0);
   const im = new THREE.InstancedMesh(lg, twoSided(MT.flat('#FFFFFF', 0.7)), leaves.length), o = new THREE.Object3D(), col = new THREE.Color();
-  leaves.forEach(([p, a, t], i) => { o.position.copy(p); o.rotation.set((t - 0.5) * 1.6, a, -0.4 + t * 0.8); o.scale.setScalar(0.8 + t * 0.5); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, col.set(t > 0.6 ? '#8CC152' : t > 0.3 ? '#5E9A38' : '#4C7F2E')); });
+  leaves.forEach(([p, a, t], i) => { o.position.copy(p); o.rotation.set((t - 0.5) * 1.6, a, -0.4 + t * 0.8); o.scale.setScalar(0.7 + t * 0.4); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, col.set(t > 0.6 ? '#8CC152' : t > 0.3 ? '#5E9A38' : '#4C7F2E')); });
   im.castShadow = true; g.add(im);
 }
 function slabTable(g, it, o) {
@@ -740,7 +740,7 @@ function slabTable(g, it, o) {
   const vx = -w * 0.14, vz = -d * 0.05, vh = 40;
   lathe(g, [[0, 0], [6.5, 0], [7, 2], [7, 4], [6.2, 5], [6.4, vh * 0.55], [6.6, vh - 1], [7, vh]], MT.flat('#7E4A3C', 0.12), vx, h, vz);
   cyl(g, 7.2, 7.2, 1.2, MT.flat('#7A4A3C', 0.3), vx, h + 3.2, vz, 24); cyl(g, 7.4, 7.4, 1, MT.flat('#7A4A3C', 0.3), vx, h + 6, vz, 24);
-  branchTree(g, vx, h + 4, vz, Math.min(150, 270 - h - 50), 7);
+  branchTree(g, vx, h + 4, vz, 95, 7);
   // 托盤＋書＋小白公仔
   const tx = w * 0.3, tz = -d * 0.12; rbox(g, 28, 1.2, 20, MT.flat('#2A2B2D', 0.4), tx, h + 0.6, tz, 0.5).rotation.y = 0.18;
   rbox(g, 22, 2.6, 16, MT.flat('#EDE6D8', 0.8), tx, h + 2.5, tz, 0.4).rotation.y = 0.12; rbox(g, 20, 2, 14, MT.flat('#8E9AA6', 0.8), tx, h + 4.8, tz, 0.4).rotation.y = 0.24;
