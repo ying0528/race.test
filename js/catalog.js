@@ -53,10 +53,8 @@ export const CATS = [
     ['床頭櫃', 60, 40, 50, 'walnut'], ['床頭櫃', 45, 35, 60, 'black'], ['床頭櫃', 40, 35, 45, 'white'], ['床頭櫃', 48, 40, 52, 'gray'], ['床頭櫃', 42, 42, 55, 'teak'],
     ['迷你床頭櫃', 30, 30, 45, 'oak']] },
   { id: 'ward', n: '衣櫃', g: '臥室', t: 'cab', items: [
-    ['衣櫃（2 門）', 80, 60, 200, 'white'], ['衣櫃（2 門）', 100, 60, 200, 'oak'], ['衣櫃（3 門）', 120, 60, 210, 'white'], ['衣櫃（3 門）', 150, 60, 210, 'ash'],
-    ['衣櫃（4 門）', 160, 60, 220, 'walnut'], ['衣櫃（4 門）', 200, 60, 220, 'white'], ['衣櫃（5 門）', 240, 60, 230, 'white'], ['衣櫃（6 門）', 270, 60, 240, 'gray'],
-    ['滑門衣櫃', 180, 65, 220, 'oak', 'slide'], ['滑門衣櫃', 210, 65, 230, 'black', 'slide'],
-    ['單門衣櫃', 50, 55, 180, 'white'], ['窄衣櫃（2 門）', 60, 55, 190, 'oak']] },
+    ['木紋開放衣櫃', 120, 58, 200, '#7A5236', 'combo', 'veneer'], ['滑門衣櫃', 120, 62, 201, '#CFC2B2', 'slide', 'frame'],
+    ['三門鏡面衣櫃', 117, 58, 201, '#EFE9DD', 'mirror', 'frame'], ['雙門衣櫃', 80, 55, 190, '#EFE9DD', 'plain', 'matte']] },
   { id: 'dresser', n: '梳妝台', g: '臥室', t: 'table', items: [
     ['梳妝台（含鏡）', 80, 40, 135, 'white', 'mirror'], ['梳妝台（含鏡）', 90, 45, 135, 'oak', 'mirror'], ['梳妝台（含鏡）', 100, 45, 135, 'walnut', 'mirror'], ['梳妝台（含鏡）', 120, 45, 135, 'white', 'mirror'],
     ['梳妝台（含鏡）', 100, 40, 135, 'ash', 'mirror'], ['梳妝台（含鏡）', 80, 45, 135, 'black', 'mirror'], ['化妝桌（無鏡）', 80, 40, 75, 'oak'], ['化妝桌（無鏡）', 100, 45, 75, 'white'],
@@ -146,7 +144,8 @@ export const CATS = [
     ['弧形抽屜玄關櫃', 160, 42, 85, '#E4D9C4', 'curve', 'matte'], ['壁龕書桌展示牆', 180, 55, 250, '#B7BE8C', 'niche', 'matte'],
     ['圓形把手衣櫃', 200, 60, 250, '#F3EFE7', 'circ', 'matte'], ['開放衣帽櫃', 170, 55, 250, '#2E2F31', 'openw', 'matte'],
     ['床頭木作腰牆', 300, 8, 110, '#D9C2A3', 'wains', 'veneer'], ['懸浮化妝台＋環形燈鏡', 100, 45, 160, '#F3EFE7', 'vanity2', 'matte'],
-    ['雙層落地窗簾', 260, 14, 265, '#8D8377', 'curtain', 'linen']] },
+    ['雙層落地窗簾', 260, 14, 265, '#8D8377', 'curtain', 'linen'],
+    ['整面系統衣櫃（吊衣＋抽屜＋鞋櫃）', 360, 60, 260, '#D9C2A3', 'walkin', 'veneer'], ['鐵件開放衣櫃', 240, 55, 250, '#D9C2A3', 'iron', 'veneer']] },
   // 牆上置物架：第 8 欄是預設離地高度
   { id: 'wshelf', n: '牆上置物架', g: '裝修櫃', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
@@ -299,7 +298,7 @@ export function getItem(key, styleKey, it) {
   if (cat.t === 'mirror') elev = 105;
   if (r[5] === 'float') elev = 25;
   const s = { key, cat: cat.id, catName: cat.n, t: cat.t, name, w: r[1], d: r[2], h: r[3], color, v: r[5] || null, elev };
-  if (cat.t === 'wall' || cat.t === 'built' || cat.t === 'wshelf') s.fin = r[6];
+  if (cat.t === 'wall' || cat.t === 'built' || cat.t === 'wshelf' || cat.id === 'ward') s.fin = r[6];
   if (cat.t === 'wshelf') s.elev = r[7];
   const lr = lenRange(s); if (it && it.len && lr) s.w = Math.max(lr.min, Math.min(lr.max, it.len));   // 伸縮後的寬度
   const er = elevRange(s); if (it && it.el != null && er) s.elev = Math.max(er.min, Math.min(er.max, it.el));   // 置物架離地高度
