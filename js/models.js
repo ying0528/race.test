@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261117a';
-import * as MT from './mats.js?v=20261117a';
+import { WOODS, FINISH } from './catalog.js?v=20261118a';
+import * as MT from './mats.js?v=20261118a';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -673,29 +673,35 @@ B.sofa = (g, it, P, o) => {
 };
 
 B.bed = (g, it, P, o) => {
+  // 包覆式軟床（參考實景）：厚實圓角布包床架把床墊包起來、兩層軟包床頭、白色床墊、床尾兩條披毯、灰／卡其枕頭＋鏽紅腰枕
   const { w, d, h, v } = it; if (v === 'bunk') return OLD.bed(g, it, P);
   const pick = it.fin === 'fabric' || it.fin === 'leather' || it.fin === 'wood', hc = it.color && it.color[0] === '#' ? it.color : null;
-  const soft = v === 'soft' || (pick && it.fin !== 'wood'), wm = woodOf(P.wood), linen = MT.fabric('#F4F1EA', 5), accent = MT.fabric(P.accent, 6, 'knit');
-  // 手機選的床頭（布面／皮革／木頭）與床單被套顏色
-  const hb = pick ? (it.fin === 'leather' ? MT.leather(hc) : it.fin === 'wood' ? MT.wood(hc, { rings: 6, gloss: 0.3 }) : MT.fabric(hc, 2)) : MT.fabric(it.color || '#B9B2A4', 2);
-  const duv = it.color2 ? MT.fabric(it.color2, 5) : MT.fabric(soft && !pick ? '#EBE6DB' : shade(pick ? '#E3DED4' : it.color || '#E3DED4', 1.08), 5);
-  if (pick && it.fin === 'wood') { rbox(g, w, h - 6, 6, hb, 0, 6 + (h - 6) / 2, -d / 2 + 3, 2.4); }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 13, 3.2, 2.2, wm, sx * (w / 2 - 8), sz * (d / 2 - 9), 0.05, BRASSY());
-  rbox(g, w, 15, d, soft ? hb : pick ? hb : wm, 0, 20.5, 0, 3, 5);
-  if (pick && it.fin === 'wood') { /* 木頭床頭已經畫好 */ } else if (soft) { rbox(g, w, h - 8, 5, hb, 0, 8 + (h - 8) / 2, -d / 2 + 2.5, 2.2); const n = Math.max(3, Math.round(w / 23)), pw = (w - 2) / n; for (let i = 0; i < n; i++) cushion(g, pw - 0.3, 8, h - 38, hb, -(w - 2) / 2 + pw * (i + 0.5), 36 + (h - 38) / 2, -d / 2 + 8, { r: 3.8, bulge: 0.28, pipe: false, sd: i * 2 }).rotation.x = Math.PI / 2; }
-  else rbox(g, w, h - 6, 6, wm, 0, 6 + (h - 6) / 2, -d / 2 + 3, 2.4);
-  const hd = soft ? 13 : 7, md = d - hd - 3, mz = -d / 2 + hd + md / 2 + 1, mw = w - 6;
-  rbox(g, mw, 25, md, linen, 0, 40.5, mz, 9, 6); loop(g, rrPts(mw - 3, md - 3, 8, 49.5).map((p) => p.setZ(p.z + mz)), 0.4, linen);
-  cloth(g, mw + 5, md * 0.7, duv, 0, 55.2, mz + md * 0.15, { amp: 1.5, droop: 20, edge: 13, sd: 4, ends: false });
-  cloth(g, mw + 3, 32, linen, 0, 56.6, mz - md * 0.2, { amp: 0.8, droop: 18, edge: 11, sd: 7, seg: 36 });
-  cloth(g, mw + 6, 50, accent, 0, 57.6, mz + md / 2 - 34, { amp: 1.2, droop: 21, edge: 14, sd: 5 });
-  const np = w >= 140 ? 2 : 1, top = mz - md / 2;
-  for (let i = 0; i < np; i++) {
-    const sx = np === 2 ? (i ? 1 : -1) : 0, px = sx * (mw / 4 - 0.5), pw = np === 2 ? mw / 2 - 12 : mw - 20;
-    pillow(g, pw, 44, 18, linen, px, 60, top + 27, { seam: false, sd: i + 3 }).rotation.x = -Math.PI / 2 + 0.36;
-    if (o.decor && w >= 110) pillow(g, 46, 46, 16, MT.fabric(i ? '#D8CCB8' : P.accent, i ? 2 : 5, i ? 'boucle' : 'linen'), np === 2 ? sx * (mw / 4 - 7) : -8, 69, top + 48, { sd: i * 4 + 6 }).rotation.set(-0.52, sx * 0.14, sx * 0.07);
+  const hb = pick ? (it.fin === 'leather' ? MT.leather(hc) : it.fin === 'wood' ? MT.wood(hc, { rings: 6, gloss: 0.3 }) : MT.fabric(hc, 3, 'boucle')) : MT.fabric('#E2D8C5', 3, 'boucle');   // 床頭＋床架（手機可換布面／皮革／木頭＋顏色）
+  const linen = MT.fabric('#FAF9F6', 5), sheet = it.color2 ? MT.fabric(it.color2, 5) : MT.fabric('#F7F6F2', 5), dk = MT.flat('#2A2A2C', 0.6);
+  const HB = 14, hh = Math.max(72, Math.min(h, 100) - 8);   // 床頭厚度、高度
+  // 床架：離地 6 cm 的圓角布包框，前後左右都包住床墊
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 6, 6, 6, dk, sx * (w / 2 - 16), 3, sz * (d / 2 - 22));
+  const fz = (HB - 4) / 2, fd = d - HB + 4;
+  rbox(g, w, 32, fd, hb, 0, 22, fz, 11, 6);   // 床架上緣比床墊底高，包住床墊下半
+  // 床頭：後層比床寬一點、前層軟墊比較矮，兩層都是很圓的厚墊
+  rbox(g, w + 14, hh, HB, hb, 0, 6 + hh / 2, -d / 2 + HB / 2, 7, 6);
+  rbox(g, w - 18, hh - 30, 11, hb, 0, 32 + (hh - 30) / 2 + 2, -d / 2 + HB + 4, 5.5, 6);
+  // 床墊：白色厚床墊，比床架高出一截
+  const mw = w - 18, md = fd - 18, mz = fz + 3, top = mz - md / 2;
+  rbox(g, mw, 24, md, linen, 0, 44, mz, 7, 6);
+  cloth(g, mw + 3, md * 0.8, sheet, 0, 56.3, mz + md * 0.08, { amp: 0.5, droop: 14, edge: 12, sd: 4, ends: false });
+  // 床尾披毯：米白一條、卡其一條（稍微斜放），兩側自然垂下
+  const ft = mz + md / 2;
+  cloth(g, mw + 30, 104, MT.fabric('#E6DFD2', 5, 'knit'), 0, 57.6, ft - 40, { amp: 0.7, droop: 24, edge: 16, sd: 6 });
+  const cr = cloth(g, mw + 34, 70, MT.fabric('#B08260', 5), -4, 58.6, ft - 50, { amp: 0.8, droop: 26, edge: 18, sd: 8 }); if (cr) cr.rotation.y = 0.04;
+  // 枕頭：靠床頭立著
+  const two = w >= 140, sp = two ? mw / 2 - 10 : mw - 18;
+  for (const sx of two ? [-1, 1] : [0]) pillow(g, sp, 46, 18, MT.fabric(sx > 0 ? '#A9ADB2' : '#B5AA98', 4), sx * (mw / 4), 66, top + 18, { seam: false, sd: 3 + sx }).rotation.x = -Math.PI / 2 + 0.3;
+  if (o.decor) {
+    if (w >= 110) pillow(g, two ? 58 : 46, 38, 14, MT.fabric('#9EA3A8', 4), two ? 10 : 0, 68, top + 32, { sd: 7 }).rotation.set(-0.5, 0.08, 0.04);
+    pillow(g, two ? 62 : 46, 28, 13, MT.fabric('#6E3524', 2, 'linen'), two ? 6 : 0, 66, top + 44, { sd: 9 }).rotation.set(-0.62, -0.05, 0);   // 鏽紅腰枕
+    if (two) { const bo = cyl(g, 7.5, 7.5, 34, MT.fabric('#55595F', 3), -mw / 2 + 22, 64, top + 26, 18); bo.rotation.z = Math.PI / 2; bo.rotation.y = 0.35; }   // 小圓筒枕
   }
-  if (o.decor && w >= 140) pillow(g, 58, 27, 14, MT.fabric(shade(it.color || '#8E9AA6', 0.7), 5), 3, 62.5, top + 67, { sd: 13 }).rotation.x = -0.62;
 };
 
 function vase(g, x, y, z, s = 1, color = '#D9D2C4', stems = 0) {
