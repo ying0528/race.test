@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261118d';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds } from './catalog.js?v=20261118d';
-import * as ART from './planart.js?v=20261118d';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261118e';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds, SIZES } from './catalog.js?v=20261118e';
+import * as ART from './planart.js?v=20261118e';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -275,8 +275,11 @@ $('main').addEventListener('click', (e) => {
   }
   else if (a === 'len') {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return;
-    it.len = Math.max(R.min, Math.min(R.max, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len }); snapToWall(it);
+    const cap = R.wallCap ? wallSpan(it) : null, mx = cap ? Math.max(R.min, Math.min(R.max, Math.floor(cap.hi - cap.lo))) : R.max;   // 最長＝靠著的那面牆
+    it.len = Math.max(R.min, Math.min(mx, s.w + (+b.dataset.d))); send({ t: 'len', id: it.id, len: it.len, exact: it.len === mx && mx % R.step !== 0 }); snapToWall(it);
+    if (cap) { const c = cap.axisX ? it.x : it.y, h = it.len / 2, nc = Math.round(Math.max(cap.lo + h, Math.min(cap.hi - h, c)) * 2) / 2; if (nc !== c) { if (cap.axisX) it.x = nc; else it.y = nc; send({ t: 'move', id: it.id, x: it.x, y: it.y }); } }   // 加長後不要超出牆的兩端
   }
+  else if (a === 'sz') { const it = S.st.items.find((i) => i.id === S.sel); if (!it || !SIZES[it.key]) return; it.sz = +b.dataset.d; send({ t: 'sz', id: it.id, sz: it.sz }); }   // 同款換尺寸
   else if (a === 'vrot' || a === 'vreset') { const n = a === 'vreset' ? 0 : (vdeg() / 90 + 1) % 4; S.st.vrot = n; S.view = null; send({ t: 'vrot', r: n }); }
   else if (a === 'fill') { const it = S.st.items.find((i) => i.id === S.sel); if (it && !fillWall(it)) { S.fillNo = Date.now(); setTimeout(update, 2300); } }
   else if (a === 'elev') {
@@ -338,7 +341,8 @@ function updateSel() {
   if (!s) el.innerHTML = '<span class="muted">點家具可以選取，按住拖曳就能移動。</span>';
   else if (s.t === 'person') { const p = resolvePeople(S.st.items).get(it.id); el.innerHTML = `<b>${esc(s.name)}</b><span>${p && p.mode === 'sit' ? '坐著' : '站著'}</span>`; }
   else if (lenRange(s)) { const R = lenRange(s), E = elevRange(s), bt = (act, d, txt, off) => `<button data-act="${act}" data-d="${d}" ${off ? 'disabled' : ''}>${txt}</button>`;
-    el.innerHTML = `<b>${esc(s.name)}</b><span>${s.t === 'wall' ? '長' : '寬'} ${s.w}${E ? '・離地 ' + s.elev : ''}</span><span class="lenb">${bt('len', -R.step, '－' + R.step, s.w <= R.min)}${bt('len', R.step, '＋' + R.step, s.w >= R.max)}${bt('fill', 0, Date.now() - (S.fillNo || 0) < 2200 ? (S.fillWhy || '放不下') : '填滿整面', false)}${E ? bt('elev', -E.step, '↓', s.elev <= E.min) + bt('elev', E.step, '↑', s.elev >= E.max) : ''}</span>`; }
+    el.innerHTML = `<b>${esc(s.name)}</b><span>${s.t === 'wall' ? '長' : '寬'} ${s.w}${E ? '・離地 ' + s.elev : ''}</span><span class="lenb">${bt('len', -R.step, '－' + R.step, s.w <= R.min)}${bt('len', R.step, '＋' + R.step, s.w >= (R.wallCap ? Math.min(R.max, wallMax(it) || R.max) : R.max))}${R.fill ? bt('fill', 0, Date.now() - (S.fillNo || 0) < 2200 ? (S.fillWhy || '放不下') : '填滿整面', false) : ''}${E ? bt('elev', -E.step, '↓', s.elev <= E.min) + bt('elev', E.step, '↑', s.elev >= E.max) : ''}</span>`; }
+  else if (SIZES[it.key]) el.innerHTML = `<b>${esc(s.name)}</b><span class="lenb sz">${SIZES[it.key].opts.map((o, i) => `<button data-act="sz" data-d="${i}" class="${i === s.sz ? 'on' : ''}">${esc(o[4] || o[0])}</button>`).join('')}</span>`;
   else el.innerHTML = `<b>${esc(s.name)}</b><span>寬 ${s.w} × 深 ${s.d} × 高 ${s.h} cm${s.elev ? '・壁掛' : ''}</span>`;
   $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
 }
@@ -357,7 +361,10 @@ function snapToWall(it, force) {   // force：不管離牆多遠都貼到最近�
 }
 // 填滿整面：裝修櫃／置物架沿著背後那面牆左右延伸到牆的盡頭（遇到門、窗、轉角就停）；隔間牆則延伸到兩邊的牆
 // 已經靠著某面牆就用那面；還沒靠牆就從最近的牆開始試，找第一面放得下的
-function fillWall(it) {
+// 靠著的那面牆可以放多長（遇到門、窗、轉角就停）：回傳 { lo, hi, axisX } 或 null（沒有靠牆）
+function wallSpan(it) { let out = null; fillWall(it, (sp) => { out = sp; }); return out; }
+const wallMax = (it) => { const sp = wallSpan(it); return sp ? Math.floor(sp.hi - sp.lo) : null; };
+function fillWall(it, dry) {
   const s = getItem(it.key, it.st || S.st.style, it), R = lenRange(s); if (!R) return false;
   const inWall = (x, y, z0, z1) => PLAN.walls.some(([a, b, c, d, lo, hi]) => x > Math.min(a, c) && x < Math.max(a, c) && y > Math.min(b, d) && y < Math.max(b, d) && lo <= z0 + 1 && hi >= z1 - 1);
   const anyWall = (x, y) => PLAN.walls.some(([a, b, c, d]) => x > Math.min(a, c) - 0.5 && x < Math.max(a, c) + 0.5 && y > Math.min(b, d) - 0.5 && y < Math.max(b, d) + 0.5);
@@ -367,6 +374,7 @@ function fillWall(it) {
     for (let k = 0; k < 8 && ok(lo - 0.25); k++) lo -= 0.25; for (let k = 0; k < 8 && ok(hi + 0.25); k++) hi += 0.25;   // 最後一點一點貼到牆面
     return [lo, hi]; };
   const apply = (axisX, c, span, r, fixed) => {
+    if (dry) { dry({ lo: span[0], hi: span[1], axisX }); return true; }
     const [lo, hi] = span, w = Math.min(R.max, Math.floor(hi - lo)); if (w < R.min) return false;   // 寬度算到公分，真的填滿
     const mid = Math.max(lo + w / 2, Math.min(hi - w / 2, w >= hi - lo - 1 ? (lo + hi) / 2 : c));
     it.len = w; it.r = r; if (axisX) { it.x = Math.round(mid * 2) / 2; it.y = Math.round(fixed * 2) / 2; } else { it.y = Math.round(mid * 2) / 2; it.x = Math.round(fixed * 2) / 2; }
@@ -376,7 +384,7 @@ function fillWall(it) {
   const rm = curRoom(); if (!rm) return false;
   const q = rm.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || rm.r, [x1, y1, x2, y2] = q, hd = s.d / 2, z0 = s.elev || 0, z1 = Math.min(z0 + s.h, 235);
   const sides = [[it.y - y1, 0], [x2 - it.x, 90], [y2 - it.y, 180], [it.x - x1, 270]].sort((a, b) => a[0] - b[0]);
-  const against = sides[0][0] <= 70 + hd;   // 已經靠著某面牆：整面填滿，只在門、窗、轉角停；還沒靠牆：挑一面沒被家具擋住的牆
+  const against = sides[0][0] <= 70 + hd; if (dry && !against) return false;   // 已經靠著某面牆：整面填滿，只在門、窗、轉角停；還沒靠牆：挑一面沒被家具擋住的牆
   for (const [, k, loose] of against ? [[0, sides[0][1], 1]] : sides) {
     const axisX = k === 0 || k === 180, fixed = k === 0 ? y1 + hd : k === 180 ? y2 - hd : k === 90 ? x2 - hd : x1 + hd, c = axisX ? Math.max(x1, Math.min(x2, it.x)) : Math.max(y1, Math.min(y2, it.y));
     const back = k === 0 ? [0, -hd - 6] : k === 180 ? [0, hd + 6] : k === 90 ? [hd + 6, 0] : [-hd - 6, 0];
@@ -441,7 +449,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261116a').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261118e').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -452,7 +460,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118e'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -485,7 +493,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118e'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
