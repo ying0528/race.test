@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261118d';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261118d';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261118d';
 import { buildItem, buildPerson, M } from './models.js?v=20261118d';
 import * as MT from './mats.js?v=20261118d';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
@@ -257,7 +257,7 @@ function proto(sig, make, tall) {
 function sigOf(it, people, used) {
   const sk = it.st || state.style, spec = getItem(it.key, sk, it); if (!spec) return null;
   const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
-  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (lenRange(spec) ? '~L' + spec.w : '') };
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (lenRange(spec) || SIZES[it.key] ? '~' + spec.w + 'x' + spec.d + 'x' + spec.h : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 // 平板：畫面上沒在用的家具模型、紋路材質釋放掉（換地板、牆面、風格、家具後 1 秒做一次）
@@ -811,6 +811,7 @@ function onMsg(entry, m) {
     case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
       state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
     case 'len': { const it = find(m.id), R = it && lenRange(getItem(it.key)); if (R) { const st = m.exact ? 1 : R.step; it.len = Math.round(num(m.len, R.min, R.max) / st) * st; syncItems(); } break; }   // exact：填滿整面時算到公分
+    case 'sz': { const it = find(m.id), z = it && SIZES[it.key]; if (z && Number.isInteger(m.sz) && z.opts[m.sz]) { it.sz = m.sz; syncItems(); } break; }   // 同款換尺寸
     case 'elev': { const it = find(m.id), s = it && getItem(it.key, null, it), R = elevRange(s); if (R) { it.el = Math.round(num(m.el, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;
