@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261118b';
-import * as MT from './mats.js?v=20261118b';
+import { WOODS, FINISH } from './catalog.js?v=20261118c';
+import * as MT from './mats.js?v=20261118c';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -711,8 +711,55 @@ function vase(g, x, y, z, s = 1, color = '#D9D2C4', stems = 0) {
 }
 function books(g, x, y, z, n = 3, ry = 0) { for (let i = 0; i < n; i++) rbox(g, 26 - i * 2, 2.6, 19 - i, MT.flat(['#E9E2D6', '#5E6B7A', '#C9B8A0', '#7C8471'][i % 4], 0.85), x, y + 1.3 + i * 2.6, z, 0.5).rotation.y = ry + i * 0.13; }
 
+// ── 岩板餐桌（參考實景）：圓角白岩板桌面＋深灰薄邊、深灰圓弧板式桌腳；桌上預設放玻璃花瓶插枝葉、托盤擺飾
+function rrShape(w, d, r) { const s = new THREE.Shape(), x = w / 2, z = d / 2; r = Math.min(r, x - 0.1, z - 0.1); s.moveTo(-x + r, -z); s.lineTo(x - r, -z); s.quadraticCurveTo(x, -z, x, -z + r); s.lineTo(x, z - r); s.quadraticCurveTo(x, z, x - r, z); s.lineTo(-x + r, z); s.quadraticCurveTo(-x, z, -x, z - r); s.lineTo(-x, -z + r); s.quadraticCurveTo(-x, -z, -x + r, -z); return s; }
+function slabXZ(g, shape, t, m, y) { const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: true, bevelSize: Math.min(0.6, t * 0.3), bevelThickness: Math.min(0.6, t * 0.3), bevelSegments: 2, curveSegments: 10 }); geo.rotateX(Math.PI / 2); return mesh(g, geo, m, 0, y + t, 0); }
+function branchTree(g, x, y, z, H, seed = 1) {
+  let rs = seed * 9301 + 49297; const rnd = () => ((rs = (rs * 9301 + 49297) % 233280) / 233280);
+  const bark = MT.flat('#5B4636', 0.85), up = new THREE.Vector3(0, 1, 0), leaves = [];
+  const seg = (p0, dir, len, r, dep) => {
+    const p1 = p0.clone().addScaledVector(dir, len), m = mesh(g, new THREE.CylinderGeometry(r * 0.72, r, len, 6), bark, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); m.quaternion.setFromUnitVectors(up, dir); m.castShadow = true;
+    if (dep <= 3) for (let k = 0; k < (dep === 0 ? 12 : dep === 1 ? 9 : 5); k++) { const t = 0.25 + rnd() * 0.75; leaves.push([p0.clone().lerp(p1, t).add(new THREE.Vector3((rnd() - 0.5) * 7, (rnd() - 0.3) * 5, (rnd() - 0.5) * 7)), rnd() * 6.28, rnd()]); }
+    if (dep === 0) return;
+    const n = dep >= 3 ? 2 : 3;
+    for (let k = 0; k < n; k++) { const a = rnd() * 6.28, sp = 0.55 + rnd() * 0.6, nd = dir.clone().multiplyScalar(1.1).add(new THREE.Vector3(Math.cos(a) * sp, 0.25, Math.sin(a) * sp)).normalize(); seg(p1, nd, len * (0.74 + rnd() * 0.16), r * 0.64, dep - 1); }
+  };
+  seg(new THREE.Vector3(x, y, z), new THREE.Vector3(0.18, 1, 0.06).normalize(), H * 0.3, 1.4, 4);
+  const lg = new THREE.PlaneGeometry(3.6, 1.8); lg.translate(1.8, 0, 0);
+  const im = new THREE.InstancedMesh(lg, twoSided(MT.flat('#FFFFFF', 0.7)), leaves.length), o = new THREE.Object3D(), col = new THREE.Color();
+  leaves.forEach(([p, a, t], i) => { o.position.copy(p); o.rotation.set((t - 0.5) * 1.6, a, -0.4 + t * 0.8); o.scale.setScalar(0.8 + t * 0.5); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, col.set(t > 0.6 ? '#8CC152' : t > 0.3 ? '#5E9A38' : '#4C7F2E')); });
+  im.castShadow = true; g.add(im);
+}
+function slabTable(g, it, o) {
+  const { w, d, h } = it, f = it.color && it.color[0] === '#' ? it.color : '#EFEBE5';
+  const top = it.fin === 'wood' ? MT.wood(f, { rings: 6, gloss: 0.45 }) : it.fin === 'paint' ? MT.gloss(f) : MT.marble(f), base = MT.flat('#55575A', 0.42);
+  slabXZ(g, rrShape(w, d, 11), 2, top, h - 2.6); slabXZ(g, rrShape(w - 1.2, d - 1.2, 10.5), 0.9, MT.flat('#3A3B3D', 0.4), h - 3.6);
+  const bw = w * 0.56, bd = Math.max(26, d * 0.36); slabXZ(g, rrShape(bw, bd, bd / 2 - 0.2), h - 4.2, base, 0);
+  if (!o.decor) return;
+  // 玻璃花瓶＋枝葉
+  const vx = -w * 0.14, vz = -d * 0.05, vh = 40;
+  lathe(g, [[0, 0], [6.5, 0], [7, 2], [7, 4], [6.2, 5], [6.4, vh * 0.55], [6.6, vh - 1], [7, vh]], MT.flat('#7E4A3C', 0.12), vx, h, vz);
+  cyl(g, 7.2, 7.2, 1.2, MT.flat('#7A4A3C', 0.3), vx, h + 3.2, vz, 24); cyl(g, 7.4, 7.4, 1, MT.flat('#7A4A3C', 0.3), vx, h + 6, vz, 24);
+  branchTree(g, vx, h + 4, vz, Math.min(150, 270 - h - 50), 7);
+  // 托盤＋書＋小白公仔
+  const tx = w * 0.3, tz = -d * 0.12; rbox(g, 28, 1.2, 20, MT.flat('#2A2B2D', 0.4), tx, h + 0.6, tz, 0.5).rotation.y = 0.18;
+  rbox(g, 22, 2.6, 16, MT.flat('#EDE6D8', 0.8), tx, h + 2.5, tz, 0.4).rotation.y = 0.12; rbox(g, 20, 2, 14, MT.flat('#8E9AA6', 0.8), tx, h + 4.8, tz, 0.4).rotation.y = 0.24;
+  const fig = MT.flat('#F2F0EC', 0.45), fy = h + 5.8; rbox(g, 5, 7, 3.6, fig, tx, fy + 3.5, tz, 1.6); mesh(g, new THREE.SphereGeometry(3.6, 18, 14), fig, tx, fy + 10, tz); for (const sx of [-1, 1]) { mesh(g, new THREE.SphereGeometry(1.4, 12, 10), fig, tx + sx * 2.8, fy + 13, tz); rbox(g, 1.8, 6, 1.8, fig, tx + sx * 3.4, fy + 3.6, tz, 0.8).rotation.z = sx * 0.3; }
+}
+// ── 皮革扶手餐椅（參考實景）：米白外殼包著焦糖色皮革內襯，椅背往前慢慢降低成扶手；深色細腳＋銅色腳套
+function shellChair(g, it, o) {
+  const { w, d, h } = it, inC = it.fin && it.color && it.color[0] === '#' ? it.color : '#B8714A', inner = it.fin === 'fabric' ? MT.fabric(inC, 2) : MT.leather(inC), outer = MT.leather('#ECE5D9'), leg = MT.flat('#2A2A2C', 0.4), sh = 46, R = w / 2 - 1, zc = -d / 2 + R + 1;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, sh - 5, 1.7, 0.9, leg, sx * (w / 2 - 10), zc + sz * (R - 10) + (sz > 0 ? 2 : 0), 0.06, BRASSY());
+  const shell = (r, mat, t0) => { const span = Math.PI * 1.22, H = h - sh + 6, geo = new THREE.CylinderGeometry(r, r * 0.9, H, 40, 8, true, Math.PI - span / 2, span), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i), y = p.getY(i) + H / 2, a = Math.abs(Math.atan2(x, -z)) / (span / 2), k = 1 - 0.62 * Math.pow(a, 1.6); p.setY(i, y * k); p.setZ(i, z * (1 + 0.04 * y / H)); }
+    geo.computeVertexNormals(); return mesh(g, geo, twoSided(mat), 0, sh - 6 + t0, zc); };
+  shell(R, outer, 0); shell(R - 2.2, inner, 0.5);
+  const sg = new THREE.CylinderGeometry(R - 1, R - 2, 5, 40, 1, false); sg.scale(1, 1, (d - 4) / (2 * R)); mesh(g, sg, outer, 0, sh - 4, zc + 1);
+  const cu = new THREE.CylinderGeometry(R - 3, R - 3, 5, 40); cu.scale(1, 1, (d - 8) / (2 * R)); const c = mesh(g, cu, inner, 0, sh + 0.5, zc + 2); c.geometry = smooth(c.geometry);
+}
 B.table = (g, it, P, o) => {
   const { w, d, v } = it; if (v === 'stoolseat' || v === 'fmirror') return OLD.table(g, it, P);
+  if (v === 'slab') return slabTable(g, it, o);
   const h = v === 'mirror' ? 75 : it.h, f = it.color, marble = f === 'marble', painted = f === 'white' || f === 'black' || f === 'gray', low = h < 62;
   let top = marble ? MT.marble('#EFEBE5') : painted ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 6, gloss: 0.45 }), lg = marble ? BRASSY() : f === 'black' ? MT.metal('#1E1E20', 0.45) : woodOf(f);
   if (f && f[0] === '#' && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'marble')) {   // 手機上個別選的桌面材質＋顏色
@@ -745,6 +792,7 @@ B.table = (g, it, P, o) => {
 
 B.chair = (g, it, P, o) => {
   const { w, d, h, v } = it; if (v === 'bench') return OLD.chair(g, it, P);
+  if (v === 'shell') return shellChair(g, it, o);
   const hexc = it.color && it.color[0] === '#', pick = hexc && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'fabric');
   let wm = hexc ? woodOf(P.wood) : woodOf(it.color), f = MT.fabric(hexc ? it.color : '#D9D3C6', 2, 'boucle'); const sh = v === 'bar' ? 71 : 44.5;
   if (pick) { wm = it.fin === 'wood' ? MT.wood(it.color, { rings: 6, gloss: 0.35 }) : it.fin === 'paint' ? MT.gloss(it.color) : MT.fabric(it.color, 2, 'boucle'); f = it.fin === 'fabric' ? wm : MT.fabric(shade(it.color, 1.12), 2, 'boucle'); }   // 整張椅子同一個顏色
