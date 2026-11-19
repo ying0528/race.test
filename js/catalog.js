@@ -45,6 +45,10 @@ export const CATS = [
   { id: 'plant', n: '植栽', g: '裝飾', t: 'plant', items: [
     ['中型盆栽', 45, 45, 110], ['天堂鳥', 80, 80, 180], ['桌上盆栽', 22, 22, 30]] },
   // ---------------- 廚具 ----------------
+  { id: 'ksys', n: '廚房系統櫃', g: '廚具', t: 'ksys', items: [
+    ['廚房系統櫃 A（爐在左）', 300, 60, 230, '#F1EEE8', 'longL'], ['廚房系統櫃 A（爐在右）', 300, 60, 230, '#F1EEE8', 'longR'],
+    ['廚房系統櫃 B 含高櫃（爐在左）', 340, 60, 230, '#F1EEE8', 'tallL'], ['廚房系統櫃 B 含高櫃（爐在右）', 340, 60, 230, '#F1EEE8', 'tallR'],
+    ['小廚房 C（爐在左）', 180, 60, 230, '#F1EEE8', 'compL'], ['小廚房 C（爐在右）', 180, 60, 230, '#F1EEE8', 'compR']] },
   { id: 'cook', n: '瓦斯爐', g: '廚具', t: 'cook', items: [
     ['IH 雙口爐（含下櫃）', 75, 60, 88, 'white', 'ih2'], ['IH 三口爐（含下櫃）', 80, 60, 88, 'black', 'ih3'], ['單口爐（含下櫃）', 45, 60, 88, 'white', 1],
     ['四口瓦斯爐（含下櫃）', 90, 60, 88, 'black', 4]] },
@@ -120,7 +124,7 @@ export const sizeOf = (key, it) => { const z = SIZES[key]; if (!z) return null; 
 const ADJ = {
   'tvcab:0': { min: 60 }, 'tvcab:1': { min: 60 }, 'shelf:0': { min: 30, fill: true }, 'shelf:1': { min: 30, fill: true },
   'chest:0': { min: 30 }, 'chest:1': { min: 30 }, 'chest:2': { min: 60 }, 'sink:0': { min: 60, max: 100 }, 'kcab:0': { min: 30 },
-  'tower:0': { min: 60 }, 'vanity:0': { min: 40, max: 80 }, 'tub:0': { min: 110 }, 'tub:1': { min: 110 }, 'shower:0': { min: 80 }, 'shower:1': { min: 80 },
+  'tower:0': { min: 60 }, 'ksys:0': { min: 240 }, 'ksys:1': { min: 240 }, 'ksys:2': { min: 300 }, 'ksys:3': { min: 300 }, 'ksys:4': { min: 150, max: 260 }, 'ksys:5': { min: 150, max: 260 }, 'vanity:0': { min: 40, max: 80 }, 'tub:0': { min: 110 }, 'tub:1': { min: 110 }, 'shower:0': { min: 80 }, 'shower:1': { min: 80 },
 };
 export const WOOD_NAMES = { oak: '橡木', walnut: '胡桃木', white: '白色', black: '黑色', ash: '梣木', gray: '灰色', teak: '柚木', marble: '大理石' };
 const FABRIC_T = { sofa: 1, chair: 1, ochair: 1, bed: 1, rug: 1 };
@@ -210,6 +214,9 @@ export const FINISH = {
   // 廚具：瓦斯爐、水槽、櫥櫃、電器櫃一起換（選一次，整個廚房同步）
   kitchen: { mats: [['quartz', '白石英石'], ['marble', '大理石'], ['black', '黑色石材'], ['steel', '不鏽鋼']], mcol: { quartz: '#EDEBE7', marble: '#EFEBE5', black: '#2A2A2C', steel: '#C9CCCF' }, mlabel: '檯面', label: '門板顏色',
     colors: [['#F1EEE8', '白'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#9FA593', '灰綠'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#2F3E5C', '深藍'], ['#2E2F31', '黑']] },
+  ksys: { mats: [['matte', '霧面烤漆'], ['wood', '木紋'], ['fluted', '直紋格柵']], mlabel: '門板材質', label: '門板顏色',
+    colors: [['#F1EEE8', '白'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#9FA593', '灰綠'], ['#5A5E64', '深灰'], ['#3F5A54', '墨綠'], ['#C9A27A', '淺木'], ['#7A5236', '胡桃'], ['#2E2F31', '黑']],
+    colors2: [['#EDEBE7', '白石英石'], ['#E9E3D8', '彩色石紋'], ['#EFEBE5', '白大理石'], ['#6B655E', '灰岩板'], ['#2A2A2C', '黑石']], label2: '檯面' },
   // 冰箱、排油煙機、洗衣機：外觀顏色
   appl: { mats: [['std', '外觀']], label: '外觀顏色', colors: [['#C9CCCF', '不鏽鋼'], ['#F3F3F1', '白'], ['#2A2B2E', '黑'], ['#D8C7A8', '香檳金'], ['#8E9499', '鈦灰']] },
   shower: { mats: [['clear', '清玻璃'], ['frost', '霧面玻璃']], mlabel: '玻璃', label: '框色', colors: [['#C8CCD0', '銀'], ['#1E1E20', '黑'], ['#C9A35A', '金']] },
@@ -219,7 +226,7 @@ export const FINISH = {
   ward: { mats: [['frame', '實木框門'], ['matte', '霧面烤漆'], ['stone', '石紋面板'], ['veneer', '木紋平板']],
     colors: [['#D9C2A3', '淺橡'], ['#C08A52', '原木'], ['#7A5236', '胡桃'], ['#EFE9DD', '米白'], ['#CFC2B2', '奶茶'], ['#C9C9C7', '淺灰'], ['#5A5E64', '深灰'], ['#2E2F31', '黑']] },
 };
-const FIN_CAT = { coffee: 'table', side: 'table', dtable: 'table', desk: 'table', dresser: 'table', tvcab: 'cab', nstand: 'cab', chest: 'cab', shoe: 'cab', shelf: 'cab', bed: 'bed', chair: 'chair', dchair: 'ochair', rug: 'rug', lamp: 'lamp', cook: 'kitchen', sink: 'kitchen', kcab: 'kitchen', tower: 'kitchen', fridge: 'appl', hood: 'appl', washer: 'appl', shower: 'shower' };
+const FIN_CAT = { ksys: 'ksys', coffee: 'table', side: 'table', dtable: 'table', desk: 'table', dresser: 'table', tvcab: 'cab', nstand: 'cab', chest: 'cab', shoe: 'cab', shelf: 'cab', bed: 'bed', chair: 'chair', dchair: 'ochair', rug: 'rug', lamp: 'lamp', cook: 'kitchen', sink: 'kitchen', kcab: 'kitchen', tower: 'kitchen', fridge: 'appl', hood: 'appl', washer: 'appl', shower: 'shower' };
 const CAB2 = { curve: 1, niche: 1, circ: 1, openw: 1, vanity2: 1 };
 export const finishOf = (s) => (!s ? null : s.t === 'sofa' ? 'sofa' : FIN_CAT[s.cat] ? FIN_CAT[s.cat] : s.cat === 'ward' ? 'ward' : s.t === 'wall' ? (s.v === 'lattice' ? 'lattice' : s.v === 'showcase' ? 'showcase' : s.v === 'hslat' ? 'slat' : s.v === 'full' || s.v === 'open' ? 'wall' : 'gdoor') : s.t === 'built' ? (s.v === 'dress' ? 'dress' : s.v === 'curtain' ? 'curtain' : CAB2[s.v] ? 'cab2' : s.v === 'wains' ? 'shelf' : 'built') : s.t === 'wshelf' ? 'shelf' : null);
 // 牆面沿長度方向哪幾段是擋住的（其餘是門洞／拉門開口）。回傳 [[x1, x2], ...]，x 以牆中心為 0

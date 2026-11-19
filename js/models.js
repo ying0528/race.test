@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261119a';
-import * as MT from './mats.js?v=20261119a';
+import { WOODS, FINISH } from './catalog.js?v=20261119b';
+import * as MT from './mats.js?v=20261119b';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -668,6 +668,7 @@ const OLD = { table: B.table, chair: B.chair, bed: B.bed, cab: B.cab };
 // 手機沒指定材質時，各風格的預設材質與顏色
 const STYLE_FIN = {
   sofa: { modern: { fin: 'leather' }, luxe: { fin: 'flannel' } },
+  ksys: { nordic: { fin: 'matte', color: '#F1EEE8', color2: '#EDEBE7' }, japandi: { fin: 'wood', color: '#C9A27A', color2: '#E9E3D8' }, modern: { fin: 'matte', color: '#5A5E64', color2: '#6B655E' }, luxe: { fin: 'fluted', color: '#EFE9DD', color2: '#EFEBE5' } },
   bed: { nordic: { fin: 'fabric', color: '#D9D4CA' }, japandi: { fin: 'wood', color: '#A8784A', color2: '#E6DDCD' }, modern: { fin: 'leather', color: '#4E5156', color2: '#D6D8DA' }, luxe: { fin: 'fabric', color: '#2F3E5C', color2: '#EFEAE2' } },
 };
 function sofaLegs(s, sk, w, dm, wm, teak, dkm) {
@@ -914,6 +915,70 @@ B.cab = (g, it, P, o) => {
   let bx = nx - open / 2 + 3; for (const [bw, hh, c] of [[3.2, 13, '#B5654A'], [2.6, 14, '#EDE6D8'], [4, 12.5, '#2F3E5C'], [3, 14, '#7C8471'], [2.4, 12, '#C8A464']]) { if (bx + bw > nx + open / 2 - 3 || hh > bh / 2 - 3) continue; rbox(g, bw, hh, Math.min(18, d - 6), MT.flat(c, 0.8), bx + bw / 2, by + 1.2 + hh / 2, 1, 0.4); bx += bw + 0.25; }
   if (w >= 60) vase(g, -w / 2 + 16, h, 1, w >= 120 ? 1.05 : 0.8, '#3F5A54'); if (w >= 120) { vase(g, -w / 2 + 34, h, -3, 0.58, '#EEEAE2'); books(g, w / 2 - 30, h, 1, 3, -0.1); }
 };
+
+
+// ===== 廚房系統櫃（A 一字型＋玻璃吊櫃／B 含高櫃＋格柵吊櫃／C 小廚房），L＝爐在左、R＝爐在右（整組鏡射）=====
+// 門板材質 it.fin（matte 霧面烤漆／wood 木紋／fluted 直紋格柵）＋顏色 it.color；檯面 it.color2
+const KTOP = { '#E9E3D8': 'terrazzo', '#EDEBE7': 'quartz', '#EFEBE5': 'marble', '#6B655E': 'stone', '#2A2A2C': 'black' };
+function ktop(c) { const k = KTOP[c] || 'quartz'; return k === 'terrazzo' ? MT.terrazzo('#F2EDE4') : k === 'marble' ? MT.marble('#EFEBE5') : k === 'stone' ? MT.marble('#6B655E') : k === 'black' ? MT.marble('#2A2A2C') : M('marble', '#EDEBE7'); }
+function kitchenSys(g, it, P, o) {
+  const { w, d, h, v } = it, kind = v.slice(0, -1), s = new THREE.Group(); if (v.endsWith('R')) s.scale.x = -1; g.add(s);
+  const c = it.color && it.color[0] === '#' ? it.color : '#F1EEE8', fin = it.fin || 'matte';
+  const dm = fin === 'wood' ? MT.wood(c, { rings: 16, gloss: 0.15, warp: 0.3, vert: true }) : MT.flat(c, 0.45), top = ktop(it.color2 || '#EDEBE7');
+  const dark = new THREE.Color(c).getHSL({}).l < 0.35, line = MT.flat(dark ? '#1A1A1B' : '#8A6A4A', 0.5), frameM = MT.metal(P.sk === 'modern' || dark ? '#1E1E20' : P.sk === 'luxe' ? '#B8955A' : '#8A6A4A', 0.35);
+  const H0 = 88, PH = 10, CT = 4, BH = H0 - PH - CT, Z = d / 2, UD = 35, UB = 150, UZ = -Z + UD / 2, uh = h - UB;
+  const pantry = kind === 'tall' ? 60 : 0, bw = w - pantry, x0 = -w / 2;
+  // 下櫃配置（由左到右）：爐、門、洗碗機、水槽、門
+  const segs = [];
+  if (kind === 'comp') { const hob = Math.min(80, bw * 0.45); segs.push(['hob', hob], ['sink', bw - hob]); }
+  else { const hob = kind === 'tall' ? 90 : 80, fixed = hob + 60 + 90, rest = Math.max(0, bw - fixed), a = Math.round(rest * 0.4 / 5) * 5; segs.push(['hob', hob]); if (a >= 30) segs.push(['doors', a]); segs.push(['dw', 60], ['sink', 90]); if (rest - a >= 20) segs.push(['doors', rest - a]); else segs[segs.length - 1][1] += rest - a; if (a < 30 && a > 0) segs[0][1] += a; }
+  box(s, bw - 2, PH, d - 14, DARK(), x0 + bw / 2, PH / 2, -5); box(s, bw - 4, 0.6, 1, M('emit', '#FFE9C4'), x0 + bw / 2, 0.4, Z - 12).castShadow = false; box(s, bw, BH, d - 4, dm, x0 + bw / 2, PH + BH / 2, -2);
+  const front = (x, y, ww, hh) => { box(s, ww - 0.6, hh - 0.6, 2, dm, x, y, Z - 3); box(s, ww - 0.6, 0.9, 0.8, line, x, y + hh / 2 - 0.6, Z - 1.6); };   // 門片＋上緣隱藏把手溝
+  let x = x0, hobX = 0, sinkX = 0, hobW = 80;
+  for (const [t, sw] of segs) { const cx = x + sw / 2;
+    if (t === 'hob' || (t === 'sink' && kind !== 'comp' && false)) { hobX = cx; hobW = sw; const hs = [BH * 0.22, BH * 0.33, BH * 0.45]; let y = PH; for (const hh of kind === 'comp' ? [BH * 0.4, BH * 0.6] : hs) { front(cx, y + hh / 2, sw, hh); y += hh; } }
+    else if (t === 'dw') { box(s, sw - 0.6, BH - 2, 2.2, MT.gloss('#1C1D1F'), cx, PH + BH / 2, Z - 2.9); box(s, sw - 8, 1.2, 1, STEEL(), cx, PH + BH - 6, Z - 1.6); }
+    else { const n = Math.max(1, Math.round(sw / 45)), dw = sw / n; for (let i = 0; i < n; i++) front(x + dw * (i + 0.5), PH + BH / 2, dw, BH); if (t === 'sink') sinkX = cx; }
+    x += sw; }
+  { const cm = box(s, bw, CT, d, top, x0 + bw / 2, H0 - CT / 2, 0, 0.5), uv = cm.geometry.attributes.uv; if (uv) { cm.geometry = cm.geometry.clone(); const u2 = cm.geometry.attributes.uv; for (let i = 0; i < u2.count; i++) u2.setXY(i, u2.getX(i) * bw / 80, u2.getY(i) * d / 80); } }   // 檯面紋路依實際尺寸重複
+  // 爐台：黑玻璃＋兩口爐架
+  const gw = Math.min(hobW - 10, 72); box(s, gw, 0.8, 46, MT.gloss('#0E0F11'), hobX, H0 + 0.4, 0, 0.3);
+  for (const sx of [-1, 1]) { cyl(s, 4.5, 5.5, 1.6, MT.flat('#1C1D1F', 0.5), hobX + sx * gw / 4, H0 + 1.6, 0, 18); const t = mesh(s, new THREE.TorusGeometry(9, 0.6, 6, 20), MT.flat('#1C1D1F', 0.5), hobX + sx * gw / 4, H0 + 2.8, 0); t.rotation.x = Math.PI / 2; }
+  for (const sx of [-1, 0, 1]) cyl(s, 1.6, 1.6, 1.6, STEEL(), hobX + sx * 7, H0 + 1.2, 18, 12);
+  // 水槽＋龍頭
+  const sbw = Math.min(70, (kind === 'comp' ? segs[1][1] : 90) - 16), sx0 = kind === 'comp' ? x0 + segs[0][1] + Math.max(sbw / 2 + 8, segs[1][1] * 0.55) : sinkX;
+  box(s, sbw, 0.6, 42, STEEL(), sx0, H0 + 0.2, 1, 0.2); box(s, sbw - 4, 0.6, 38, MT.metal('#3E4246', 0.4), sx0, H0 + 0.35, 1, 0.2);
+  cyl(s, 1.3, 1.5, 28, MT.metal('#9A9DA0', 0.25), sx0 + sbw * 0.3, H0 + 14, -Z + 7, 12); const sp = cyl(s, 1.1, 1.1, 16, MT.metal('#9A9DA0', 0.25), sx0 + sbw * 0.3, H0 + 27, -Z + 14, 10); sp.rotation.x = Math.PI / 2;
+  // 排油煙機（爐的正上方）
+  const hw = hobW + 4; box(s, hw, 9, 50, MT.gloss('#16171A'), hobX, UB - 6, -Z + 25, 0.8); box(s, hw - 4, 0.5, 44, MT.flat('#3A3C40', 0.5), hobX, UB - 10.6, -Z + 25);
+  // 吊櫃：爐上方較短，其餘到頂；A 型一組玻璃門、B 型爐上格柵門＋黑框玻璃展示櫃
+  const uSegs = []; let ux = x0;
+  for (const [t, sw] of segs) { uSegs.push([t === 'hob' ? 'hood' : 'u', ux, sw]); ux += sw; }
+  const glassAt = kind === 'comp' ? -1 : uSegs.findIndex(([t, a, sw]) => t === 'u' && a > hobX + hobW / 2 - 1 && sw >= 60);
+  box(s, bw, uh, 1.6, dm, x0 + bw / 2, UB + uh / 2, -Z + 0.8); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, UB + 0.9, UZ - 1); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, h - 0.9, UZ - 1); for (const xx of [x0 + 0.9, x0 + bw - 0.9]) box(s, 1.8, uh, UD - 2, dm, xx, UB + uh / 2, UZ - 1);   // 吊櫃箱體（背板＋上下板＋側板，玻璃門看得到裡面）
+  const flutes = [];
+  uSegs.forEach(([t, a, sw], i) => {
+    const glass = i === glassAt, y0 = t === 'hood' ? UB + 18 : UB, hh = h - y0, n = glass ? Math.max(2, Math.round(sw / 40)) : Math.max(1, Math.round(sw / 45)), dw = sw / n;
+    if (t === 'hood') box(s, sw, 18, UD - 2, dm, a + sw / 2, UB + 9, UZ - 1);
+    for (let k = 0; k < n; k++) { const cx = a + dw * (k + 0.5);
+      if (glass && k < 2) { for (const sx of [-1, 1]) box(s, 2, hh - 1, 2, frameM, cx + sx * (dw / 2 - 1.3), y0 + hh / 2, -Z + UD - 0.5); for (const yy of [y0 + 1.2, h - 1.2]) box(s, dw - 1, 2, 2, frameM, cx, yy, -Z + UD - 0.5);
+        box(s, dw - 4, hh - 4, 0.4, MT.glass('#D9E2E0'), cx, y0 + hh / 2, -Z + UD - 0.8).castShadow = false; for (const yy of [y0 + hh * 0.36, y0 + hh * 0.68]) { box(s, dw - 3, 1.2, UD - 4, MT.glass('#E8EEEC'), cx, yy, UZ); if (o.decor) for (let q = -1; q <= 1; q += 2) cyl(s, 4, 3.4, 8, MT.ceramic('#F2F1EE'), cx + q * dw * 0.22, yy + 4.6, UZ, 16); }
+        box(s, dw - 4, 0.6, 0.6, M('emit', '#FFF3DC'), cx, h - 3.5, -Z + UD - 3).castShadow = false; continue; }
+      box(s, dw - 0.6, hh - 0.6, 2, dm, cx, y0 + hh / 2, -Z + UD);
+      if (fin === 'fluted' || (kind === 'tall' && t === 'hood')) for (let fx = -dw / 2 + 2; fx < dw / 2 - 1; fx += 2.6) flutes.push([cx + fx, y0 + hh / 2, hh - 2]);
+      else box(s, dw - 0.6, 0.9, 0.8, line, cx, y0 + 0.9, -Z + UD + 1.2); }
+  });
+  if (flutes.length) { const fg = new THREE.CylinderGeometry(0.9, 0.9, 1, 8), im = new THREE.InstancedMesh(fg, dm, flutes.length), m4 = new THREE.Object3D(); flutes.forEach(([fx, fy, fh], i) => { m4.position.set(fx, fy, -Z + UD + 1); m4.scale.set(1, fh, 1); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); }); im.castShadow = true; s.add(im); }
+  box(s, bw - 4, 0.6, 1.2, M('emit', '#FFE9C4'), x0 + bw / 2, UB - 0.4, -Z + UD - 3).castShadow = false;   // 吊櫃下 LED 燈條
+  // B 型：高櫃（電器／收納）
+  if (pantry) { const px = w / 2 - pantry / 2; box(s, pantry, h, d - 2, dm, px, h / 2, -1); for (const sx of [-1, 1]) { box(s, pantry / 2 - 0.6, h - PH - 1, 2, dm, px + sx * pantry / 4, PH + (h - PH) / 2, Z - 1); box(s, 1, 30, 1.6, line, px + sx * 1.6, H0 + 10, Z + 0.4); } box(s, pantry - 2, PH, d - 10, DARK(), px, PH / 2, -3); }
+  if (!o.decor) return;
+  // 擺飾：爐上一只鍋、檯面花瓶插枝葉、C 型加一盤水果
+  cyl(s, 11, 11, 10, STEEL(), hobX - gw / 4, H0 + 8, 0, 24); cyl(s, 11.4, 11.4, 1, MT.flat('#2A2A2C', 0.4), hobX - gw / 4, H0 + 13.5, 0, 24);
+  const vx = kind === 'comp' ? sx0 - sbw / 2 - 18 : hobX + hobW / 2 + 22; vase(s, vx, H0, -Z + 12, 0.9, '#EFEADF', 8);
+  if (kind === 'comp') { const fx = vx - 22; lathe(s, [[0, 0], [12, 0], [15, 3], [15.4, 3.4], [12, 1], [0, 1]], MT.ceramic('#8E8A84'), fx, H0, 2); for (let q = 0; q < 6; q++) mesh(s, new THREE.SphereGeometry(3.8, 14, 10), MT.flat('#E8902E', 0.55), fx + Math.cos(q * 1.05) * 7, H0 + 5 + (q === 5 ? 3 : 0), 2 + Math.sin(q * 1.05) * 6); }
+}
+B.ksys = (g, it, P, o) => kitchenSys(g, it, P, o);
 
 const CABS = { tvcab: 1, nstand: 1, chest: 1, shoe: 1, shelf: 1 };
 // 建立一件家具。style = STYLES[風格]；opts.decor = 是否附上抱枕、毯子、花瓶等擺飾
@@ -1349,7 +1414,7 @@ export function buildItem(it, style, opts = {}) {
   const hex = it.color && it.color[0] === '#';
   const sk = style.sk, P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent, sk };
   const spec = Object.assign({}, it, { styled: false });
-  if (!it.fin && STYLE_FIN[it.cat] && STYLE_FIN[it.cat][sk] && (it.v == null || it.cat === 'sofa')) Object.assign(spec, STYLE_FIN[it.cat][sk]);   // 風格預設材質（手機沒指定時）
+  if (!it.fin && STYLE_FIN[it.cat] && STYLE_FIN[it.cat][sk] && (it.v == null || it.cat === 'sofa' || it.cat === 'ksys')) Object.assign(spec, STYLE_FIN[it.cat][sk]);   // 風格預設材質（手機沒指定時）
   if (CABS[it.cat] && hex && (it.fin === 'wood' || it.fin === 'paint')) spec.color = it.fin[0] + it.color;   // 櫃子：木紋或烤漆＋顏色
   (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P, o);
   g.scale.setScalar(0.01);
