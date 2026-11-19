@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261119b';
-import * as MT from './mats.js?v=20261119b';
+import { WOODS, FINISH } from './catalog.js?v=20261119c';
+import * as MT from './mats.js?v=20261119c';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -921,62 +921,104 @@ B.cab = (g, it, P, o) => {
 // 門板材質 it.fin（matte 霧面烤漆／wood 木紋／fluted 直紋格柵）＋顏色 it.color；檯面 it.color2
 const KTOP = { '#E9E3D8': 'terrazzo', '#EDEBE7': 'quartz', '#EFEBE5': 'marble', '#6B655E': 'stone', '#2A2A2C': 'black' };
 function ktop(c) { const k = KTOP[c] || 'quartz'; return k === 'terrazzo' ? MT.terrazzo('#F2EDE4') : k === 'marble' ? MT.marble('#EFEBE5') : k === 'stone' ? MT.marble('#6B655E') : k === 'black' ? MT.marble('#2A2A2C') : M('marble', '#EDEBE7'); }
+let kGlowTex = null;
+function kGlow() {   // 吊櫃 LED 打在壁面上的暖光（上亮下淡）
+  if (!kGlowTex) { const cv = document.createElement('canvas'); cv.width = 4; cv.height = 64; const x = cv.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, 'rgba(255,214,150,0.55)'); gr.addColorStop(0.35, 'rgba(255,214,150,0.18)'); gr.addColorStop(1, 'rgba(255,214,150,0)'); x.fillStyle = gr; x.fillRect(0, 0, 4, 64); kGlowTex = new THREE.CanvasTexture(cv); kGlowTex.colorSpace = THREE.SRGBColorSpace; }
+  return memoMat('kglow', () => new THREE.MeshBasicMaterial({ map: kGlowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+}
+const tileUV = (m, w, h, cm = 80) => { m.geometry = m.geometry.clone(); const u = m.geometry.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * w / cm, u.getY(i) * h / cm); return m; };
+function kFaucet(s, x, y, z) {
+  const ch = MT.metal('#A7AAAD', 0.22); cyl(s, 2.6, 2.8, 2, ch, x, y + 1, z, 20); cyl(s, 1.4, 1.5, 24, ch, x, y + 14, z, 16);
+  const pts = []; for (let k = 0; k <= 16; k++) { const a = (k / 16) * Math.PI; pts.push(new THREE.Vector3(0, 26 + Math.sin(a) * 9, -Math.cos(a) * 11 + 11)); }
+  const sp = mesh(s, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 1.2, 10), ch, x, y, z); sp.castShadow = true;
+  cyl(s, 1.7, 1.5, 8, ch, x, y + 22, z + 22, 16); const lv = cyl(s, 0.6, 0.6, 9, ch, x + 2.8, y + 20, z, 8); lv.rotation.z = -0.9;
+}
+function kHob(s, x, y, z, gw) {
+  const gl = MT.gloss('#0C0D0F'), iron = MT.flat('#141516', 0.65), br = MT.metal('#6B6E72', 0.35);
+  box(s, gw, 0.8, 50, gl, x, y + 0.4, z, 0.4);
+  for (const sx of [-1, 1]) { const bx = x + sx * gw / 4.2, bz = z - 2;
+    cyl(s, 6, 6.6, 1.4, br, bx, y + 1.5, bz, 24); cyl(s, 4.2, 4.2, 1, iron, bx, y + 2.6, bz, 24);
+    const R = 11; for (const [dx, dz, ww, dd] of [[0, -R, 2 * R, 1.3], [0, R, 2 * R, 1.3], [-R, 0, 1.3, 2 * R], [R, 0, 1.3, 2 * R]]) box(s, ww, 1.3, dd, iron, bx + dx, y + 3.4, bz + dz, 0.3);
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4, arm = box(s, 7, 1.3, 1.3, iron, bx + Math.cos(a) * 7.5, y + 3.4, bz + Math.sin(a) * 7.5, 0.3); arm.rotation.y = -a; } }
+  for (const sx of [-1, 1]) { cyl(s, 2.3, 2.3, 1.6, MT.metal('#9A9DA0', 0.3), x + sx * 6, y + 1.6, z + 20, 20); box(s, 0.8, 1, 3.4, MT.flat('#2A2B2D', 0.5), x + sx * 6, y + 2.8, z + 20); }
+}
+function kHood(s, x, y, z, hw, deep) {   // y＝底面高度
+  const st = MT.metal('#B9BCBF', 0.3), gl = MT.gloss('#0E0F11');
+  box(s, hw, 7, deep, st, x, y + 3.5, z, 0.6); box(s, hw, 7.4, 1.2, gl, x, y + 3.7, z + deep / 2 + 0.3, 0.5); box(s, hw * 0.5, 0.5, 0.3, MT.flat('#8A8D90', 0.5), x, y + 5, z + deep / 2 + 1);
+  const n = 3, pw = (hw - 8) / n; for (let k = 0; k < n; k++) { const px = x - (hw - 8) / 2 + pw * (k + 0.5); box(s, pw - 1.5, 0.4, deep - 12, MT.flat('#2E3033', 0.55), px, y - 0.1, z - 2); for (let q = -2; q <= 2; q++) box(s, 0.3, 0.45, deep - 14, MT.flat('#55585C', 0.5), px + q * (pw / 6), y - 0.15, z - 2);
+    const lt = cyl(s, 2, 2, 0.4, M('emit', '#FFE3B0'), px, y - 0.35, z + deep / 2 - 5, 16); lt.castShadow = false; }
+}
 function kitchenSys(g, it, P, o) {
   const { w, d, h, v } = it, kind = v.slice(0, -1), s = new THREE.Group(); if (v.endsWith('R')) s.scale.x = -1; g.add(s);
-  const c = it.color && it.color[0] === '#' ? it.color : '#F1EEE8', fin = it.fin || 'matte';
-  const dm = fin === 'wood' ? MT.wood(c, { rings: 16, gloss: 0.15, warp: 0.3, vert: true }) : MT.flat(c, 0.45), top = ktop(it.color2 || '#EDEBE7');
-  const dark = new THREE.Color(c).getHSL({}).l < 0.35, line = MT.flat(dark ? '#1A1A1B' : '#8A6A4A', 0.5), frameM = MT.metal(P.sk === 'modern' || dark ? '#1E1E20' : P.sk === 'luxe' ? '#B8955A' : '#8A6A4A', 0.35);
-  const H0 = 88, PH = 10, CT = 4, BH = H0 - PH - CT, Z = d / 2, UD = 35, UB = 150, UZ = -Z + UD / 2, uh = h - UB;
+  const c = it.color && it.color[0] === '#' ? it.color : '#F1EEE8', fin = it.fin || 'matte', sk = P.sk;
+  const dm = fin === 'wood' ? MT.wood(c, { rings: 16, gloss: 0.15, warp: 0.3, vert: true }) : MT.flat(c, 0.42), inner = MT.flat(shade(c, 0.62), 0.7), top = ktop(it.color2 || '#EDEBE7');
+  const dark = new THREE.Color(c).getHSL({}).l < 0.35, prof = MT.metal(sk === 'modern' || dark ? '#232325' : sk === 'luxe' ? '#B8955A' : '#8A6A4A', 0.3), frameM = prof;
+  const H0 = 90, PH = 10, CT = 3, BH = H0 - PH - CT, Z = d / 2, UD = 35, UB = 152, UZ = -Z + UD / 2, uh = h - UB, FZ = Z - 2.4;
   const pantry = kind === 'tall' ? 60 : 0, bw = w - pantry, x0 = -w / 2;
-  // 下櫃配置（由左到右）：爐、門、洗碗機、水槽、門
   const segs = [];
   if (kind === 'comp') { const hob = Math.min(80, bw * 0.45); segs.push(['hob', hob], ['sink', bw - hob]); }
   else { const hob = kind === 'tall' ? 90 : 80, fixed = hob + 60 + 90, rest = Math.max(0, bw - fixed), a = Math.round(rest * 0.4 / 5) * 5; segs.push(['hob', hob]); if (a >= 30) segs.push(['doors', a]); segs.push(['dw', 60], ['sink', 90]); if (rest - a >= 20) segs.push(['doors', rest - a]); else segs[segs.length - 1][1] += rest - a; if (a < 30 && a > 0) segs[0][1] += a; }
-  box(s, bw - 2, PH, d - 14, DARK(), x0 + bw / 2, PH / 2, -5); box(s, bw - 4, 0.6, 1, M('emit', '#FFE9C4'), x0 + bw / 2, 0.4, Z - 12).castShadow = false; box(s, bw, BH, d - 4, dm, x0 + bw / 2, PH + BH / 2, -2);
-  const front = (x, y, ww, hh) => { box(s, ww - 0.6, hh - 0.6, 2, dm, x, y, Z - 3); box(s, ww - 0.6, 0.9, 0.8, line, x, y + hh / 2 - 0.6, Z - 1.6); };   // 門片＋上緣隱藏把手溝
-  let x = x0, hobX = 0, sinkX = 0, hobW = 80;
-  for (const [t, sw] of segs) { const cx = x + sw / 2;
-    if (t === 'hob' || (t === 'sink' && kind !== 'comp' && false)) { hobX = cx; hobW = sw; const hs = [BH * 0.22, BH * 0.33, BH * 0.45]; let y = PH; for (const hh of kind === 'comp' ? [BH * 0.4, BH * 0.6] : hs) { front(cx, y + hh / 2, sw, hh); y += hh; } }
-    else if (t === 'dw') { box(s, sw - 0.6, BH - 2, 2.2, MT.gloss('#1C1D1F'), cx, PH + BH / 2, Z - 2.9); box(s, sw - 8, 1.2, 1, STEEL(), cx, PH + BH - 6, Z - 1.6); }
-    else { const n = Math.max(1, Math.round(sw / 45)), dw = sw / n; for (let i = 0; i < n; i++) front(x + dw * (i + 0.5), PH + BH / 2, dw, BH); if (t === 'sink') sinkX = cx; }
+  // 下櫃箱體（內側深色，門縫看得出來）＋內凹踢腳＋踢腳燈
+  box(s, bw - 1, PH, d - 14, MT.flat('#2A2B2D', 0.6), x0 + bw / 2, PH / 2, -5); box(s, bw - 4, 0.5, 0.8, M('emit', '#FFE3B8'), x0 + bw / 2, 0.6, Z - 12.2).castShadow = false;
+  box(s, bw, BH, 1.6, inner, x0 + bw / 2, PH + BH / 2, -Z + 0.8); box(s, bw, 1.8, d - 5, inner, x0 + bw / 2, PH + 0.9, -2.5); for (const xx of [x0 + 0.9, x0 + bw - 0.9]) box(s, 1.8, BH + PH, d - 3, dm, xx, (BH + PH) / 2, -1.5);
+  // 檯面下一條金屬把手溝（隱藏把手）
+  box(s, bw - 3.6, 2.6, 1.6, prof, x0 + bw / 2, H0 - CT - 1.5, Z - 3.4, 0.3);
+  const door = (x, y, ww, hh) => box(s, ww - 0.5, hh - 0.5, 1.9, dm, x, y, FZ, 0.25);
+  let x = x0, hobX = 0, hobW = 80, sinkX = 0, sinkW = 90;
+  for (const [t, sw] of segs) { const cx = x + sw / 2, dh = BH - 3.2;
+    if (t === 'hob') { hobX = cx; hobW = sw; const hs = kind === 'comp' ? [0.42, 0.58] : [0.24, 0.32, 0.44]; let y = PH; hs.forEach((k, q) => { const hh = dh * k; door(cx, y + hh / 2, sw, hh - (q < hs.length - 1 ? 2.2 : 0)); if (q > 0) box(s, sw - 1.6, 1.6, 1.2, prof, cx, y - 0.6, Z - 3.6, 0.2); y += hh; }); }
+    else if (t === 'dw') { const m = MT.metal('#2B2C2E', 0.38); box(s, sw - 0.6, dh - 0.5, 2.2, m, cx, PH + dh / 2, FZ, 0.3); box(s, sw - 1, 4.5, 2.4, MT.gloss('#111213'), cx, PH + dh - 2.6, FZ + 0.1, 0.3); box(s, sw - 14, 1.4, 1.6, MT.metal('#8E9196', 0.25), cx, PH + dh - 9, FZ + 1.6, 0.6); box(s, 4, 0.8, 0.3, M('emit', '#8FD3FF'), cx + sw / 2 - 8, PH + dh - 2.6, FZ + 1.35).castShadow = false; }
+    else { const n = Math.max(1, Math.round(sw / 45)), ww = sw / n; for (let q = 0; q < n; q++) door(x + ww * (q + 0.5), PH + dh / 2, ww, dh); if (t === 'sink') { sinkX = cx; sinkW = sw; } }
     x += sw; }
-  { const cm = box(s, bw, CT, d, top, x0 + bw / 2, H0 - CT / 2, 0, 0.5), uv = cm.geometry.attributes.uv; if (uv) { cm.geometry = cm.geometry.clone(); const u2 = cm.geometry.attributes.uv; for (let i = 0; i < u2.count; i++) u2.setXY(i, u2.getX(i) * bw / 80, u2.getY(i) * d / 80); } }   // 檯面紋路依實際尺寸重複
-  // 爐台：黑玻璃＋兩口爐架
-  const gw = Math.min(hobW - 10, 72); box(s, gw, 0.8, 46, MT.gloss('#0E0F11'), hobX, H0 + 0.4, 0, 0.3);
-  for (const sx of [-1, 1]) { cyl(s, 4.5, 5.5, 1.6, MT.flat('#1C1D1F', 0.5), hobX + sx * gw / 4, H0 + 1.6, 0, 18); const t = mesh(s, new THREE.TorusGeometry(9, 0.6, 6, 20), MT.flat('#1C1D1F', 0.5), hobX + sx * gw / 4, H0 + 2.8, 0); t.rotation.x = Math.PI / 2; }
-  for (const sx of [-1, 0, 1]) cyl(s, 1.6, 1.6, 1.6, STEEL(), hobX + sx * 7, H0 + 1.2, 18, 12);
-  // 水槽＋龍頭
-  const sbw = Math.min(70, (kind === 'comp' ? segs[1][1] : 90) - 16), sx0 = kind === 'comp' ? x0 + segs[0][1] + Math.max(sbw / 2 + 8, segs[1][1] * 0.55) : sinkX;
-  box(s, sbw, 0.6, 42, STEEL(), sx0, H0 + 0.2, 1, 0.2); box(s, sbw - 4, 0.6, 38, MT.metal('#3E4246', 0.4), sx0, H0 + 0.35, 1, 0.2);
-  cyl(s, 1.3, 1.5, 28, MT.metal('#9A9DA0', 0.25), sx0 + sbw * 0.3, H0 + 14, -Z + 7, 12); const sp = cyl(s, 1.1, 1.1, 16, MT.metal('#9A9DA0', 0.25), sx0 + sbw * 0.3, H0 + 27, -Z + 14, 10); sp.rotation.x = Math.PI / 2;
-  // 排油煙機（爐的正上方）
-  const hw = hobW + 4; box(s, hw, 9, 50, MT.gloss('#16171A'), hobX, UB - 6, -Z + 25, 0.8); box(s, hw - 4, 0.5, 44, MT.flat('#3A3C40', 0.5), hobX, UB - 10.6, -Z + 25);
-  // 吊櫃：爐上方較短，其餘到頂；A 型一組玻璃門、B 型爐上格柵門＋黑框玻璃展示櫃
-  const uSegs = []; let ux = x0;
-  for (const [t, sw] of segs) { uSegs.push([t === 'hob' ? 'hood' : 'u', ux, sw]); ux += sw; }
+  // 檯面＋水槽開孔（下嵌式大單槽）
+  const sbw = Math.min(72, sinkW - 18), sbd = 44, sz = 2, scx = kind === 'comp' ? x0 + segs[0][1] + Math.min(sinkW - sbw / 2 - 10, Math.max(sbw / 2 + 12, sinkW * 0.55)) : sinkX;
+  const sl = scx - sbw / 2, sr = scx + sbw / 2, cy = H0 - CT / 2, ov = 1.5;
+  const piece = (xa, xb, za, zb) => { if (xb - xa > 0.5 && zb - za > 0.5) tileUV(box(s, xb - xa, CT, zb - za, top, (xa + xb) / 2, cy, (za + zb) / 2, 0.3), xb - xa, zb - za); };
+  piece(x0, sl, -Z, Z + ov); piece(sr, x0 + bw, -Z, Z + ov); piece(sl, sr, -Z, sz - sbd / 2); piece(sl, sr, sz + sbd / 2, Z + ov);
+  const bs = MT.metal('#3E4246', 0.4), bd = 20; box(s, sbw, 0.6, sbd, MT.metal('#2C2F33', 0.45), scx, H0 - CT - bd, sz); for (const sx of [-1, 1]) box(s, 0.6, bd, sbd, bs, scx + sx * sbw / 2, H0 - CT - bd / 2, sz); for (const zz of [-1, 1]) box(s, sbw, bd, 0.6, bs, scx, H0 - CT - bd / 2, sz + zz * sbd / 2);
+  cyl(s, 3.2, 3.2, 0.5, MT.metal('#9A9DA0', 0.3), scx, H0 - CT - bd + 0.5, sz + 6, 20);
+  kFaucet(s, scx + sbw * 0.28, H0, -Z + 7);
+  // 壁面：石材背牆＋LED 暖光
+  const bsM = MT.stoneTile(sk === 'modern' ? '#8E8B86' : sk === 'japandi' ? '#D6CFC2' : '#C9C6C0', 2);
+  tileUV(box(s, bw, UB - H0, 1, bsM, x0 + bw / 2, H0 + (UB - H0) / 2, -Z + 0.5), bw, UB - H0, 120);
+  const gl = mesh(s, new THREE.PlaneGeometry(bw - 2, 46), kGlow(), x0 + bw / 2, UB - 23, -Z + 1.15); gl.castShadow = false; gl.receiveShadow = false;
+  kHob(s, hobX, H0, -1, Math.min(hobW - 8, 74));
+  kHood(s, hobX, UB - 9, -Z + 26, hobW + 2, 50);
+  // 吊櫃
+  const uSegs = []; let ux = x0; for (const [t, sw] of segs) { uSegs.push([t === 'hob' ? 'hood' : 'u', ux, sw]); ux += sw; }
   const glassAt = kind === 'comp' ? -1 : uSegs.findIndex(([t, a, sw]) => t === 'u' && a > hobX + hobW / 2 - 1 && sw >= 60);
-  box(s, bw, uh, 1.6, dm, x0 + bw / 2, UB + uh / 2, -Z + 0.8); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, UB + 0.9, UZ - 1); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, h - 0.9, UZ - 1); for (const xx of [x0 + 0.9, x0 + bw - 0.9]) box(s, 1.8, uh, UD - 2, dm, xx, UB + uh / 2, UZ - 1);   // 吊櫃箱體（背板＋上下板＋側板，玻璃門看得到裡面）
+  box(s, bw, uh, 1.6, inner, x0 + bw / 2, UB + uh / 2, -Z + 0.8); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, UB + 0.9, UZ - 1); box(s, bw, 1.8, UD - 2, dm, x0 + bw / 2, h - 0.9, UZ - 1); for (const xx of [x0 + 0.9, x0 + bw - 0.9]) box(s, 1.8, uh, UD, dm, xx, UB + uh / 2, UZ);
+  box(s, bw - 6, 0.5, 1, M('emit', '#FFE6BC'), x0 + bw / 2, UB - 0.3, -Z + UD - 4).castShadow = false;
   const flutes = [];
   uSegs.forEach(([t, a, sw], i) => {
-    const glass = i === glassAt, y0 = t === 'hood' ? UB + 18 : UB, hh = h - y0, n = glass ? Math.max(2, Math.round(sw / 40)) : Math.max(1, Math.round(sw / 45)), dw = sw / n;
-    if (t === 'hood') box(s, sw, 18, UD - 2, dm, a + sw / 2, UB + 9, UZ - 1);
+    const glass = i === glassAt, y0 = t === 'hood' ? UB + 14 : UB, hh = h - y0, n = glass ? Math.max(2, Math.round(sw / 40)) : Math.max(1, Math.round(sw / 45)), dw = sw / n, fz = -Z + UD + 0.4;
+    if (t === 'hood') box(s, sw - 0.4, 14, UD - 2, dm, a + sw / 2, UB + 7, UZ - 1);
     for (let k = 0; k < n; k++) { const cx = a + dw * (k + 0.5);
-      if (glass && k < 2) { for (const sx of [-1, 1]) box(s, 2, hh - 1, 2, frameM, cx + sx * (dw / 2 - 1.3), y0 + hh / 2, -Z + UD - 0.5); for (const yy of [y0 + 1.2, h - 1.2]) box(s, dw - 1, 2, 2, frameM, cx, yy, -Z + UD - 0.5);
-        box(s, dw - 4, hh - 4, 0.4, MT.glass('#D9E2E0'), cx, y0 + hh / 2, -Z + UD - 0.8).castShadow = false; for (const yy of [y0 + hh * 0.36, y0 + hh * 0.68]) { box(s, dw - 3, 1.2, UD - 4, MT.glass('#E8EEEC'), cx, yy, UZ); if (o.decor) for (let q = -1; q <= 1; q += 2) cyl(s, 4, 3.4, 8, MT.ceramic('#F2F1EE'), cx + q * dw * 0.22, yy + 4.6, UZ, 16); }
-        box(s, dw - 4, 0.6, 0.6, M('emit', '#FFF3DC'), cx, h - 3.5, -Z + UD - 3).castShadow = false; continue; }
-      box(s, dw - 0.6, hh - 0.6, 2, dm, cx, y0 + hh / 2, -Z + UD);
-      if (fin === 'fluted' || (kind === 'tall' && t === 'hood')) for (let fx = -dw / 2 + 2; fx < dw / 2 - 1; fx += 2.6) flutes.push([cx + fx, y0 + hh / 2, hh - 2]);
-      else box(s, dw - 0.6, 0.9, 0.8, line, cx, y0 + 0.9, -Z + UD + 1.2); }
+      if (glass && k < 2) { const fw = 1.8; for (const sx of [-1, 1]) box(s, fw, hh - 0.6, 2, frameM, cx + sx * (dw / 2 - fw / 2 - 0.3), y0 + hh / 2, fz, 0.2); for (const yy of [y0 + fw / 2 + 0.3, h - fw / 2 - 0.3]) box(s, dw - 0.6, fw, 2, frameM, cx, yy, fz, 0.2);
+        const gp = box(s, dw - 4, hh - 4, 0.4, MT.glass('#DCE6E4'), cx, y0 + hh / 2, fz - 0.2); gp.castShadow = false;
+        box(s, dw - 1, hh - 3, 0.6, MT.flat('#F4F1EA', 0.6), cx, y0 + hh / 2, -Z + 2); box(s, 0.6, hh - 4, 0.6, M('emit', '#FFE9C4'), cx + (k ? 1 : -1) * (dw / 2 - 2.6), y0 + hh / 2, -Z + UD - 4).castShadow = false;
+        [0.34, 0.67].forEach((r, q) => { const yy = y0 + hh * r; box(s, dw - 3, 0.8, UD - 5, MT.glass('#E8EEEC'), cx, yy, UZ - 1).castShadow = false;
+          if (o.decor) { if ((k + q) % 2 === 0) for (let p = -1; p <= 1; p++) lathe(s, [[0, 0], [3, 0], [3, 0.4], [0.5, 0.6], [0.5, 9], [3.4, 12], [3.8, 17], [3.4, 17], [3, 12.5], [0, 10]], MT.glass('#EEF2F1'), cx + p * dw * 0.27, yy + 0.4, UZ - 3, 20);
+          else { for (let p = 0; p < 4; p++) cyl(s, 7 - p * 0.2, 5 - p * 0.2, 1.6, MT.ceramic('#F3F1EC'), cx - dw * 0.15, yy + 1.2 + p * 1.7, UZ - 2, 24); lathe(s, [[0, 0], [3.5, 0], [4.5, 6], [2, 12], [1.6, 15], [2.2, 16], [0, 16]], MT.ceramic('#E6E0D4'), cx + dw * 0.25, yy + 0.4, UZ - 2, 20); } } });
+        continue; }
+      box(s, dw - 0.5, hh - 0.5, 1.9, dm, cx, y0 + hh / 2, fz - 0.6, 0.25);
+      if (fin === 'fluted' || (kind === 'tall' && t === 'hood')) for (let fx = -dw / 2 + 1.6; fx < dw / 2 - 1; fx += 2) flutes.push([cx + fx, y0 + hh / 2, hh - 1.6, fz + 0.5]); }
   });
-  if (flutes.length) { const fg = new THREE.CylinderGeometry(0.9, 0.9, 1, 8), im = new THREE.InstancedMesh(fg, dm, flutes.length), m4 = new THREE.Object3D(); flutes.forEach(([fx, fy, fh], i) => { m4.position.set(fx, fy, -Z + UD + 1); m4.scale.set(1, fh, 1); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); }); im.castShadow = true; s.add(im); }
-  box(s, bw - 4, 0.6, 1.2, M('emit', '#FFE9C4'), x0 + bw / 2, UB - 0.4, -Z + UD - 3).castShadow = false;   // 吊櫃下 LED 燈條
-  // B 型：高櫃（電器／收納）
-  if (pantry) { const px = w / 2 - pantry / 2; box(s, pantry, h, d - 2, dm, px, h / 2, -1); for (const sx of [-1, 1]) { box(s, pantry / 2 - 0.6, h - PH - 1, 2, dm, px + sx * pantry / 4, PH + (h - PH) / 2, Z - 1); box(s, 1, 30, 1.6, line, px + sx * 1.6, H0 + 10, Z + 0.4); } box(s, pantry - 2, PH, d - 10, DARK(), px, PH / 2, -3); }
+  if (flutes.length) { const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.75, 0.75, 1, 8), dm, flutes.length), m4 = new THREE.Object3D(); flutes.forEach(([fx, fy, fh, fz], i) => { m4.position.set(fx, fy, fz); m4.scale.set(1, fh, 1); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); }); im.castShadow = true; s.add(im); }
+  // B 型高櫃：嵌入烤箱＋微波爐
+  if (pantry) { const px = w / 2 - pantry / 2, pw = pantry - 0.6; box(s, pantry, h, d - 3, inner, px, h / 2, -1.5); for (const xx of [px - pantry / 2 + 0.9, px + pantry / 2 - 0.9]) box(s, 1.8, h, d - 1, dm, xx, h / 2, -0.5); box(s, pantry - 2, PH, d - 14, MT.flat('#2A2B2D', 0.6), px, PH / 2, -5);
+    const ov = (y, hh, mw) => { box(s, pw - 1, hh, 2.2, MT.gloss('#0F1012'), px, y + hh / 2, FZ, 0.4); box(s, pw - 4, hh - 10, 0.3, MT.flat('#202225', 0.3), px, y + hh / 2 - 2, FZ + 1.2); box(s, pw - 12, 1.4, 2, MT.metal('#A7AAAD', 0.25), px, y + hh - 4, FZ + 2.4, 0.6); box(s, pw - 2, 3.5, 2.3, MT.metal('#3A3C3F', 0.4), px, y + hh - 1.8, FZ + 0.1); };
+    door(px, PH + (H0 - 8 - PH) / 2, pw, H0 - 8 - PH); ov(H0 - 6, 58); ov(H0 + 54, 38); door(px, (H0 + 94 + h) / 2, pw, h - H0 - 94); }
   if (!o.decor) return;
-  // 擺飾：爐上一只鍋、檯面花瓶插枝葉、C 型加一盤水果
-  cyl(s, 11, 11, 10, STEEL(), hobX - gw / 4, H0 + 8, 0, 24); cyl(s, 11.4, 11.4, 1, MT.flat('#2A2A2C', 0.4), hobX - gw / 4, H0 + 13.5, 0, 24);
-  const vx = kind === 'comp' ? sx0 - sbw / 2 - 18 : hobX + hobW / 2 + 22; vase(s, vx, H0, -Z + 12, 0.9, '#EFEADF', 8);
-  if (kind === 'comp') { const fx = vx - 22; lathe(s, [[0, 0], [12, 0], [15, 3], [15.4, 3.4], [12, 1], [0, 1]], MT.ceramic('#8E8A84'), fx, H0, 2); for (let q = 0; q < 6; q++) mesh(s, new THREE.SphereGeometry(3.8, 14, 10), MT.flat('#E8902E', 0.55), fx + Math.cos(q * 1.05) * 7, H0 + 5 + (q === 5 ? 3 : 0), 2 + Math.sin(q * 1.05) * 6); }
+  // 擺飾：湯鍋（含鍋蓋把手）、C 型加水壺與水果盤、檯面白色直紋花瓶插枝葉、砧板
+  const st = MT.metal('#C7CACD', 0.22), px1 = hobX - Math.min(hobW - 8, 74) / 4.2;
+  cyl(s, 11, 11, 13, st, px1, H0 + 4 + 6.5, -3, 28); cyl(s, 11.4, 11.4, 1.2, st, px1, H0 + 17.6, -3, 28); cyl(s, 1.6, 1.6, 2, MT.flat('#1C1D1F', 0.5), px1, H0 + 19, -3, 12); for (const sx of [-1, 1]) box(s, 4, 1.4, 2.6, st, px1 + sx * 12.6, H0 + 15, -3, 0.5);
+  if (kind === 'comp') { const kx = hobX + Math.min(hobW - 8, 74) / 4.2; lathe(s, [[0, 0], [9, 0], [10, 3], [9.4, 10], [6, 15], [2, 16], [0, 16]], st, kx, H0 + 4, -3, 28); const hd = mesh(s, new THREE.TorusGeometry(6, 0.8, 8, 20, Math.PI), MT.flat('#1C1D1F', 0.5), kx, H0 + 20, -3); hd.rotation.y = Math.PI / 2;
+    const fx = scx + sbw / 2 + 18; if (fx + 14 < x0 + bw) lathe(s, [[0, 0], [10, 0], [14, 3.4], [14.4, 3.8], [10.4, 1], [0, 1]], MT.ceramic('#6E6A64'), fx, H0, 4); if (fx + 14 < x0 + bw) for (let q = 0; q < 6; q++) mesh(s, new THREE.SphereGeometry(3.8, 14, 10), MT.flat('#E98A24', 0.55), fx + Math.cos(q * 1.05) * 6.5, H0 + 5 + (q === 5 ? 3.5 : 0), 4 + Math.sin(q * 1.05) * 5.5); }
+  else { const cbx = (hobX + hobW / 2 + scx - sbw / 2) / 2; rbox(s, 34, 2, 24, MT.wood('#B98A58', { rings: 6 }), cbx + 14, H0 + 1, 6, 0.8).rotation.y = 0.12; }
+  const vx = kind === 'comp' ? (hobX + hobW / 2 + scx - sbw / 2) / 2 : hobX + hobW / 2 + 22, vz = -Z + 13;
+  const vg = new THREE.CylinderGeometry(6, 5.4, 22, 48, 1), vp = vg.attributes.position; for (let q = 0; q < vp.count; q++) { const a = Math.atan2(vp.getZ(q), vp.getX(q)), k = 1 + 0.05 * Math.abs(Math.cos(a * 12)); vp.setX(q, vp.getX(q) * k); vp.setZ(q, vp.getZ(q) * k); } vg.computeVertexNormals(); mesh(s, vg, MT.ceramic('#F1EDE2'), vx, H0 + 11, vz);
+  branchTree(s, vx, H0 + 18, vz, 60, 11);
 }
 B.ksys = (g, it, P, o) => kitchenSys(g, it, P, o);
 
