@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261119e';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261119e';
-import { buildItem, buildPerson, M } from './models.js?v=20261119e';
-import * as MT from './mats.js?v=20261119e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261119f';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261119f';
+import { buildItem, buildPerson, M } from './models.js?v=20261119f';
+import * as MT from './mats.js?v=20261119f';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -173,7 +173,7 @@ function buildShell() {
     bath: [MT.tiles('#D9D7D2', 2, false), 0.6], kit: [MT.tiles('#D2CEC7', 2, true), 1.2],
     foyer: [MT.tiles('#E9E5DE', 2, true), 1.6], balc: [MT.tiles('#B4B1AB', 2, false, 0.7), 0.6],
   };
-  for (const [x1, y1, x2, y2, k] of PLAN.floors) { const f = floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]); if (k === 'main') mainFloors.push(f); shell.add(f); }
+  for (const [x1, y1, x2, y2, k0] of PLAN.floors) { const k = k0 === 'bath' || k0 === 'balc' ? k0 : 'main', f = floorMesh(x1, y1, x2, y2, floorMats[k][0], floorMats[k][1]); if (k === 'main') mainFloors.push(f); shell.add(f); }   // 除了浴室、陽台，其他區域（含廚房、玄關）都跟全戶地板一致
   for (const i of state.cut) for (const [x1, y1, x2, y2] of cutRects(i)) { const f = floorMesh(x1, y1, x2, y2, floorMats.main[0], 1.6); f.position.y = -0.001; mainFloors.push(f); shell.add(f); }   // 拆掉的牆底下補地板
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(shell, x1, y1, x2, y2, -30, -0.5, slabMat, false);
   wallsCut = new THREE.Group(); wallsFull = new THREE.Group(); shell.add(wallsCut, wallsFull);
