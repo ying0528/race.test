@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261118e';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261118e';
-import { buildItem, buildPerson, M } from './models.js?v=20261118e';
-import * as MT from './mats.js?v=20261118e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261119a';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261119a';
+import { buildItem, buildPerson, M } from './models.js?v=20261119a';
+import * as MT from './mats.js?v=20261119a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -104,18 +104,19 @@ function floorMatOf(key) {
 // ---- 牆面材質：跟地板一樣，可以「全戶」或每個區域分開選。做法是在牆面朝向該區域的那一面，貼一層薄薄的面材 ----
 // 全戶的設定不套到浴室和陽台；區域單獨設定的話，浴室陽台也可以換
 const UP = new THREE.Vector3(0, 1, 0), linings = [];
+const wallAll = () => state.wall || STYLES[state.style].wallf || null;   // 全戶牆面：手機沒指定就用風格預設
 function wallKeyAt(x, y) {
   const q = roomAt(x, y, 4);
   if (q && state.walls[q.id]) return state.walls[q.id];
-  if (!state.wall) return null;
-  if (q) return q.id.startsWith('bath') || q.id.startsWith('balc') ? null : state.wall;
+  const all = wallAll(); if (!all) return null;
+  if (q) return q.id.startsWith('bath') || q.id.startsWith('balc') ? null : all;
   const f = PLAN.floors.find(([a, b, c, d]) => x >= a && x <= c && y >= b && y <= d);   // 不屬於任何區域、但在室內（走道）
-  return f && f[4] !== 'bath' && f[4] !== 'balc' ? state.wall : null;
+  return f && f[4] !== 'bath' && f[4] !== 'balc' ? all : null;
 }
 function applyWallFinishes() {
   liteClean();
   for (const m of linings) { m.removeFromParent(); m.geometry.dispose(); } linings.length = 0;
-  if (!wallsFull || (!state.wall && !Object.keys(state.walls).length)) return;
+  if (!wallsFull || (!wallAll() && !Object.keys(state.walls).length)) return;
   const quads = new Map();   // 材質鍵 → { full: [], cut: [] }
   const add = (key, N, P0, s0, s1, z0, z1) => { const e = quads.get(key) || { full: [], cut: [] }; quads.set(key, e); e.full.push([N, P0, s0, s1, z0, z1]); if (z0 < CUT) e.cut.push([N, P0, s0, s1, z0, Math.min(z1, CUT)]); };
   for (const [x1, y1, x2, y2, z1, z2] of PLAN.walls) {

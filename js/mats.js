@@ -91,6 +91,11 @@ const WALL = {
     const fine = line(u * 1 + v * 2 + w * 2.2, 90), fine2 = line(u * 3 - v * 1 + w * 3, 140), mott = pfbm(u, v, 3, 32);
     const t = 1.02 - 0.06 * cloud - 0.32 * fine - 0.22 * fine2 - core * (0.42 + 0.18 * mott) - 0.1 * halo;
     return j ? [0.3, 0.86] : [0.5, cl(t), core * (0.5 + 0.2 * mott) + halo * 0.12 + fine * 0.05]; },
+  // 色漆：平滑霧面漆，只有很淡的滾筒紋
+  paint: (x, y, S) => { const u = x / S, v = y / S, r = pnoise(u * 160, v * 160, 160, 160), c = pfbm(u, v, 3, 3); return [0.5 + 0.1 * r, 0.985 + 0.02 * (c - 0.5) + 0.012 * (r - 0.5)]; },
+  // 珪藻土：細顆粒＋零星短纖維
+  diatom: (x, y, S) => { const u = x / S, v = y / S, cloud = pfbm(u, v, 4, 6), gr = pnoise(u * 520, v * 520, 520, 520), f1 = pnoise(u * 700, v * 70, 700, 70), f2 = pnoise(u * 70, v * 700, 70, 700), f3 = pnoise((u + v) * 500, (u - v) * 60, 500, 60), fib = f1 > 0.84 || f2 > 0.85 || f3 > 0.86;
+    return [0.62 + 0.25 * gr, 0.95 + 0.09 * (cloud - 0.5) + 0.07 * (gr - 0.5) - (fib ? 0.08 : 0), fib ? 0.12 : 0.01]; },
   // 礦物塗料（仿清水模／威尼斯灰泥）：雲狀深淺＋鏝刀刷痕
   stucco: (x, y, S) => { const u = x / S, v = y / S, cloud = pfbm(u, v, 5, 4), mask = cl((pfbm(u + 0.3, v, 3, 3) - 0.45) * 5);
     const sh = pnoise(u * 12, v * 90, 12, 90) * 0.6 + pnoise(u * 24, v * 180, 24, 180) * 0.4, sv = pnoise(u * 90, v * 12, 90, 12) * 0.6 + pnoise(u * 180, v * 24, 180, 24) * 0.4, sp = pnoise(u * 300, v * 300, 300, 300);
@@ -111,8 +116,8 @@ const WALL = {
     let t = 0.95 + 0.14 * (cloud - 0.5) - 0.08 * stain - (pin ? 0.08 : 0); if (seam) t *= 0.88; if (hole < hr) t *= 0.45; else if (hole < hr * 1.6) t *= 1.06;
     return [hole < hr ? 0.1 : seam ? 0.35 : 0.5 + 0.1 * (cloud - 0.5), cl(t)]; },
 };
-const WALL_REP = { pandora: 240, gold: 320, stucco: 300, veneer: 120, slat: 120, travertine: 240, concrete: 240 };   // 一張貼圖代表幾公分
-const WALL_ROUGH = { pandora: 0.16, gold: 0.12, stucco: 0.8, veneer: 0.55, slat: 0.6, travertine: 0.24, concrete: 0.85 };
+const WALL_REP = { paint: 200, diatom: 160, pandora: 240, gold: 320, stucco: 300, veneer: 120, slat: 120, travertine: 240, concrete: 240 };   // 一張貼圖代表幾公分
+const WALL_ROUGH = { paint: 0.9, diatom: 0.92, pandora: 0.16, gold: 0.12, stucco: 0.8, veneer: 0.55, slat: 0.6, travertine: 0.24, concrete: 0.85 };
 // kind：上面七種；color：底色；matte：石材改霧面
 // 橡木紋板：用實拍照片（灰階）當紋路，再乘上選的顏色。照片要等下載完才會出現，下載好時通知大螢幕重畫
 let onTexLoad = () => {}; export function setOnTexLoad(f) { onTexLoad = f; }

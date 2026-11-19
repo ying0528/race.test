@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261118e';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds, SIZES } from './catalog.js?v=20261118e';
-import * as ART from './planart.js?v=20261118e';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261119a';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds, SIZES } from './catalog.js?v=20261119a';
+import * as ART from './planart.js?v=20261119a';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -134,11 +134,11 @@ const wImg = (pw) => `./media/swatch/w_${pw.kind}_${pw.color.slice(1)}.jpg?v=${S
 const floorName = (id) => (FLOORS[id] ? FLOORS[id].n : '跟著風格');
 const floorGroup = (id) => (FLOOR_GROUPS.find((g) => g.items.some((f) => f[0] === id)) || {}).n || '';
 function wallName(k) {
-  const pw = parseWall(k); if (!pw) return '跟著風格';
+  const pw = parseWall(k); if (!pw) { const d = S.st && parseWall(STYLES[S.st.style].wallf); return d ? '跟著風格（' + wallName(STYLES[S.st.style].wallf) + '）' : '跟著風格'; }
   const c = (pw.group.colors.find((x) => x[0] === pw.color) || [])[1] || '';
   return pw.group.n + '・' + c + (pw.group.alt && pw.kind === pw.group.alt[0] ? '・' + pw.group.alt[1] : '');
 }
-const wallSw = (k, st, cls = '') => { const pw = parseWall(k); return pw ? `<img class="${cls}" src="${wImg(pw)}" alt="">` : `<i class="${cls} plainw" style="background:${STYLES[st.style].wall}"></i>`; };
+const wallSw = (k, st, cls = '') => { const pw = parseWall(k || STYLES[st.style].wallf); return pw ? `<img class="${cls}" src="${wImg(pw)}" alt="">` : `<i class="${cls} plainw" style="background:${STYLES[st.style].wall}"></i>`; };
 const floorSw = (id, st, cls = '') => `<img class="${cls}" src="${fImg(FLOORS[id] ? id : null, st.style)}" alt="">`;
 const roomName = (id) => (PLAN.rooms.find((q) => q.id === id) || {}).n || id;
 function styleMain(st) {
@@ -169,7 +169,7 @@ function stylePicker(st) {
       FLOOR_GROUPS[fg].items.map(([id, n]) => `<button class="tile ${id === cur ? 'on' : ''}" data-act="floor" data-k="${id}"><img src="${fImg(id)}" alt=""><span>${n}</span></button>`).join('') + '</div>';
   } else {
     const { wg, G, matte, kind } = wallOpts(cur), pw = parseWall(cur);
-    h += '<div class="pkl">1　材質</div><div class="mats">' + `<button class="mt ${cur ? '' : 'on'}" data-act="wallf" data-k="">${fr ? wallSw(st.wall, st) : `<i class="plainw" style="background:${STYLES[st.style].wall}"></i>`}<span>${dflt}</span></button>` +
+    h += '<div class="pkl">1　材質</div><div class="mats">' + `<button class="mt ${cur ? '' : 'on'}" data-act="wallf" data-k="">${wallSw(fr ? st.wall : '', st)}<span>${dflt}</span></button>` +
       WALL_GROUPS.map((g, i) => `<button class="mt ${cur && i === wg ? 'on' : ''}" data-act="wg" data-i="${i}"><img src="${wImg({ kind: g.k, color: g.colors[0][0] })}" alt=""><span>${g.n}</span></button>`).join('') + '</div>' +
       (G.alt ? `<div class="seg wide">${[[G.k, '木皮平板'], [G.alt[0], G.alt[1]]].map(([k, n]) => `<button class="${k === kind ? 'on' : ''}" data-act="walt" data-k="${k}">${n}</button>`).join('')}</div>` : '') +
       `<div class="pkl">2　${esc(G.n)}的顏色</div><div class="cols">` + G.colors.map(([c, n]) => { const k = wallKey(kind, c, matte); return `<button class="cl ${k === cur ? 'on' : ''}" data-act="wallf" data-k="${k}"><img src="${wImg({ kind, color: c })}" alt=""><span>${n}</span></button>`; }).join('') + '</div>' +
@@ -449,7 +449,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261118e').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261119a').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -460,7 +460,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118e'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261119a'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -493,7 +493,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261118e'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261119a'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好

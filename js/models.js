@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261118e';
-import * as MT from './mats.js?v=20261118e';
+import { WOODS, FINISH } from './catalog.js?v=20261119a';
+import * as MT from './mats.js?v=20261119a';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -208,7 +208,8 @@ B.rug = (g, it) => {
   box(g, 1.6, 1.08, d - 16, m2, -w / 2 + 12, 0.55, 0).castShadow = false; box(g, 1.6, 1.08, d - 16, m2, w / 2 - 12, 0.55, 0).castShadow = false;
 };
 
-B.lamp = (g, it) => {
+B.lamp = (g, it, P) => {
+  if (!it.v && it.cat === 'lamp' && P && P.sk) return styleLamp(g, it, P.sk);
   const { w, h, v } = it, shd = M('emit', it.color || '#F4EBDD'), mt = v === 'tripod' ? M('wood', WOODS.oak) : DARK();
   const sr = w / 2, sh = v === 'small' ? h * 0.42 : 28;
   if (v === 'tripod') for (let i = 0; i < 3; i++) { const a = i * 2.094, top = new THREE.Vector3(0, h - sh + 2, 0), dv = new THREE.Vector3(Math.cos(a) * w * 0.42, 0, Math.sin(a) * w * 0.42).sub(top), p = cyl(g, 1.3, 1.3, dv.length(), mt, 0, 0, 0, 8); p.position.copy(top).addScaledVector(dv, 0.5); p.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.normalize()); }
@@ -663,21 +664,74 @@ const woodOf = (f) => { const c = cfin(f); if (c) return c[0] === 'w' ? MT.wood(
 const BRASSY = () => MT.metal('#B8955A', 0.3);
 const OLD = { table: B.table, chair: B.chair, bed: B.bed, cab: B.cab };
 
+// ===== 依風格換款式 =====
+// 手機沒指定材質時，各風格的預設材質與顏色
+const STYLE_FIN = {
+  sofa: { modern: { fin: 'leather' }, luxe: { fin: 'flannel' } },
+  bed: { nordic: { fin: 'fabric', color: '#D9D4CA' }, japandi: { fin: 'wood', color: '#A8784A', color2: '#E6DDCD' }, modern: { fin: 'leather', color: '#4E5156', color2: '#D6D8DA' }, luxe: { fin: 'fabric', color: '#2F3E5C', color2: '#EFEAE2' } },
+};
+function sofaLegs(s, sk, w, dm, wm, teak, dkm) {
+  if (sk === 'japandi') { rbox(s, w - 4, 13.5, dm - 6, teak, 0, 6.75, 0, 1, 3); return; }   // 日式：實木矮座框
+  if (sk === 'modern') { for (const sx of [-1, 1]) { const x = sx * (w / 2 - 16); rbox(s, 2.2, 2.2, dm - 16, dkm, x, 1.1, 0, 0.5); for (const sz of [-1, 1]) rbox(s, 2.2, 13.5, 2.2, dkm, x, 6.75, sz * (dm / 2 - 9), 0.5); } return; }   // 現代：黑色金屬雪橇腳
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(s, 14, sk === 'luxe' ? 2 : 2.8, sk === 'luxe' ? 1.1 : 1.5, sk === 'luxe' ? BRASSY() : wm, sx * (w / 2 - 11), sz * (dm / 2 - 10), sk === 'luxe' ? 0.05 : 0.12, sk === 'luxe' ? null : BRASSY());
+}
+// 茶几：北歐白色桌面＋原木腳／日式矮實木／現代黑色＋鐵框／輕奢大理石＋黃銅
+function styleCoffee(g, it, P, o) {
+  const { w, d, v } = it, sk = P.sk, round = v === 'round';
+  const top = (m, t, y) => { if (round) { const c = mesh(g, new THREE.CylinderGeometry(w / 2, w / 2 - 0.6, t, 56), m, 0, y + t / 2, 0); c.scale.z = d / w; return c; } return rbox(g, w, t, d, m, 0, y + t / 2, 0, Math.min(1.2, t / 2 - 0.1), 3); };
+  let h = it.h;
+  if (sk === 'japandi') { h = Math.min(h, 36); const wd = MT.wood(WOODS.teak, { rings: 6, gloss: 0.3 }); top(wd, 4.5, h - 4.5);
+    if (round) { const b = mesh(g, new THREE.CylinderGeometry(w * 0.3, w * 0.3, h - 4.5, 40), wd, 0, (h - 4.5) / 2, 0); b.scale.z = d / w; } else for (const sx of [-1, 1]) rbox(g, 4.5, h - 4.5, d - 10, wd, sx * (w / 2 - 12), (h - 4.5) / 2, 0, 0.8); }
+  else if (sk === 'modern') { const dk = MT.metal('#1E1E20', 0.45); top(MT.gloss('#2A2A2C'), 2, h - 2);
+    if (round) for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5; rbox(g, 1.6, h - 2, 1.6, dk, Math.cos(a) * w * 0.36, (h - 2) / 2, Math.sin(a) * d * 0.36, 0.4); }
+    else for (const sx of [-1, 1]) { const x = sx * (w / 2 - 4); for (const sz of [-1, 1]) rbox(g, 1.6, h - 2, 1.6, dk, x, (h - 2) / 2, sz * (d / 2 - 4), 0.4); rbox(g, 1.6, 1.6, d - 8, dk, x, 0.8, 0, 0.4); } }
+  else if (sk === 'luxe') { const br = BRASSY(); top(MT.marble('#EFEBE5'), 2.5, h - 2.5);
+    if (round) { const l = lathe(g, [[0.1, 0], [w * 0.22, 0], [w * 0.2, 1.5], [4, 5], [3.2, h * 0.5], [5, h - 4], [w * 0.15, h - 2.5]], br, 0, 0, 0); l.scale.z = d / w; }
+    else { for (const sx of [-1, 1]) for (const sz of [-1, 1]) rbox(g, 1.4, h - 2.5, 1.4, br, sx * (w / 2 - 5), (h - 2.5) / 2, sz * (d / 2 - 5), 0.3); for (const y of [0.7, h - 3.2]) for (const sz of [-1, 1]) rbox(g, w - 10, 1.4, 1.4, br, 0, y, sz * (d / 2 - 5), 0.3); } }
+  else { const wd = woodOf('oak'); top(MT.gloss('#F2F0EC'), 2.6, h - 2.6);
+    if (round) for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5; tleg(g, h - 2.6, 2, 1.2, wd, Math.cos(a) * w * 0.3, Math.sin(a) * d * 0.3, 0.08, null); }
+    else for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, h - 2.6, 2.2, 1.3, wd, sx * (w / 2 - 10), sz * (d / 2 - 9), 0.08, null); }
+  if (o.decor && w >= 80) { books(g, -w * 0.16, h, d * 0.05, 2, 0.3); vase(g, w * 0.2, h, -d * 0.1, 0.5, sk === 'japandi' ? '#4A4744' : sk === 'luxe' ? '#C8A464' : sk === 'modern' ? '#8D8D8A' : '#8EA1AE'); }
+}
+// 4 人餐桌：日式厚實木板腳／現代深色桌面＋黑鐵框／輕奢大理石＋黃銅（北歐維持原木）
+function styleDining(g, it, P, o) {
+  const { w, d, h } = it, sk = P.sk;
+  if (sk === 'japandi') { const wd = MT.wood(WOODS.teak, { rings: 6, gloss: 0.35 }); rbox(g, w, 4.5, d, wd, 0, h - 2.25, 0, 1.2, 3); for (const sx of [-1, 1]) rbox(g, 5, h - 4.5, d - 14, wd, sx * (w / 2 - 14), (h - 4.5) / 2, 0, 1); rbox(g, w - 28, 6, 3, wd, 0, h - 14, 0, 0.8); }
+  else { const dk = MT.metal('#1E1E20', 0.45); rbox(g, w, 2.4, d, MT.marble('#4A4B4D'), 0, h - 1.2, 0, 1, 3); for (const sx of [-1, 1]) { const x = sx * (w / 2 - 8); for (const sz of [-1, 1]) rbox(g, 2.4, h - 2.4, 2.4, dk, x, (h - 2.4) / 2, sz * (d / 2 - 6), 0.4); rbox(g, 2.4, 2.4, d - 12, dk, x, h - 3.6, 0, 0.4); rbox(g, 2.4, 2.4, d - 12, dk, x, 1.2, 0, 0.4); } }
+  if (!o.decor) return; mesh(g, new THREE.BoxGeometry(Math.min(38, w * 0.3), 0.25, d - 4), MT.fabric(sk === 'japandi' ? '#7D8B5F' : '#8D8D8A', 1), 0, h + 0.13, 0); vase(g, 0, h + 0.25, 0, 1, sk === 'japandi' ? '#4A4744' : '#D9D2C4', 8);
+}
+// 立燈：北歐原木三腳／日式紙燈籠／現代黑色弧形燈／輕奢黃銅
+function styleLamp(g, it, sk) {
+  const { w, h } = it, shd = M('emit', '#F6EEDF');
+  if (sk === 'japandi') { const dk = MT.flat('#2A2622', 0.6); cyl(g, w * 0.32, w * 0.34, 2, dk, 0, 1, 0, 24); cyl(g, 0.9, 0.9, h - 30, dk, 0, (h - 30) / 2 + 2, 0, 8); const b = mesh(g, new THREE.SphereGeometry(w / 2 + 4, 24, 16), twoSided(shd), 0, h - 22, 0); b.scale.y = 1.15; b.castShadow = false; for (let k = -3; k <= 3; k++) { const r = (w / 2 + 4) * Math.sqrt(1 - (k / 4) ** 2) + 0.2, t = mesh(g, new THREE.TorusGeometry(r, 0.25, 4, 32), MT.flat('#CFC4B0', 0.8), 0, h - 22 + k * (w / 2 + 4) * 1.15 / 4, 0); t.rotation.x = Math.PI / 2; t.castShadow = false; } return; }
+  if (sk === 'modern') { const dk = MT.metal('#1E1E20', 0.4); rbox(g, w * 0.7, 4, w * 0.7, MT.marble('#3A3B3D'), 0, 2, 0, 1); const R = 55, pts = []; for (let i = 0; i <= 24; i++) { const a = (i / 24) * Math.PI * 0.62; pts.push(new THREE.Vector3((1 - Math.cos(a)) * R * 0.95, 4 + Math.sin(a) * (h - 6), 0)); }
+    const tube = mesh(g, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p.x - R * 0.95 * 0 , Math.min(p.y, h), 0))), 40, 0.9, 8), dk, 0, 0, 0); tube.castShadow = true; const e = pts[pts.length - 1];
+    const sh = mesh(g, new THREE.SphereGeometry(16, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), twoSided(dk), e.x, Math.min(e.y, h) - 4, 0); sh.castShadow = false; mesh(g, new THREE.CircleGeometry(14, 24), shd, e.x, Math.min(e.y, h) - 4.2, 0).rotation.x = Math.PI / 2; return; }
+  const br = sk === 'luxe' ? BRASSY() : null, sr = w / 2, s = 30;
+  if (br) { cyl(g, sr * 0.7, sr * 0.75, 2.4, br, 0, 1.2, 0, 32); cyl(g, 1, 1, h - s, br, 0, (h - s) / 2 + 2, 0, 10); cyl(g, 1, 1, s + 6, br, 0, h - (s + 6) / 2, 0, 10);
+    const geo = new THREE.CylinderGeometry(sr * 0.7, sr, s, 48, 1, true), p = geo.attributes.position; for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), k = 1 + 0.04 * Math.cos(a * 24); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); } geo.computeVertexNormals(); const m = mesh(g, geo, twoSided(shd), 0, h - s / 2, 0); m.castShadow = false;
+    for (const [r, y] of [[sr * 0.7, h], [sr, h - s]]) { const t = mesh(g, new THREE.TorusGeometry(r, 0.4, 6, 40), br, 0, y, 0); t.rotation.x = Math.PI / 2; } return; }
+  B.lamp(g, Object.assign({}, it, { v: 'tripod' }));   // 北歐：原木三腳
+}
 B.sofa = (g, it, P, o) => {
   const { w, d, h, v } = it, fin = it.fin || (v === 'leather' ? 'leather' : 'linen'), lea = fin === 'leather', kind = fin === 'flannel' ? 'flannel' : fin === 'weave' ? 'herring' : 'linen', f = lea ? MT.leather(P.fabric) : MT.fabric(P.fabric, 5, kind), fc = lea ? f : MT.fabric(P.fabric, 3, kind), wm = woodOf(P.wood);
   if (v === 'stool') { for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, 12, 2.4, 1.4, wm, sx * (w / 2 - 7), sz * (d / 2 - 7), 0.1, BRASSY()); cushion(g, w, h - 11, d, fc, 0, 11 + (h - 11) / 2, 0, { r: 6, bulge: 0.12 }); return; }
-  const isL = v === 'L' || v === 'Lr', dm = isL ? 95 : d, arm = Math.max(12, Math.min(20, w * 0.09)), s = new THREE.Group(); s.position.z = -(d - dm) / 2; g.add(s);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(s, 14, 2.8, 1.5, wm, sx * (w / 2 - 11), sz * (dm / 2 - 10), 0.12, BRASSY());
-  rbox(s, w - 3, 14, dm - 3, f, 0, 20.5, 0, 3.5, 5);
-  rbox(s, w - 2, h - 32, 16, f, 0, 14 + (h - 32) / 2 + 4, -dm / 2 + 9, 7.5, 6);
-  for (const sx of [-1, 1]) rbox(s, arm, h - 38, dm - 1, f, sx * (w / 2 - arm / 2), 14 + (h - 38) / 2 + 3.5, 0, Math.min(9, arm / 2 - 0.5), 6);
+  const sk = P.sk, isL = v === 'L' || v === 'Lr', dm = isL ? 95 : d, arm = sk === 'japandi' ? 7 : sk === 'modern' ? 14 : Math.max(12, Math.min(20, w * 0.09)), s = new THREE.Group(); s.position.z = -(d - dm) / 2; g.add(s);
+  const teak = MT.wood(WOODS.teak, { rings: 6, gloss: 0.3 }), dkm = MT.metal('#1E1E20', 0.45);
+  sofaLegs(s, sk, w, dm, wm, teak, dkm);
+  rbox(s, w - 3, 14, dm - 3, f, 0, 20.5, 0, sk === 'modern' ? 1.5 : 3.5, 5);
+  rbox(s, w - 2, h - 32, 16, f, 0, 14 + (h - 32) / 2 + 4, -dm / 2 + 9, sk === 'modern' ? 2.5 : 7.5, 6);
+  for (const sx of [-1, 1]) {
+    if (sk === 'japandi') { rbox(s, arm, h - 34, dm - 1, teak, sx * (w / 2 - arm / 2), (h - 34) / 2 + 13.5, 0, 1.6, 3); continue; }   // 日式：實木扶手
+    rbox(s, arm, h - 38, dm - 1, f, sx * (w / 2 - arm / 2), 14 + (h - 38) / 2 + 3.5, 0, sk === 'modern' ? 2 : Math.min(sk === 'luxe' ? 10 : 9, arm / 2 - 0.5), 6);
+  }
   const inner = w - 2 * arm, n = Math.max(1, Math.round(inner / 72)), cw = inner / n;
   for (let i = 0; i < n; i++) {
     const x = -inner / 2 + cw * (i + 0.5);
     cushion(s, cw - 0.6, 15, dm - 23, fc, x, 35, 10.5, { r: 5.5, sd: i * 5 + 1 });
     const b = cushion(s, cw - 2.5, 18, h - 47, fc, x, 40.5 + (h - 47) / 2, -dm / 2 + 26, { r: 7.5, bulge: 0.3, sd: i * 3 + 9 }); b.rotation.x = Math.PI / 2 - 0.22;
   }
-  if (isL) { const cwid = 92, sx = v === 'L' ? 1 : -1, x = sx * (w / 2 - arm - cwid / 2), z = dm / 2 + (d - dm) / 2; rbox(s, cwid, 14, d - dm + 2, f, x, 20.5, z, 3.5, 5); cushion(s, cwid - 1, 15, d - dm, fc, x, 35, z + 0.5, { r: 5.5, sd: 21 }); for (const zz of [-1, 1]) tleg(s, 14, 2.8, 1.5, wm, x + sx * (cwid / 2 - 10), z + zz * ((d - dm) / 2 - 9) + 0.01, 0.1, BRASSY()); }
+  if (isL) { const cwid = 92, sx = v === 'L' ? 1 : -1, x = sx * (w / 2 - arm - cwid / 2), z = dm / 2 + (d - dm) / 2; rbox(s, cwid, 14, d - dm + 2, f, x, 20.5, z, 3.5, 5); cushion(s, cwid - 1, 15, d - dm, fc, x, 35, z + 0.5, { r: 5.5, sd: 21 }); for (const zz of [-1, 1]) if (sk !== 'japandi' && sk !== 'modern') tleg(s, 14, 2.8, 1.5, sk === 'luxe' ? BRASSY() : wm, x + sx * (cwid / 2 - 10), z + zz * ((d - dm) / 2 - 9) + 0.01, 0.1, BRASSY()); }
   if (o.decor && w >= 140) {
     pillow(s, 46, 46, 17, MT.fabric(P.accent, 5), -inner / 2 + 25, 64, -dm / 2 + 41, { sd: 2 }).rotation.set(-0.3, 0.28, 0.1);
     pillow(s, 42, 42, 15, MT.fabric('#EAE3D5', 2, 'boucle'), -inner / 2 + 54, 61, -dm / 2 + 45, { sd: 5 }).rotation.set(-0.34, -0.12, -0.13);
@@ -774,6 +828,8 @@ function shellChair(g, it, o) {
 B.table = (g, it, P, o) => {
   const { w, d, v } = it; if (v === 'stoolseat' || v === 'fmirror') return OLD.table(g, it, P);
   if (v === 'slab') return slabTable(g, it, o);
+  if (P.sk && !it.fin && it.cat === 'coffee') return styleCoffee(g, it, P, o);
+  if (P.sk && !it.fin && it.cat === 'dtable' && !v && P.sk !== 'nordic') { if (P.sk === 'luxe') it = Object.assign({}, it, { color: 'marble' }); else return styleDining(g, it, P, o); }
   const h = v === 'mirror' ? 75 : it.h, f = it.color, marble = f === 'marble', painted = f === 'white' || f === 'black' || f === 'gray', low = h < 62;
   let top = marble ? MT.marble('#EFEBE5') : painted ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 6, gloss: 0.45 }), lg = marble ? BRASSY() : f === 'black' ? MT.metal('#1E1E20', 0.45) : woodOf(f);
   if (f && f[0] === '#' && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'marble')) {   // 手機上個別選的桌面材質＋顏色
@@ -807,18 +863,21 @@ B.table = (g, it, P, o) => {
 B.chair = (g, it, P, o) => {
   const { w, d, h, v } = it; if (v === 'bench') return OLD.chair(g, it, P);
   if (v === 'shell') return shellChair(g, it, o);
+  const sk = !it.fin && !v ? P.sk : null; if (sk === 'luxe') return shellChair(g, Object.assign({}, it, { w: 52, d: 54, fin: 'fabric', color: '#2F3E5C' }), o);
   const hexc = it.color && it.color[0] === '#', pick = hexc && (it.fin === 'wood' || it.fin === 'paint' || it.fin === 'fabric');
   let wm = hexc ? woodOf(P.wood) : woodOf(it.color), f = MT.fabric(hexc ? it.color : '#D9D3C6', 2, 'boucle'); const sh = v === 'bar' ? 71 : 44.5;
+  if (sk === 'japandi') { wm = MT.wood(WOODS.teak, { rings: 6, gloss: 0.35 }); f = MT.fabric('#C4A47A', 2, 'herring'); } else if (sk === 'modern') { wm = MT.metal('#1E1E20', 0.45); f = MT.leather('#2E2F31'); }
+  const pv = sk === 'japandi' || sk === 'modern' ? 'pad' : v;
   if (pick) { wm = it.fin === 'wood' ? MT.wood(it.color, { rings: 6, gloss: 0.35 }) : it.fin === 'paint' ? MT.gloss(it.color) : MT.fabric(it.color, 2, 'boucle'); f = it.fin === 'fabric' ? wm : MT.fabric(shade(it.color, 1.12), 2, 'boucle'); }   // 整張椅子同一個顏色
   for (const sx of [-1, 1]) { tleg(g, sh, 2, 1.15, wm, sx * (w / 2 - 4.5), d / 2 - 5.5, 0.07, null); const b = mesh(g, new THREE.CylinderGeometry(1.35, 1.15, h + 2, 14), wm, sx * (w / 2 - 4.5), h / 2 - 0.5, -d / 2 + 6); b.rotation.x = -0.1; b.rotation.z = -sx * 0.03; }
   rbox(g, w - 5, 3.2, d - 8, wm, 0, sh - 0.5, 0, 1.4); rbox(g, w - 12, 2.4, 2.4, wm, 0, sh * 0.62, d / 2 - 6.5, 1); for (const sx of [-1, 1]) rbox(g, 2.2, 2.4, d - 14, wm, sx * (w / 2 - 5), sh * 0.55, 0, 1);
   if (v === 'bar') rbox(g, w - 10, 1.6, 1.6, MT.metal('#AEB3B8'), 0, 26, d / 2 - 5.6, 0.6);
-  if (v !== 'bar' || true) cushion(g, w - 4, v === 'pad' ? 6 : 3.2, d - 8, v === 'pad' || v === 'bar' ? f : wm, 0, sh + (v === 'pad' ? 3.9 : 2.4), 0.6, { r: v === 'pad' ? 2.7 : 1.4, bulge: v === 'pad' ? 0.35 : 0.1, pipe: v === 'pad' });
+  if (v !== 'bar' || true) cushion(g, w - 4, pv === 'pad' ? 6 : 3.2, d - 8, pv === 'pad' || v === 'bar' ? f : wm, 0, sh + (pv === 'pad' ? 3.9 : 2.4), 0.6, { r: pv === 'pad' ? 2.7 : 1.4, bulge: pv === 'pad' ? 0.35 : 0.1, pipe: pv === 'pad' });
   const bh = Math.min(22, (h - sh) * 0.5), bend = (geo) => { const pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i); pos.setZ(i, pos.getZ(i) + 0.013 * x * x); } return smooth(geo); };
   // 椅背柱往後斜，椅背板兩端往前彎：算出柱子在椅背高度的位置，讓板子兩端剛好嵌進柱子
   const by = h - bh / 2 - 1, postZ = -d / 2 + 6 - Math.tan(0.1) * (by - (h / 2 - 0.5)), e = 0.013 * ((w - 5) / 2 - 2) ** 2, bz = postZ - e;
   mesh(g, bend(new RoundedBoxGeometry(w - 5, bh, 2.8, 4, 1.2)), wm, 0, by, bz).rotation.x = -0.1;
-  if (v === 'pad') mesh(g, bend(new RoundedBoxGeometry(w - 9, bh - 5, 3.4, 4, 1.6)), f, 0, by, bz + 1.7).rotation.x = -0.1;
+  if (pv === 'pad') mesh(g, bend(new RoundedBoxGeometry(w - 9, bh - 5, 3.4, 4, 1.6)), f, 0, by, bz + 1.7).rotation.x = -0.1;
 };
 
 B.rug = (g, it) => {
@@ -832,8 +891,9 @@ B.tv = (g, it) => { const { w, h } = it; rbox(g, w, h, 2.2, MT.flat('#0C0D0F', 0
 B.cab = (g, it, P, o) => {
   if (it.cat === 'ward' && WARD[it.v]) { WARD[it.v](g, it, o.decor !== false); return; }
   if (it.cat !== 'tvcab' || it.v === 'float') { OLD.cab(g, it, P); if (o.decor && it.cat === 'chest' && it.h < 110) { vase(g, -it.w * 0.22, it.h, 0, 0.55, '#3F5A54'); books(g, it.w * 0.2, it.h, 0, 2, -0.1); } return; }
-  const { w, d, h } = it, f = it.color, wm = woodOf(f === 'marble' ? 'walnut' : f), top = cfin(f) ? woodOf(f) : f === 'marble' ? MT.marble('#EFEBE5') : f === 'white' || f === 'black' || f === 'gray' ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 5, gloss: 0.5 }), dk = MT.metal('#1E1E20', 0.45), L = 13, T = 2;
-  for (const sx of [-1, 1]) { rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, d / 2 - 6, 0.5); rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, -d / 2 + 6, 0.5); rbox(g, 2.4, 2, d - 10, dk, sx * (w / 2 - 14), 1, 0, 0.5); }
+  const { w, d, h } = it, f = it.color, wm = woodOf(f === 'marble' ? 'walnut' : f), top = cfin(f) ? woodOf(f) : f === 'marble' ? MT.marble('#EFEBE5') : f === 'white' || f === 'black' || f === 'gray' ? MT.gloss(WOODS[f]) : MT.wood(WOODS[f] || WOODS.oak, { rings: 5, gloss: 0.5 }), dk0 = MT.metal('#1E1E20', 0.45), L = 13, T = 2, sk = cfin(f) ? null : P.sk, dk = sk === 'luxe' ? BRASSY() : dk0, flat = sk === 'nordic' || sk === 'modern';
+  if (sk === 'nordic') for (const sx of [-1, 1]) for (const sz of [-1, 1]) tleg(g, L, 2, 1.2, woodOf('oak'), sx * (w / 2 - 10), sz * (d / 2 - 6), 0.1, null);
+  else for (const sx of [-1, 1]) { rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, d / 2 - 6, 0.5); rbox(g, 2.4, L, 2.4, dk, sx * (w / 2 - 14), L / 2, -d / 2 + 6, 0.5); rbox(g, 2.4, 2, d - 10, dk, sx * (w / 2 - 14), 1, 0, 0.5); }
   // 每 30 公分一格（30 公分一格、60 公分兩格…）：最右邊一格是開放格，其餘是木條門
   const bh = h - L - 2.5, by = L + bh / 2, n = Math.max(1, Math.floor(w / 30)), cw = (w - T) / n, nOpen = n >= 2 ? 1 : 0;
   rbox(g, w, T, d - 1, wm, 0, L + T / 2, -0.5, 0.5); rbox(g, w, bh, T, wm, 0, by, -d / 2 + T / 2, 0.5);
@@ -842,6 +902,7 @@ B.cab = (g, it, P, o) => {
   const door = MT.flat(shade(hexOf(f), 0.4), 0.7);
   for (let i = 0; i < n - nOpen; i++) {
     const x0 = -w / 2 + T + cw * i, dw = cw - T;
+    if (flat) { rbox(g, dw - 0.4, bh - 2, 1.8, top, x0 + dw / 2, by, d / 2 - 0.4, 0.3); rbox(g, dw * 0.4, 0.8, 0.6, sk === 'modern' ? MT.flat('#111', 0.6) : woodOf('oak'), x0 + dw / 2, by + bh / 2 - 4, d / 2 + 0.6, 0.2); continue; }   // 北歐／現代：平板門
     rbox(g, dw, bh - 4, 1, door, x0 + dw / 2, by, d / 2 - 1.6, 0.3);
     for (let x = 0.95; x < dw; x += 2.3) mesh(g, new THREE.CylinderGeometry(0.9, 0.9, bh - 4, 8), wm, x0 + x, by, d / 2 - 0.75);
     rbox(g, 0.9, 9, 1.6, BRASSY(), x0 + (i % 2 ? 3 : dw - 3), by + 4, d / 2 + 0.6, 0.3);
@@ -1286,8 +1347,9 @@ const ART = {
 export function buildItem(it, style, opts = {}) {
   const g = new THREE.Group(), o = Object.assign({ decor: true }, opts);
   const hex = it.color && it.color[0] === '#';
-  const P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent };
+  const sk = style.sk, P = { wood: style.woods[0] === 'marble' ? 'walnut' : style.woods[0], fabric: hex ? it.color : style.fabrics[0], accent: style.accent, sk };
   const spec = Object.assign({}, it, { styled: false });
+  if (!it.fin && STYLE_FIN[it.cat] && STYLE_FIN[it.cat][sk] && (it.v == null || it.cat === 'sofa')) Object.assign(spec, STYLE_FIN[it.cat][sk]);   // 風格預設材質（手機沒指定時）
   if (CABS[it.cat] && hex && (it.fin === 'wood' || it.fin === 'paint')) spec.color = it.fin[0] + it.color;   // 櫃子：木紋或烤漆＋顏色
   (B[it.t] || ((gg) => box(gg, it.w, it.h, it.d, M('paint', '#CCCCCC'), 0, it.h / 2, 0)))(g, spec, P, o);
   g.scale.setScalar(0.01);

@@ -127,13 +127,13 @@ const FABRIC_T = { sofa: 1, chair: 1, ochair: 1, bed: 1, rug: 1 };
 
 // 四種風格：各有自己的木色與布料色，型錄會依風格換成對應款式
 export const STYLES = {
-  nordic: { n: '北歐', d: '淺木地板、灰色布沙發', floor: 'wood', floorC: '#D6B98F', wall: '#F2EFEA', accent: '#8FA58A', sw: ['#D6B98F', '#F2EFEA', '#B8BCBF', '#8FA58A'],
-    woods: ['oak', 'ash', 'white'], fabrics: ['#B8BCBF', '#C9D6DF', '#D9D4CA', '#8FA58A', '#E3DED4'] },
-  modern: { n: '現代', d: '深色木紋、黑灰家具', floor: 'wood', floorC: '#9A8C7D', wall: '#ECEAE6', accent: '#C9A86A', sw: ['#9A8C7D', '#ECEAE6', '#5A5E64', '#C9A86A'],
+  nordic: { sk: 'nordic', n: '北歐', d: '洗白木地板、霧藍牆、芥末黃點綴', floor: 'wood', floorC: '#E7DAC8', wall: '#C9D3D6', wallf: 'paint|#C9D3D6|', accent: '#D4A84B', sw: ['#E7DAC8', '#C9D3D6', '#F2F0EC', '#D4A84B'],
+    woods: ['white', 'ash', 'oak'], fabrics: ['#C9CCCD', '#8EA1AE', '#E3DED4', '#D4A84B', '#B8BCBF'] },
+  modern: { sk: 'modern', n: '現代', d: '水泥灰牆、黑灰家具、香檳金', floor: 'wood', floorC: '#9A8C7D', wall: '#A9A79F', wallf: 'stucco|#A9A79F|', accent: '#C9A86A', sw: ['#9A8C7D', '#A9A79F', '#2E2F31', '#C9A86A'],
     woods: ['black', 'gray', 'walnut'], fabrics: ['#5A5E64', '#3C4047', '#8D8D8A', '#B59A6A', '#2E2F31'] },
-  japandi: { n: '日式', d: '原木色、亞麻質感', floor: 'wood', floorC: '#C4A074', wall: '#F1EBE0', accent: '#7D8B6F', sw: ['#C4A074', '#F1EBE0', '#D8CCB8', '#7D8B6F'],
-    woods: ['teak', 'oak', 'ash'], fabrics: ['#D8CCB8', '#C8B9A0', '#A7906E', '#7D8B6F', '#E6DDCD'] },
-  luxe: { n: '輕奢', d: '石紋地坪、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#EFEBE5', accent: '#C8A464', sw: ['#E9E5DE', '#EFEBE5', '#2F3E5C', '#C8A464'],
+  japandi: { sk: 'japandi', n: '日式', d: '柚木地板、珪藻土牆、墨黑與抹茶', floor: 'wood', floorC: '#99673A', wall: '#DDD0B8', wallf: 'diatom|#DDD0B8|', accent: '#7D8B5F', sw: ['#99673A', '#DDD0B8', '#4A4744', '#7D8B5F'],
+    woods: ['teak', 'oak', 'black'], fabrics: ['#D8CCB8', '#4A4744', '#7D8B5F', '#B07A55', '#E6DDCD'] },
+  luxe: { sk: 'luxe', n: '輕奢', d: '石紋地坪、白橡木紋牆、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#E8E2D8', wallf: 'oak|#E8E2D8|', accent: '#C8A464', sw: ['#E9E5DE', '#E8E2D8', '#2F3E5C', '#C8A464'],
     woods: ['walnut', 'white', 'marble'], fabrics: ['#2F3E5C', '#E7E1D7', '#6B5B73', '#3F5A54', '#8C7A5B'] },
 };
 
@@ -147,6 +147,8 @@ export const FLOOR_GROUPS = [
 // 牆面材質：每種有幾個顏色；sheen＝石材可選亮面／霧面；alt＝木紋可換成木格柵。
 // 選擇存成字串 "種類|顏色|m"（m＝霧面），例如 "pandora|#EFEEEA|"、"slat|#C08A52|"
 export const WALL_GROUPS = [
+  { k: 'paint', n: '色漆', colors: [['#C9D3D6', '霧藍'], ['#D3D8CC', '淺鼠尾草綠'], ['#E3DCCF', '燕麥'], ['#D9CBBE', '奶茶'], ['#7D7B78', '煙灰'], ['#F2EFEA', '白']] },
+  { k: 'diatom', n: '珪藻土', colors: [['#DDD0B8', '杏米'], ['#CDB48E', '淡土黃'], ['#A9AD94', '抹茶灰'], ['#8C8780', '炭灰']] },
   { k: 'oak', n: '橡木紋板', colors: [['#E8E2D8', '白橡'], ['#C9C3BA', '灰橡'], ['#D9C3A0', '淺橡'], ['#BF9364', '原木'], ['#8A6A4E', '胡桃'], ['#6F6861', '煙燻灰']] },
   { k: 'pandora', n: '潘朵拉白', sheen: true, colors: [['#EFEEEA', '白'], ['#D9D4CB', '米灰'], ['#B5B4B1', '灰'], ['#7E7D7B', '深灰']] },
   { k: 'gold', n: '金脈大理石', sheen: true, colors: [['#F3F0EA', '白底金脈'], ['#EAE3D6', '米白金脈'], ['#E6E6E4', '灰白'], ['#3A3836', '黑金']] },
