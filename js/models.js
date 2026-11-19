@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261119c';
-import * as MT from './mats.js?v=20261119c';
+import { WOODS, FINISH } from './catalog.js?v=20261119d';
+import * as MT from './mats.js?v=20261119d';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -948,6 +948,22 @@ function kHood(s, x, y, z, hw, deep) {   // y＝底面高度
   const n = 3, pw = (hw - 8) / n; for (let k = 0; k < n; k++) { const px = x - (hw - 8) / 2 + pw * (k + 0.5); box(s, pw - 1.5, 0.4, deep - 12, MT.flat('#2E3033', 0.55), px, y - 0.1, z - 2); for (let q = -2; q <= 2; q++) box(s, 0.3, 0.45, deep - 14, MT.flat('#55585C', 0.5), px + q * (pw / 6), y - 0.15, z - 2);
     const lt = cyl(s, 2, 2, 0.4, M('emit', '#FFE3B0'), px, y - 0.35, z + deep / 2 - 5, 16); lt.castShadow = false; }
 }
+// 刀具組：白色刀座＋原木頂板，5 把白柄刀＋1 把剪刀
+function kKnives(s, x, y, z) {
+  const wh = MT.flat('#F3F2EF', 0.35), wd = MT.wood('#D8B48A', { rings: 6, gloss: 0.2 }), bw = 13, bd = 10, bh = 20, tilt = -0.32;
+  const blk = new THREE.Group(); blk.position.set(x, y, z); s.add(blk);
+  rbox(blk, bw, bh, bd, wh, 0, bh / 2, 0, 0.8);
+  const tp = rbox(blk, bw, 5, bd + 2, wd, 0, bh + 1, 0.6, 0.5); tp.rotation.x = tilt;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(blk, 0.6, 0.6, 0.6, MT.flat('#2A2B2D', 0.6), sx * (bw / 2 - 1.5), 0.3, sz * (bd / 2 - 1.5), 8);
+  const kn = [[-4.6, 13, -1.6], [-1.8, 13.5, -1.6], [1, 13, -1.6], [3.8, 12.5, -1.4], [-0.4, 10.5, 2.2]];
+  for (const [kx, len, kz] of kn) { const hd = new THREE.Group(); hd.position.set(kx, bh + 2.2, kz); hd.rotation.x = tilt; blk.add(hd);
+    const hg = rbox(hd, 2, len, 2.8, wh, 0, len / 2, 0, 0.9); hg.rotation.y = 0;
+    rbox(hd, 2.2, 1.4, 3, MT.metal('#C9CCCF', 0.25), 0, 0.5, 0, 0.4); }
+  // 剪刀（兩個圈＋握柄）
+  const sc = new THREE.Group(); sc.position.set(bw / 2 - 1.6, bh + 2, 2.6); sc.rotation.x = tilt; blk.add(sc);
+  rbox(sc, 1.4, 6, 1.4, wh, 0, 3, 0, 0.5);
+  for (const sx of [-1, 1]) { const r = mesh(sc, new THREE.TorusGeometry(2.6, 0.55, 8, 20), wh, sx * 1.7, 9.5, 0); r.scale.y = 1.6; }
+}
 function kitchenSys(g, it, P, o) {
   const { w, d, h, v } = it, kind = v.slice(0, -1), s = new THREE.Group(); if (v.endsWith('R')) s.scale.x = -1; g.add(s);
   const c = it.color && it.color[0] === '#' ? it.color : '#F1EEE8', fin = it.fin || 'matte', sk = P.sk;
@@ -1017,8 +1033,7 @@ function kitchenSys(g, it, P, o) {
     const fx = scx + sbw / 2 + 18; if (fx + 14 < x0 + bw) lathe(s, [[0, 0], [10, 0], [14, 3.4], [14.4, 3.8], [10.4, 1], [0, 1]], MT.ceramic('#6E6A64'), fx, H0, 4); if (fx + 14 < x0 + bw) for (let q = 0; q < 6; q++) mesh(s, new THREE.SphereGeometry(3.8, 14, 10), MT.flat('#E98A24', 0.55), fx + Math.cos(q * 1.05) * 6.5, H0 + 5 + (q === 5 ? 3.5 : 0), 4 + Math.sin(q * 1.05) * 5.5); }
   else { const cbx = (hobX + hobW / 2 + scx - sbw / 2) / 2; rbox(s, 34, 2, 24, MT.wood('#B98A58', { rings: 6 }), cbx + 14, H0 + 1, 6, 0.8).rotation.y = 0.12; }
   const vx = kind === 'comp' ? (hobX + hobW / 2 + scx - sbw / 2) / 2 : hobX + hobW / 2 + 22, vz = -Z + 13;
-  const vg = new THREE.CylinderGeometry(6, 5.4, 22, 48, 1), vp = vg.attributes.position; for (let q = 0; q < vp.count; q++) { const a = Math.atan2(vp.getZ(q), vp.getX(q)), k = 1 + 0.05 * Math.abs(Math.cos(a * 12)); vp.setX(q, vp.getX(q) * k); vp.setZ(q, vp.getZ(q) * k); } vg.computeVertexNormals(); mesh(s, vg, MT.ceramic('#F1EDE2'), vx, H0 + 11, vz);
-  branchTree(s, vx, H0 + 18, vz, 60, 11);
+  kKnives(s, vx, H0, vz);
 }
 B.ksys = (g, it, P, o) => kitchenSys(g, it, P, o);
 
