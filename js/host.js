@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120e';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds, CEILS } from './catalog.js?v=20261120e';
-import { buildItem, buildPerson, M } from './models.js?v=20261120e';
-import * as MT from './mats.js?v=20261120e';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120f';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds, CEILS } from './catalog.js?v=20261120f';
+import { buildItem, buildPerson, M } from './models.js?v=20261120f';
+import * as MT from './mats.js?v=20261120f';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -190,12 +190,15 @@ function buildCeil() {
           const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; const gp = new THREE.Mesh(new THREE.PlaneGeometry(iw * cm, id * cm), new THREE.MeshBasicMaterial({ map: tx, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.38 })); gp.rotation.x = Math.PI / 2; gp.position.set(cx * cm, (H - 0.3) * cm, cy * cm); gp.renderOrder = 2; ceilDeco.add(gp);
         }
         if (full) { const n = Math.max(2, Math.round(w / 130)); for (let i = 0; i < n; i++) { const x = x1 + w * (i + 0.5) / n; disc(x, y1 + bw / 2, lo); disc(x, y2 - bw / 2, lo); } }
-      } else if (K === 'D') {   // 木格柵：中間一片原木格柵＋四周細燈縫
+      } else if (K === 'D') {   // 木格柵：整片平頂往下降，格柵嵌在中間凹進去的槽裡（格柵底不超出平頂面）
         const iw = full ? w - 140 : Math.min(220, w - 120), id = full ? d - 140 : Math.min(170, d - 120); if (iw < 60 || id < 60) continue;
-        const along = iw >= id, gx1 = cx - iw / 2, gy1 = cy - id / 2; wbox(ceilDeco, gx1 - 4, gy1 - 4, gx1 + iw + 4, gy1 + id + 4, H - 0.8, H - 0.2, dark, false);
-        const n = Math.floor((along ? id : iw) / 8), geo = new THREE.BoxGeometry(along ? iw * cm : 4 * cm, 9 * cm, along ? 4 * cm : id * cm), im = new THREE.InstancedMesh(geo, wood, n), m4 = new THREE.Object3D();
-        for (let i = 0; i < n; i++) { const t2 = (i + 0.5) * 8; m4.position.set((along ? cx : gx1 + t2) * cm, (H - 5.3) * cm, (along ? gy1 + t2 : cy) * cm); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); } im.castShadow = true; im.receiveShadow = true; ceilDeco.add(im);
-        for (const [a, b2, c2, d2] of [[gx1 - 10, gy1 - 10.5, gx1 + iw + 10, gy1 - 9.5], [gx1 - 10, gy1 + id + 9.5, gx1 + iw + 10, gy1 + id + 10.5], [gx1 - 10.5, gy1 - 10, gx1 - 9.5, gy1 + id + 10], [gx1 + iw + 9.5, gy1 - 10, gx1 + iw + 10.5, gy1 + id + 10]]) wbox(ceilDeco, a, b2, c2, d2, H - 1, H - 0.3, led, false);
+        const drop = 16, lo = H - drop, gx1 = cx - iw / 2, gy1 = cy - id / 2, gx2 = gx1 + iw, gy2 = gy1 + id;
+        for (const b of [[x1, y1, x2, gy1], [x1, gy2, x2, y2], [x1, gy1, gx1, gy2], [gx2, gy1, x2, gy2]]) if (b[2] - b[0] > 0.5 && b[3] - b[1] > 0.5) wbox(ceilDeco, ...b, lo, H, white, false);
+        wbox(ceilDeco, gx1, gy1, gx2, gy2, H - 0.8, H - 0.2, dark, false);   // 槽內深色底，格柵縫看進去是暗的
+        const along = iw >= id, n = Math.floor((along ? id : iw) / 8), geo = new THREE.BoxGeometry(along ? iw * cm : 4 * cm, 10 * cm, along ? 4 * cm : id * cm), im = new THREE.InstancedMesh(geo, wood, n), m4 = new THREE.Object3D();
+        for (let i = 0; i < n; i++) { const t2 = (i + 0.5) * 8; m4.position.set((along ? cx : gx1 + t2) * cm, (lo + 2 + 5) * cm, (along ? gy1 + t2 : cy) * cm); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); } im.castShadow = true; im.receiveShadow = true; ceilDeco.add(im);
+        for (const [a, b2, c2, d2] of [[gx1, gy1, gx2, gy1 + 1], [gx1, gy2 - 1, gx2, gy2], [gx1, gy1, gx1 + 1, gy2], [gx2 - 1, gy1, gx2, gy2]]) wbox(ceilDeco, a, b2, c2, d2, H - 1.4, H - 0.9, led, false);   // 槽內一圈暖光
+        if (full) { const n2 = Math.max(2, Math.round(w / 130)); for (let k2 = 0; k2 < n2; k2++) { const x = x1 + w * (k2 + 0.5) / n2; disc(x, (y1 + gy1) / 2, lo); disc(x, (gy2 + y2) / 2, lo); } }
       } else {   // F：法式線板（牆頂階梯線板＋天花框線＋中央花飾）
         const ring = (a, b, c2, d2, wd, z0, z1) => { for (const r of [[a, b, c2, b + wd], [a, d2 - wd, c2, d2], [a, b + wd, a + wd, d2 - wd], [c2 - wd, b + wd, c2, d2 - wd]]) wbox(ceilDeco, ...r, z0, z1, molding, false); };
         ring(x1, y1, x2, y2, 4, H - 12, H); ring(x1, y1, x2, y2, 7, H - 12, H - 9); ring(x1, y1, x2, y2, 10, H - 3, H);
