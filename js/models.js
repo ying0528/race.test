@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH } from './catalog.js?v=20261120b';
-import * as MT from './mats.js?v=20261120b';
+import { WOODS, FINISH, ksysLayout } from './catalog.js?v=20261120c';
+import * as MT from './mats.js?v=20261120c';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -981,10 +981,7 @@ function kitchenSys(g, it, P, o) {
   const dm = fin === 'wood' ? MT.wood(c, { rings: 16, gloss: 0.15, warp: 0.3, vert: true }) : MT.flat(c, 0.42), inner = MT.flat(shade(c, 0.62), 0.7), top = ktop(it.color2 || '#EDEBE7');
   const dark = new THREE.Color(c).getHSL({}).l < 0.35, prof = MT.metal(sk === 'modern' || dark ? '#232325' : sk === 'luxe' ? '#B8955A' : '#8A6A4A', 0.3), frameM = prof;
   const H0 = 90, PH = 10, CT = 3, BH = H0 - PH - CT, Z = d / 2, UD = 35, UB = 152, UZ = -Z + UD / 2, uh = h - UB, FZ = Z - 2.4;
-  const pantry = kind === 'tall' ? 60 : 0, bw = w - pantry, x0 = -w / 2;
-  const segs = [];
-  if (kind === 'comp') { const hob = Math.min(80, bw * 0.45); segs.push(['hob', hob], ['sink', bw - hob]); }
-  else { const hob = kind === 'tall' ? 90 : 80, fixed = hob + 60 + 90, rest = Math.max(0, bw - fixed), a = Math.round(rest * 0.4 / 5) * 5; segs.push(['hob', hob]); if (a >= 30) segs.push(['doors', a]); segs.push(['dw', 60], ['sink', 90]); if (rest - a >= 20) segs.push(['doors', rest - a]); else segs[segs.length - 1][1] += rest - a; if (a < 30 && a > 0) segs[0][1] += a; }
+  const L = ksysLayout(w, v), { pantry, bw, x0, segs } = L;
   // 下櫃箱體（內側深色，門縫看得出來）＋內凹踢腳＋踢腳燈
   box(s, bw - 1, PH, d - 14, MT.flat('#2A2B2D', 0.6), x0 + bw / 2, PH / 2, -5); box(s, bw - 4, 0.5, 0.8, M('emit', '#FFE3B8'), x0 + bw / 2, 0.6, Z - 12.2).castShadow = false;
   box(s, bw, BH, 1.6, inner, x0 + bw / 2, PH + BH / 2, -Z + 0.8); box(s, bw, 1.8, d - 5, inner, x0 + bw / 2, PH + 0.9, -2.5); for (const xx of [x0 + 0.9, x0 + bw - 0.9]) box(s, 1.8, BH + PH, d - 3, dm, xx, (BH + PH) / 2, -1.5);
@@ -998,7 +995,7 @@ function kitchenSys(g, it, P, o) {
     else { const n = Math.max(1, Math.round(sw / 45)), ww = sw / n; for (let q = 0; q < n; q++) door(x + ww * (q + 0.5), PH + dh / 2, ww, dh); if (t === 'sink') { sinkX = cx; sinkW = sw; } }
     x += sw; }
   // 檯面＋水槽開孔（下嵌式大單槽）
-  const sbw = Math.min(72, sinkW - 18), sbd = 44, sz = 2, scx = kind === 'comp' ? x0 + segs[0][1] + Math.min(sinkW - sbw / 2 - 10, Math.max(sbw / 2 + 12, sinkW * 0.55)) : sinkX;
+  const sbw = L.sbw, sbd = 44, sz = 2, scx = L.scx;
   const sl = scx - sbw / 2, sr = scx + sbw / 2, cy = H0 - CT / 2, ov = 1.5;
   const piece = (xa, xb, za, zb) => { if (xb - xa > 0.5 && zb - za > 0.5) tileUV(box(s, xb - xa, CT, zb - za, top, (xa + xb) / 2, cy, (za + zb) / 2, 0.3), xb - xa, zb - za); };
   piece(x0, sl, -Z, Z + ov); piece(sr, x0 + bw, -Z, Z + ov); piece(sl, sr, -Z, sz - sbd / 2); piece(sl, sr, sz + sbd / 2, Z + ov);
@@ -1028,7 +1025,8 @@ function kitchenSys(g, it, P, o) {
           if (o.decor) { if ((k + q) % 2 === 0) for (let p = -1; p <= 1; p++) lathe(s, [[0, 0], [3, 0], [3, 0.4], [0.5, 0.6], [0.5, 9], [3.4, 12], [3.8, 17], [3.4, 17], [3, 12.5], [0, 10]], MT.glass('#EEF2F1'), cx + p * dw * 0.27, yy + 0.4, UZ - 3, 20);
           else { for (let p = 0; p < 4; p++) cyl(s, 7 - p * 0.2, 5 - p * 0.2, 1.6, MT.ceramic('#F3F1EC'), cx - dw * 0.15, yy + 1.2 + p * 1.7, UZ - 2, 24); lathe(s, [[0, 0], [3.5, 0], [4.5, 6], [2, 12], [1.6, 15], [2.2, 16], [0, 16]], MT.ceramic('#E6E0D4'), cx + dw * 0.25, yy + 0.4, UZ - 2, 20); } } });
         continue; }
-      box(s, dw - 0.5, hh - 0.5, 1.9, dm, cx, y0 + hh / 2, fz - 0.6, 0.25);
+      if (hh > 105) { const h2 = Math.round(hh * 0.3); box(s, dw - 0.5, hh - h2 - 0.5, 1.9, dm, cx, y0 + (hh - h2) / 2, fz - 0.6, 0.25); box(s, dw - 0.5, h2 - 0.5, 1.9, dm, cx, h - h2 / 2, fz - 0.6, 0.25); }   // 到頂的吊櫃分上下兩片門
+      else box(s, dw - 0.5, hh - 0.5, 1.9, dm, cx, y0 + hh / 2, fz - 0.6, 0.25);
       if (fin === 'fluted' || (kind === 'tall' && t === 'hood')) for (let fx = -dw / 2 + 1.6; fx < dw / 2 - 1; fx += 2) flutes.push([cx + fx, y0 + hh / 2, hh - 1.6, fz + 0.5]); }
   });
   if (flutes.length) { const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.75, 0.75, 1, 8), dm, flutes.length), m4 = new THREE.Object3D(); flutes.forEach(([fx, fy, fh, fz], i) => { m4.position.set(fx, fy, fz); m4.scale.set(1, fh, 1); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); }); im.castShadow = true; s.add(im); }

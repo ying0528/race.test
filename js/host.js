@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120b';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120b';
-import { buildItem, buildPerson, M } from './models.js?v=20261120b';
-import * as MT from './mats.js?v=20261120b';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120c';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120c';
+import { buildItem, buildPerson, M } from './models.js?v=20261120c';
+import * as MT from './mats.js?v=20261120c';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -258,8 +258,9 @@ function proto(sig, make, tall) {
 }
 function sigOf(it, people, used) {
   const sk = it.st || state.style, spec = getItem(it.key, sk, it); if (!spec) return null;
+  if (spec.cat === 'ksys' || (spec.cat === 'built' && spec.h >= 250)) spec.h = PLAN.H;   // 系統櫃：高度跟這一戶的天花板一樣
   const pose = spec.t === 'person' ? people.get(it.id) : null, decor = !used.has(it.id);
-  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color : '') + (lenRange(spec) || SIZES[it.key] ? '~' + spec.w + 'x' + spec.d + 'x' + spec.h : '') };
+  return { spec, sk, pose, decor, sig: pose ? it.key + '|' + pose.mode + '|' + (pose.seat || 0) : it.key + '@' + sk + (decor ? '' : '-') + (spec.fin ? '~' + spec.fin + spec.color + (spec.color2 || '') : '') + (spec.cat === 'ksys' || spec.cat === 'built' ? '^' + spec.h : '') + (lenRange(spec) || SIZES[it.key] ? '~' + spec.w + 'x' + spec.d + 'x' + spec.h : '') };
 }
 const makeObj = (q) => proto(q.sig, () => (q.pose ? buildPerson(q.spec, q.pose) : buildItem(q.spec, STYLES[q.sk], { decor: q.decor })), !q.pose && q.spec.elev + q.spec.h > CUT);
 // 平板：畫面上沒在用的家具模型、紋路材質釋放掉（換地板、牆面、風格、家具後 1 秒做一次）

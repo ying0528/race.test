@@ -1,6 +1,6 @@
 // 手機平面圖的繪製：有材質的地板、粗黑牆、門弧線，以及每種家具的俯視圖（單位 cm，等比例）
-import { PLAN } from './plan.js?v=20261120b';
-import { STYLES, FLOORS, planColor, wallSegs, doorGap } from './catalog.js?v=20261120b';
+import { PLAN } from './plan.js?v=20261120c';
+import { STYLES, FLOORS, planColor, wallSegs, doorGap, ksysLayout } from './catalog.js?v=20261120c';
 
 const INK = '#4A4038';
 function tint(hex, f) {   // f > 1 變亮，f < 1 變暗
@@ -124,6 +124,14 @@ export function itemArt(s) {
     case 'sink': { h = counter(w, d); const bs = v === 'double' ? [[-w / 4, w / 2 - 12], [w / 4, w / 2 - 12]] : [[0, Math.min(w - 16, 70)]]; for (const [px, bw] of bs) h += r(px - bw / 2, -d / 2 + 13, bw, d - 22, 5, '#FFFFFF', `stroke="${INK}" stroke-width="1.1"`) + r(px - bw / 2 + 3, -d / 2 + 16, bw - 6, d - 28, 4, '#E6E9EB') + el(px, 2, 2.2, 2.2, '#77797D'); h += el(0, -d / 2 + 7, 2.6, 2.6, '#C9CCD0', S) + ln(0, -d / 2 + 7, 0, -d / 2 + 20, '#9A9CA0', 2.4, 'stroke-linecap="round"'); break; }
     case 'fridge': h = r(x0, y0, w, d, 3, '#DADCDF', S) + r(x0 + 3, y0 + 3, w - 6, d - 9, 2, '#F4F5F6') + ln(x0, d / 2 - 4, w / 2, d / 2 - 4, '#8E9196', 1.6) + (v === 'side' ? ln(0, d / 2 - 4, 0, d / 2, '#8E9196', 1) : ''); break;
     case 'kcab': h = counter(w, d); break;
+    case 'ksys': {   // 廚房系統櫃：檯面＋瓦斯爐＋水槽（＋洗碗機、高櫃），爐在右的款式整組左右翻過來
+      const L = ksysLayout(w, v); let g = r(L.x0, -d / 2, L.bw, d, 1.5, '#F3F0EA', S);
+      let x = L.x0; for (const [k, sw] of L.segs) { if (x > L.x0) g += ln(x, -d / 2 + 2, x, d / 2 - 2, '#D5CFC3', 0.7); if (k === 'dw') g += r(x + 4, d / 2 - 7, sw - 8, 4, 1, '#3A3B3D'); x += sw; }
+      const gw = Math.min(L.hobW - 8, 74); g += r(L.hobX - gw / 2, -d / 2 + 6, gw, d - 14, 2, '#1D1D1F', S) + burner(L.hobX - gw / 4.2, -2, 9) + burner(L.hobX + gw / 4.2, -2, 9);
+      g += r(L.scx - L.sbw / 2, -d / 2 + 10, L.sbw, 44, 5, '#FFFFFF', `stroke="${INK}" stroke-width="1.1"`) + r(L.scx - L.sbw / 2 + 3, -d / 2 + 13, L.sbw - 6, 38, 4, '#5A5E63') + el(L.scx, -d / 2 + 34, 2.4, 2.4, '#C9CCD0') + el(L.scx + L.sbw * 0.28, -d / 2 + 6, 2.6, 2.6, '#C9CCD0', S);
+      if (L.pantry) g += r(w / 2 - L.pantry, -d / 2, L.pantry, d, 1.5, '#E4DFD6', S) + ln(w / 2 - L.pantry / 2, -d / 2 + 3, w / 2 - L.pantry / 2, d / 2 - 3, '#B9B2A6', 0.8);
+      g += r(L.x0, -d / 2, L.bw, 35, 0, 'none', `stroke="${INK}" stroke-width=".8" stroke-dasharray="5 4"`);   // 吊櫃範圍（虛線）
+      h = L.mirror ? `<g transform="scale(-1 1)">${g}</g>` : g; break; }
     case 'hood': h = r(x0, y0, w, d, 2, '#C9CCD0', `stroke="${INK}" stroke-width=".8" stroke-dasharray="5 4" fill-opacity=".45"`); break;
     case 'tower': h = v === 'dw' ? counter(w, d) : r(x0, y0, w, d, 2, c, S) + ln(x0, y0, w / 2, d / 2, INK, 0.7) + ln(w / 2, y0, x0, d / 2, INK, 0.7); break;
     case 'toilet': { const td = v === 'wall' ? 0 : 19, bd = d - td; h = (td ? r(x0 + 1, y0, w - 2, td, 4, '#FFFFFF', S) + el(0, y0 + td / 2, 2.4, 2.4, '#C9CCD0', S) : '') + el(0, y0 + td + bd / 2 - 2, w / 2, bd / 2 + 2, '#FFFFFF', S) + el(0, y0 + td + bd / 2, w / 2 - 5, bd / 2 - 5, '#F1F3F4', 'stroke="#B9BDC2" stroke-width=".8"'); break; }

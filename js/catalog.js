@@ -46,9 +46,9 @@ export const CATS = [
     ['中型盆栽', 45, 45, 110], ['天堂鳥', 80, 80, 180], ['桌上盆栽', 22, 22, 30]] },
   // ---------------- 廚具 ----------------
   { id: 'ksys', n: '廚房系統櫃', g: '廚具', t: 'ksys', items: [
-    ['廚房系統櫃 A（爐在左）', 300, 60, 230, '#F1EEE8', 'longL'], ['廚房系統櫃 A（爐在右）', 300, 60, 230, '#F1EEE8', 'longR'],
-    ['廚房系統櫃 B 含高櫃（爐在左）', 340, 60, 230, '#F1EEE8', 'tallL'], ['廚房系統櫃 B 含高櫃（爐在右）', 340, 60, 230, '#F1EEE8', 'tallR'],
-    ['小廚房 C（爐在左）', 180, 60, 230, '#F1EEE8', 'compL'], ['小廚房 C（爐在右）', 180, 60, 230, '#F1EEE8', 'compR']] },
+    ['廚房系統櫃 A（爐在左）', 300, 60, 280, '#F1EEE8', 'longL'], ['廚房系統櫃 A（爐在右）', 300, 60, 280, '#F1EEE8', 'longR'],
+    ['廚房系統櫃 B 含高櫃（爐在左）', 340, 60, 280, '#F1EEE8', 'tallL'], ['廚房系統櫃 B 含高櫃（爐在右）', 340, 60, 280, '#F1EEE8', 'tallR'],
+    ['小廚房 C（爐在左）', 180, 60, 280, '#F1EEE8', 'compL'], ['小廚房 C（爐在右）', 180, 60, 280, '#F1EEE8', 'compR']] },
   { id: 'cook', n: '瓦斯爐', g: '廚具', t: 'cook', items: [
     ['IH 雙口爐（含下櫃）', 75, 60, 88, 'white', 'ih2'], ['IH 三口爐（含下櫃）', 80, 60, 88, 'black', 'ih3'], ['單口爐（含下櫃）', 45, 60, 88, 'white', 1],
     ['四口瓦斯爐（含下櫃）', 90, 60, 88, 'black', 4]] },
@@ -80,13 +80,13 @@ export const CATS = [
     ['頂天系統衣櫃', 240, 60, 280, '#D9C2A3', 'ward', 'veneer'], ['電視牆收納櫃', 300, 40, 280, '#D9C2A3', 'tvwall', 'veneer'],
     ['玄關鞋櫃＋穿鞋椅', 200, 40, 280, '#D9C2A3', 'entry', 'veneer'], ['整面開放書牆', 240, 35, 280, '#D9C2A3', 'books', 'veneer'],
     ['餐邊電器高櫃', 180, 60, 280, '#F1EEE8', 'pantry', 'matte'], ['床頭背牆＋吊櫃', 300, 40, 280, '#D9C2A3', 'bedwall', 'veneer'],
-    ['書桌＋上吊櫃', 160, 60, 250, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer'],
+    ['書桌＋上吊櫃', 160, 60, 280, '#D9C2A3', 'desk', 'veneer'], ['臥榻收納櫃', 220, 60, 280, '#D9C2A3', 'bench', 'veneer'],
     ['化妝台＋開放更衣牆', 300, 50, 280, '#EFEBE3', 'dress', 'leather'],
-    ['弧形抽屜玄關櫃', 160, 42, 85, '#E4D9C4', 'curve', 'matte'], ['壁龕書桌展示牆', 180, 55, 250, '#B7BE8C', 'niche', 'matte'],
-    ['圓形把手衣櫃', 200, 60, 250, '#F3EFE7', 'circ', 'matte'], ['開放衣帽櫃', 170, 55, 250, '#2E2F31', 'openw', 'matte'],
+    ['弧形抽屜玄關櫃', 160, 42, 85, '#E4D9C4', 'curve', 'matte'], ['壁龕書桌展示牆', 180, 55, 280, '#B7BE8C', 'niche', 'matte'],
+    ['圓形把手衣櫃', 200, 60, 280, '#F3EFE7', 'circ', 'matte'], ['開放衣帽櫃', 170, 55, 280, '#2E2F31', 'openw', 'matte'],
     ['床頭木作腰牆', 300, 8, 110, '#D9C2A3', 'wains', 'veneer'], ['懸浮化妝台＋環形燈鏡', 100, 45, 160, '#F3EFE7', 'vanity2', 'matte'],
     ['雙層落地窗簾', 260, 14, 265, '#8D8377', 'curtain', 'linen'],
-    ['整面系統衣櫃（吊衣＋抽屜＋鞋櫃）', 360, 60, 260, '#D9C2A3', 'walkin', 'veneer'], ['鐵件開放衣櫃', 240, 55, 250, '#D9C2A3', 'iron', 'veneer']] },
+    ['整面系統衣櫃（吊衣＋抽屜＋鞋櫃）', 360, 60, 280, '#D9C2A3', 'walkin', 'veneer'], ['鐵件開放衣櫃', 240, 55, 280, '#D9C2A3', 'iron', 'veneer']] },
   // 牆上置物架：第 8 欄是預設離地高度
   { id: 'wshelf', n: '牆上置物架', g: '裝飾', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
@@ -110,6 +110,15 @@ export const CATS = [
 
 const BY = Object.fromEntries(CATS.map(c => [c.id, c]));
 // 同一款只差尺寸的家具：放進場景後在手機上選尺寸（it.sz 是選到第幾個）。每個選項 [名稱, w, d, h]
+// 廚房系統櫃的下櫃配置（3D 模型與手機平面圖共用）：由左到右的 [種類, 寬]，以及爐、水槽中心（未鏡射時）
+export function ksysLayout(w, v) {
+  const kind = v.slice(0, -1), pantry = kind === 'tall' ? 60 : 0, bw = w - pantry, x0 = -w / 2, segs = [];
+  if (kind === 'comp') { const hob = Math.min(80, bw * 0.45); segs.push(['hob', hob], ['sink', bw - hob]); }
+  else { const hob = kind === 'tall' ? 90 : 80, rest = Math.max(0, bw - (hob + 60 + 90)), a = Math.round(rest * 0.4 / 5) * 5; segs.push(['hob', hob]); if (a >= 30) segs.push(['doors', a]); segs.push(['dw', 60], ['sink', 90]); if (rest - a >= 20) segs.push(['doors', rest - a]); else segs[segs.length - 1][1] += rest - a; if (a < 30 && a > 0) segs[0][1] += a; }
+  let x = x0; const at = {}; for (const [k, sw] of segs) { if (!at[k]) at[k] = [x + sw / 2, sw]; x += sw; }
+  const sinkW = at.sink[1], sbw = Math.min(72, sinkW - 18), scx = kind === 'comp' ? x0 + segs[0][1] + Math.min(sinkW - sbw / 2 - 10, Math.max(sbw / 2 + 12, sinkW * 0.55)) : at.sink[0];
+  return { kind, pantry, bw, x0, segs, hobX: at.hob[0], hobW: at.hob[1], sinkX: at.sink[0], sinkW, scx, sbw, mirror: v.endsWith('R') };
+}
 export const SIZES = {
   'sofa:0': { def: 1, opts: [['單人', 90, 88, 80], ['雙人', 150, 88, 80]] },
   'tv:0': { def: 1, opts: [['55 吋', 123, 6, 71], ['65 吋', 145, 6, 83], ['75 吋', 167, 6, 96], ['85 吋', 190, 6, 108]] },
