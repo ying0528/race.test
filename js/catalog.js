@@ -131,11 +131,11 @@ const FABRIC_T = { sofa: 1, chair: 1, ochair: 1, bed: 1, rug: 1 };
 
 // 四種風格：各有自己的木色與布料色，型錄會依風格換成對應款式
 export const STYLES = {
-  nordic: { sk: 'nordic', n: '北歐', d: '洗白木地板、霧藍牆、芥末黃點綴', floor: 'wood', floorC: '#E7DAC8', wall: '#C9D3D6', wallf: 'paint|#C9D3D6|', accent: '#D4A84B', sw: ['#E7DAC8', '#C9D3D6', '#F2F0EC', '#D4A84B'],
+  nordic: { sk: 'nordic', n: '北歐', d: '白色彩色石紋地板、霧藍牆、芥末黃點綴', floor: 'terrazzo', floorK: 't0131', floorC: '#F4EFE4', wall: '#C9D3D6', wallf: 'paint|#C9D3D6|', accent: '#D4A84B', sw: ['#F4EFE4', '#C9D3D6', '#F2F0EC', '#D4A84B'],
     woods: ['white', 'ash', 'oak'], fabrics: ['#C9CCCD', '#8EA1AE', '#E3DED4', '#D4A84B', '#B8BCBF'] },
   modern: { sk: 'modern', n: '現代', d: '水泥灰牆、黑灰家具、香檳金', floor: 'wood', floorC: '#9A8C7D', wall: '#A9A79F', wallf: 'stucco|#A9A79F|', accent: '#C9A86A', sw: ['#9A8C7D', '#A9A79F', '#2E2F31', '#C9A86A'],
     woods: ['black', 'gray', 'walnut'], fabrics: ['#5A5E64', '#3C4047', '#8D8D8A', '#B59A6A', '#2E2F31'] },
-  japandi: { sk: 'japandi', n: '日式', d: '柚木地板、珪藻土牆、墨黑與抹茶', floor: 'wood', floorC: '#99673A', wall: '#DDD0B8', wallf: 'diatom|#DDD0B8|', accent: '#7D8B5F', sw: ['#99673A', '#DDD0B8', '#4A4744', '#7D8B5F'],
+  japandi: { sk: 'japandi', n: '日式', d: '洗白橡木地板、珪藻土牆、墨黑與抹茶', floor: 'wood', floorK: 'w15', floorC: '#E7DAC8', wall: '#DDD0B8', wallf: 'diatom|#DDD0B8|', accent: '#7D8B5F', sw: ['#E7DAC8', '#DDD0B8', '#4A4744', '#7D8B5F'],
     woods: ['teak', 'oak', 'black'], fabrics: ['#D8CCB8', '#4A4744', '#7D8B5F', '#B07A55', '#E6DDCD'] },
   luxe: { sk: 'luxe', n: '輕奢', d: '石紋地坪、白橡木紋牆、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#E8E2D8', wallf: 'oak|#E8E2D8|', accent: '#C8A464', sw: ['#E9E5DE', '#E8E2D8', '#2F3E5C', '#C8A464'],
     woods: ['walnut', 'white', 'marble'], fabrics: ['#2F3E5C', '#E7E1D7', '#6B5B73', '#3F5A54', '#8C7A5B'] },

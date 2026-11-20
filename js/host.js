@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261119f';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261119f';
-import { buildItem, buildPerson, M } from './models.js?v=20261119f';
-import * as MT from './mats.js?v=20261119f';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120a';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120a';
+import { buildItem, buildPerson, M } from './models.js?v=20261120a';
+import * as MT from './mats.js?v=20261120a';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -95,9 +95,10 @@ function applyRoomFloors() {   // 個別區域的地板：疊一層薄薄的在�
   for (const q of PLAN.rooms) { const k = state.floors[q.id]; if (FLOORS[k]) for (const [a, b, c, d] of q.rs) { const m = floorMesh(a, b, c, d, floorMatOf(k), 1.6); m.position.y = 0.002; roomFloors.add(m); } }
   if (roomFloors.parent !== scene) scene.add(roomFloors);
 }
+const styleFloorMat = (st) => FLOORS[st.floorK] ? floorMatOf(st.floorK) : st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);   // 風格預設地板
 function floorMatOf(key) {
   const f = FLOORS[key], st = STYLES[state.style];
-  if (!f) return st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC);
+  if (!f) return styleFloorMat(st);
   if (f.k === 'strip') return MT.stripTile(f.c);
   return f.k === 'terrazzo' ? MT.terrazzo(f.c) : f.k === 'tile' ? MT.tiles(f.c, 2, false, 0.35) : f.k === 'stone' ? MT.stoneTile(f.c, 4) : f.k === 'carpet' ? MT.carpet(f.c) : MT.floorWood(f.c);
 }
@@ -274,14 +275,16 @@ function liteClean() {
     MT.purge(inUse); invalidate(2);
   }, 1000);
 }
-function syncItems() {
-  invalidate();
+let syncLater = 0;
+function syncItems(budget = 0) {   // budget：每個畫面最多花幾毫秒建模型，超過的留到下一個畫面（換風格時畫面不會卡住）
+  invalidate(); const t0 = performance.now(); let more = false;
   for (const it of state.items) if (it.key.startsWith('person:')) keepOffBeds(it, state.items);   // 人偶不能和床重疊
   const seen = new Set(), people = resolvePeople(state.items), used = new Set([...people.values()].map((p) => p.on).filter(Boolean));
   for (const it of state.items) {
     const q = sigOf(it, people, used); if (!q) continue;
     seen.add(it.id);
     let e = objs.get(it.id);
+    if (e && e.sig !== q.sig && budget && performance.now() - t0 > budget) { more = true; continue; }
     if (!e || e.sig !== q.sig) { if (e) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); } e = { sig: q.sig, o: makeObj(q), cap: q.pose ? null : capFor(q.spec) }; furn.add(e.o); if (e.cap) caps.add(e.cap); objs.set(it.id, e); }
     if (q.pose) { e.o.position.set(q.pose.x * cm, q.pose.elev * cm, q.pose.y * cm); e.o.rotation.y = -q.pose.r * Math.PI / 180; }
     else { e.o.position.set(it.x * cm, q.spec.elev * cm, it.y * cm); e.o.rotation.y = -it.r * Math.PI / 180; if (e.cap) { e.cap.position.set(it.x * cm, 0, it.y * cm); e.cap.rotation.y = e.o.rotation.y; } }
@@ -289,6 +292,7 @@ function syncItems() {
   for (const [id, e] of objs) if (!seen.has(id)) { furn.remove(e.o); if (e.cap) caps.remove(e.cap); objs.delete(id); }
   if (state.mode === 'tour') setScreens(true);   // 導覽中新增／刪除電視：重新決定要不要播
   liteClean();
+  cancelAnimationFrame(syncLater); if (more) syncLater = requestAnimationFrame(() => syncItems(budget));
 }
 // 閒置時先把其他風格的材質與預設家具準備好，之後切換風格就不用現算
 const warm = []; let warming = false, camMoving = false;
@@ -300,20 +304,20 @@ function warmProto(key, sk) {   // 先把家具模型建好，並在背景編譯
 }
 let lastInput = 0;
 for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
+function texJob(make) { return [() => { const job = MT.prepJob(make); if (!job) return null; return (function* () { yield* job; const m = make(); for (const t of [m.map, m.normalMap]) if (t) renderer.initTexture(t); })(); }]; }
 function texJobs() {   // 所有地板、牆面材質的貼圖，閒置時分小段先畫好；手機點選時就能立刻換上
   const makers = [...Object.keys(FLOORS).map((k) => () => floorMatOf(k)), ...WALL_GROUPS.flatMap((g) => [g.k, ...(g.alt ? [g.alt[0]] : [])].flatMap((kind) => g.colors.map(([c]) => () => MT.wallFinish(kind, c, false))))];
   return makers.map((make) => () => { const job = MT.prepJob(make); if (!job) return null; return (function* () { yield* job; const m = make(); for (const t of [m.map, m.normalMap]) if (t) renderer.initTexture(t); })(); });
 }
 function queueWarm() {
   if (LITE) return;   // 平板：不預先準備（太佔記憶體），用到才畫
-  warm.unshift(...texJobs());
+  // 先準備「切換風格」會用到的：其他風格的牆、地板貼圖，以及這一戶家具的其他風格款式；之後才是其他材質與其他戶
+  const first = [];
+  for (const sk of Object.keys(STYLES)) { if (sk === state.style) continue; const st = STYLES[sk], w = parseWall(st.wallf);
+    first.push(...texJob(() => MT.wallPaint(st.wall)), ...texJob(() => styleFloorMat(st)), ...(w ? texJob(() => MT.wallFinish(w.kind, w.color, w.matte)) : [])); }
+  for (const sk of Object.keys(STYLES)) if (sk !== state.style) for (const d of PLAN.defaults) first.push(() => warmProto(d.key, sk));
+  warm.unshift(...first, ...texJobs());
   for (const u of UNITS) if (u.plan !== PLAN) for (const d of u.plan.defaults) warm.push(() => warmProto(d.key, state.style));
-  for (const sk of Object.keys(STYLES)) {
-    if (sk === state.style) continue;
-    const st = STYLES[sk];
-    warm.push(() => MT.wallPaint(st.wall), () => (st.floor === 'marble' ? MT.tiles(st.floorC, 2, true) : MT.floorWood(st.floorC)));
-    for (const d of PLAN.defaults) warm.push(() => warmProto(d.key, sk));
-  }
   if (warming) return; warming = true;
   const busy = () => state.mode === 'tour' || camMoving || performance.now() - lastInput < 1200;
   let gen = null;
@@ -807,7 +811,7 @@ function onMsg(entry, m) {
         for (const q of fk === 'kitchen' ? state.items.filter((i) => finishOf(getItem(i.key)) === 'kitchen') : [it]) { q.m = m.m; q.c = m.c; if (c2) q.c2 = c2; }
         syncItems();
       } break; }
-    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(); } break;
+    case 'style': if (STYLES[m.k] && m.k !== state.style) { state.style = m.k; applyStyle(); syncItems(14); } break;
     case 'move': { const it = find(m.id); if (it) { it.x = num(m.x, 0, PLAN.W); it.y = num(m.y, 0, PLAN.D); syncItems(); } break; }
     case 'cut': { const i = m.i | 0; if (!(PLAN.cuts || [])[i]) break;   // 拆牆／復原牆
       state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
