@@ -42,6 +42,11 @@ const FAB = {
   knit: (x, y) => { const u = (x % 16) / 16, row = Math.floor(x / 16), v = ((y + (row % 2) * 8) % 16) / 16, h = Math.sin(Math.PI * u) * (0.55 + 0.45 * Math.abs(Math.sin(Math.PI * (v + u * 0.5)))); return [h, 0.82 + 0.2 * h]; },
   flannel: (x, y) => { const h = fbm(x * 0.5, y * 0.5, 3); return [h, 0.93 + 0.12 * h + (fbm(x * 0.03, y * 0.03, 2) - 0.5) * 0.06]; },
   herring: (x, y) => { const c = 16, col = Math.floor(x / c), u = (((col % 2 ? y + x : y - x) % 8) + 8) % 8 / 8, e = Math.min(x % c, c - (x % c)) / 2, h = Math.sin(Math.PI * u) * Math.min(1, e); return [h, 0.8 + 0.26 * h]; },
+  // 床墊布：菱格絎縫（車線凹下、中間鼓起）＋細針織紋，車線上一排小針點
+  quilt: (x, y) => { const p = 64, a = (((x + y) % p) + p) % p / p, b = (((x - y) % p) + p) % p / p, d = Math.min(Math.min(a, 1 - a), Math.min(b, 1 - b)), puff = Math.sin(Math.min(1, d * 4.2) * Math.PI / 2), knit = 0.5 + 0.5 * Math.sin(x * Math.PI / 2) * Math.sin(y * Math.PI / 4), dot = d < 0.03 && (x + y) % 6 < 3 ? 1 : 0;
+    return [0.12 + 0.7 * puff + 0.1 * knit + 0.05 * vnoise(x * 0.7, y * 0.7), 0.9 + 0.1 * puff + 0.025 * knit - 0.06 * dot]; },
+  // 被套、床單：純棉緞紋（細斜紋＋淡淡的光澤與起伏）
+  sateen: (x, y) => { const t = Math.sin(2 * Math.PI * (2 * x + y) / 8), n = fbm(x * 0.02, y * 0.02, 3); return [0.5 + 0.16 * t + (n - 0.5) * 0.5, 0.97 + 0.02 * t + (n - 0.5) * 0.06]; },
   boucle: (x, y) => { const h = fbm(x * 0.18, y * 0.18, 3) * 0.6 + 0.4 * vnoise(x * 0.5, y * 0.5); return [h, 0.8 + 0.28 * h]; },
 };
 const woodFn = (rings, seed, warp = 2.4) => (x, y, S) => { const k = 1024 / S, X = x * k, Y = y * k, v = Y / 1024 * rings + fbm(X * 0.0022 + seed, Y * 0.011 + seed, 4) * warp, late = Math.pow(v - Math.floor(v), 4);
@@ -135,7 +140,7 @@ const stripFn = (x, y, S) => { const tw = S / 2, th = S / 16, col = Math.floor(x
 export const stripTile = (color) => memo('sb' + color, () => { const m = new THREE.MeshStandardMaterial(Object.assign(maps('strip', color, stripFn, 1.8, 160 / 120, Math.max(SIZE, BIG)), { roughness: 0.7 })); m.userData.repCm = 160; return m; });
 
 const V2 = (a) => new THREE.Vector2(a, a);
-export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + color + rep, () => new THREE.MeshStandardMaterial(Object.assign(maps(kind, color, FAB[kind], kind === 'linen' ? 4.4 : 6, rep), { roughness: 0.9, normalScale: V2(0.9) })));
+export const fabric = (color, rep = 4, kind = 'linen') => memo('f' + kind + color + rep, () => new THREE.MeshStandardMaterial(Object.assign(maps(kind, color, FAB[kind], kind === 'linen' ? 4.4 : 6, rep), { roughness: kind === 'sateen' ? 0.6 : 0.9, normalScale: V2(kind === 'quilt' ? 1.6 : 0.9) })));
 export const leather = (color) => memo('l' + color, () => new THREE.MeshStandardMaterial(Object.assign(maps('leather', color, grainy, 3, 4), { roughness: 0.38, normalScale: V2(0.35) })));
 const vertical = (v, m) => { if (v) for (const t of [m.map, m.normalMap]) { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; } return m; };
 export const wood = (color, { rings = 9, gloss = 0.25, warp = 2.4, vert = false } = {}) => memo('w' + color + rings + gloss + warp + vert, () => vertical(vert, new THREE.MeshStandardMaterial(Object.assign(maps('wood' + rings + warp, color, woodFn(rings, new THREE.Color(color).r * 50, warp), 2.2), { roughness: 0.5 - gloss * 0.35, normalScale: V2(0.5) }))));
