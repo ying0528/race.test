@@ -1,7 +1,7 @@
 // 手機端：風格、平面圖編輯器、3D 家具型錄、人偶、3D 導覽搖桿
-import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120d';
-import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds, SIZES } from './catalog.js?v=20261120d';
-import * as ART from './planart.js?v=20261120d';
+import { PLAN, UNIT, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120e';
+import { CATS, GROUPS, PEOPLE, getItem, STYLES, FLOOR_GROUPS, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, resolvePeople, keepOffBeds, SIZES, CEILS } from './catalog.js?v=20261120e';
+import * as ART from './planart.js?v=20261120e';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -154,7 +154,8 @@ function styleMain(st) {
     `<div class="sum">${wallSw(st.wall, st, 'big')}<div class="t"><b>${esc(wallName(st.wall))}</b><span>全戶${pw && pw.group.sheen ? '・' + (pw.matte ? '霧面' : '亮面') : ''}（浴室、陽台除外）</span>` +
     (wo.length ? '<div class="ovr">' + wo.map(([id, k]) => `<em>${wallSw(k, st)}${esc(roomName(id))}：${esc(wallName(k))}</em>`).join('') + '</div>' : '') +
     '</div><button class="chg" data-act="pick" data-k="wall">更換</button></div>' +
-    ((st.floor || st.wall || fo.length || wo.length) ? `<button class="linkb" data-act="resetsty">${S.resetSty ? '再按一次：地板、牆面全部回到風格預設' : '全部回到風格預設'}</button>` : '');
+    '<div class="sumh">天花板</div><div class="crow">' + Object.entries(CEILS).map(([k, n]) => { const cur = st.ceil || STYLES[st.style].ceil; return `<button class="${k === cur ? 'on' : ''}" data-act="ceil" data-k="${k}"><img src="./media/swatch/c_${k}.jpg?v=1" alt=""><span>${n}</span></button>`; }).join('') + '</div><div class="cnote">客餐廳做完整款、臥室自動做簡化版；廚房、浴室維持平頂。進 3D 導覽抬頭就看得到。</div>' +
+    ((st.floor || st.wall || st.ceil || fo.length || wo.length) ? `<button class="linkb" data-act="resetsty">${S.resetSty ? '再按一次：地板、牆面、天花板全部回到風格預設' : '全部回到風格預設'}</button>` : '');
 }
 function stylePicker(st) {
   const W = S.pick === 'wall', fr = PLAN.rooms.some((q) => q.id === S.fr) ? S.fr : '', over = (W ? st.walls : st.floors) || {};
@@ -245,7 +246,7 @@ $('main').addEventListener('click', (e) => {
   if (a === 'fr') { S.fr = b.dataset.k; S.fg = undefined; S.wg = S.wo = S.walt = undefined; S.areaOpen = false; }
   if (a === 'pick') { S.pick = b.dataset.k || null; S.areaOpen = false; S.fg = undefined; S.wg = S.wo = S.walt = undefined; if (!S.pick) S.fr = ''; }
   if (a === 'area') S.areaOpen = !S.areaOpen;
-  if (a === 'resetsty') { if (!S.resetSty) { S.resetSty = true; setTimeout(() => { S.resetSty = false; update(); }, 3000); } else { S.resetSty = false; S.fr = ''; S.st.floor = null; S.st.floors = {}; S.st.wall = null; S.st.walls = {}; send({ t: 'floor', k: null }); send({ t: 'wallf', k: null }); } }
+  if (a === 'resetsty') { if (!S.resetSty) { S.resetSty = true; setTimeout(() => { S.resetSty = false; update(); }, 3000); } else { S.resetSty = false; S.fr = ''; S.st.floor = null; S.st.floors = {}; S.st.wall = null; S.st.walls = {}; S.st.ceil = null; send({ t: 'floor', k: null }); send({ t: 'wallf', k: null }); send({ t: 'ceil', k: null }); } }
   if (a === 'fk') { S.fk = b.dataset.k; S.wg = S.wo = S.walt = undefined; }
   if (a === 'wg') { S.wg = +b.dataset.i; S.wo = S.walt = undefined; }
   if (a === 'wo' || a === 'walt') {   // 換亮面／霧面或木皮／格柵：目前這一區已經是這種材質的話，直接套用到同一個顏色
@@ -254,6 +255,7 @@ $('main').addEventListener('click', (e) => {
     const o = wallOpts(cur); if (o0.same) setWall(wallKey(o.kind, o0.pw.color, o.matte));
   }
   if (a === 'wallf') setWall(b.dataset.k || null);
+  if (a === 'ceil') { S.st.ceil = b.dataset.k === STYLES[S.st.style].ceil ? null : b.dataset.k; send({ t: 'ceil', k: S.st.ceil }); update(); }
   if (a === 'fg') S.fg = +b.dataset.i;
   if (a === 'style') { S.st.style = b.dataset.k; send({ t: 'style', k: b.dataset.k }); }
   else if (a === 'room') { S.room = b.dataset.room || null; S.sel = null; S.selCut = null; S.view = null; }
@@ -281,7 +283,7 @@ $('main').addEventListener('click', (e) => {
   }
   else if (a === 'sz') { const it = S.st.items.find((i) => i.id === S.sel); if (!it || !SIZES[it.key]) return; it.sz = +b.dataset.d; send({ t: 'sz', id: it.id, sz: it.sz }); }   // 同款換尺寸
   else if (a === 'vrot' || a === 'vreset') { const n = a === 'vreset' ? 0 : (vdeg() / 90 + 1) % 4; S.st.vrot = n; S.view = null; send({ t: 'vrot', r: n }); }
-  else if (a === 'fill') { const it = S.st.items.find((i) => i.id === S.sel); if (it && !fillWall(it)) { S.fillNo = Date.now(); setTimeout(update, 2300); } }
+  else if (a === 'fill') { const it = S.st.items.find((i) => i.id === S.sel); if (it && getItem(it.key, it.st || S.st.style, it).v === 'niche') fitNiche(it); else if (it && !fillWall(it)) { S.fillNo = Date.now(); setTimeout(update, 2300); } }
   else if (a === 'elev') {
     const it = S.st.items.find((i) => i.id === S.sel), s = it && getItem(it.key, it.st || S.st.style, it), R = elevRange(s); if (!R) return;
     it.el = Math.max(R.min, Math.min(R.max, s.elev + (+b.dataset.d))); send({ t: 'elev', id: it.id, el: it.el });
@@ -347,6 +349,21 @@ function updateSel() {
   $('rotBtn').disabled = $('delBtn').disabled = !s; $('finBtn').disabled = !finishOf(s);
 }
 // 裝修櫃與牆上置物架：離牆 70cm 內就自動貼上去、背面靠牆
+// 牆中置物格：貼到最近的牆，寬度量到牆凹兩側的牆、深度量到兩側牆的盡頭（沒有牆凹就維持原本深度）
+function fitNiche(it) {
+  const s = getItem(it.key, it.st || S.st.style, it); if (!s || s.v !== 'niche') return;
+  snapToWall(it, true); const r = curRoom(); if (!r) return;
+  const q = r.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || r.r, [x1, y1, x2, y2] = q, k = it.r;
+  const W2 = (x, y) => PLAN.walls.some(([a, b, c, d]) => x > Math.min(a, c) - 0.5 && x < Math.max(a, c) + 0.5 && y > Math.min(b, d) - 0.5 && y < Math.max(b, d) + 0.5);
+  const axisX = k === 0 || k === 180, back = k === 0 ? y1 : k === 180 ? y2 : k === 90 ? x2 : x1, out = k === 0 || k === 270 ? 1 : -1, P2 = (u, v) => (axisX ? [u, v] : [v, u]);
+  const at = (u, dv) => W2(...P2(u, back + out * dv)), c0 = axisX ? it.x : it.y;
+  let lo = c0, hi = c0; while (hi - lo < 800 && !at(lo - 1, 3)) lo -= 1; while (hi - lo < 800 && !at(hi + 1, 3)) hi += 1;
+  let dp = 0; while (dp < 80 && at(lo - 1.5, dp + 1) && at(hi + 1.5, dp + 1)) dp += 1;
+  if (dp < 8 || dp >= 70) return;   // 不是牆凹（平的牆或整個房間的轉角）：維持原本大小，只貼牆
+  const w = Math.max(30, Math.min(400, Math.floor(hi - lo))), depth = dp, mid = (lo + hi) / 2, fixed = back + out * depth / 2;
+  it.len = w; it.dp = depth; [it.x, it.y] = P2(Math.round(mid * 2) / 2, Math.round(fixed * 2) / 2);
+  send({ t: 'len', id: it.id, len: w, exact: true }); send({ t: 'dp', id: it.id, dp: depth }); send({ t: 'move', id: it.id, x: it.x, y: it.y });
+}
 function snapToWall(it, force) {   // force：不管離牆多遠都貼到最近的牆（填滿整面用）
   const s = getItem(it.key, it.st || S.st.style, it), r = curRoom(); if (!s || !r || (s.t !== 'built' && s.t !== 'wshelf')) return;
   const q = r.rs.find(([a, b, c, d]) => it.x >= a - 5 && it.x <= c + 5 && it.y >= b - 5 && it.y <= d + 5) || r.r, [x1, y1, x2, y2] = q, hd = s.d / 2, hw = s.w / 2;
@@ -400,7 +417,7 @@ function bindPlan() {
   const pt = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform((svg.querySelector('#rg') || svg).getScreenCTM().inverse()); };
   const pts = new Map(); let lastSend = 0, pinch = null;
   const baseVB = () => { const r = curRoom().r; return rotVB([r[0] - PAD, r[1] - PAD, r[2] - r[0] + 2 * PAD, r[3] - r[1] + 2 * PAD]); };
-  const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) { send({ t: 'move', id: it.id, x: it.x, y: it.y }); snapToWall(it); } S.drag = null; };
+  const endDrag = () => { const d = S.drag; if (!d) return; const it = S.st.items.find((i) => i.id === d.id); if (it) { send({ t: 'move', id: it.id, x: it.x, y: it.y }); snapToWall(it); fitNiche(it); } S.drag = null; };
   // 兩指：縮放與平移平面圖（改 viewBox，家具比例不變）
   const two = () => { const [a, b] = [...pts.values()]; return { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
   const startPinch = () => { const t = two(), q = svg.createSVGPoint(); q.x = t.mx; q.y = t.my; const a = q.matrixTransform(svg.getScreenCTM().inverse()); pinch = { d0: t.d, w0: (S.view || baseVB())[2], ax: a.x, ay: a.y }; };
@@ -449,7 +466,7 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAI
 const thumbCache = new Map(); let thumbMod = null, thumbRun = 0;
 // 預先畫好的縮圖：每個風格、每一類家具一條圖（media/thumbs）。手機只顯示圖片，不用自己算 3D
 let TH = null, thDone = false;
-fetch('./media/thumbs/index.json?v=20261120d').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
+fetch('./media/thumbs/index.json?v=20261120e').then((r) => r.json()).then((j) => { TH = j; }).catch(() => { TH = null; }).finally(() => { thDone = true; if (S.sheet) renderSheet(); warmStyle = null; warmThumbs(); });
 function thumbStrip(key, sk) {
   if (!TH) return null;
   const [cat, idx] = key.split(':');
@@ -460,7 +477,7 @@ function thumbStrip(key, sk) {
 async function fillThumbs() {
   const run = ++thumbRun, need = [...document.querySelectorAll('#list img[data-th]')];
   if (!need.length) return;   // 全部都有現成圖片：不用載入 3D 繪圖程式
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261120d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261120e'); } catch (e) { return; }
   for (const img of need) {
     if (run !== thumbRun) return;
     const k = img.dataset.th;
@@ -493,7 +510,7 @@ function warmThumbs() {
 async function warmStep() {
   if (!warmList.length) return;
   if (S.drag || (S.st && S.st.mode === 'tour') || Date.now() - lastTouch < 1500) { warmTimer = setTimeout(warmStep, 600); return; }   // 手指在操作時不畫縮圖，按鈕才不會卡
-  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261120d'); } catch (e) { return; }
+  try { thumbMod = thumbMod || await import('./thumbs.js?v=20261120e'); } catch (e) { return; }
   const k = warmList.shift();
   if (!thumbCache.has(k)) { const [key, sk] = k.split('@'); try { thumbCache.set(k, thumbMod.renderThumb(getItem(key, sk), sk)); } catch (e) { thumbCache.set(k, ''); } }
   warmTimer = setTimeout(warmStep, S.sheet ? 40 : 220);   // 型錄沒打開時慢慢畫就好
@@ -554,7 +571,7 @@ $('list').addEventListener('click', (e) => {
   const it = { id: 'u' + Math.random().toString(36).slice(2, 10), key: b.dataset.key, x: Math.round((big[0] + big[2]) / 10) * 5, y: Math.round((big[1] + big[3]) / 10) * 5, r: 0 };
   if (!person) it.st = S.st.style; else keepOffBeds(it, S.st.items);
   if (b.dataset.sz != null) it.sz = +b.dataset.sz;
-  S.st.items.push(it); S.sel = it.id; pending.set(it.id, { it, t: Date.now() }); send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st, sz: it.sz });
+  S.st.items.push(it); S.sel = it.id; pending.set(it.id, { it, t: Date.now() }); send({ t: 'add', id: it.id, key: it.key, x: it.x, y: it.y, st: it.st, sz: it.sz }); fitNiche(it);
   closeSheet(); update();
 });
 

@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120d';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120d';
-import { buildItem, buildPerson, M } from './models.js?v=20261120d';
-import * as MT from './mats.js?v=20261120d';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120e';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds, CEILS } from './catalog.js?v=20261120e';
+import { buildItem, buildPerson, M } from './models.js?v=20261120e';
+import * as MT from './mats.js?v=20261120e';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -20,7 +20,7 @@ const $ = (id) => document.getElementById(id);
 const cm = 0.01;
 
 // ================= 狀態 =================
-const state = { vrot: 0, style: 'nordic', floor: null, floors: {}, wall: null, walls: {}, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
+const state = { vrot: 0, style: 'nordic', floor: null, floors: {}, wall: null, walls: {}, ceil: null, cut: [], mode: 'overview', tourBy: null, items: PLAN.defaults.map((d) => ({ ...d })) };
 let screen = 'start';
 
 // ================= 3D 基本設定 =================
@@ -155,7 +155,59 @@ function applyFloors() {   // 只換地板，不重做牆面
 // 手機連續點好幾個材質時，只套用最後一次（避免大螢幕連續重做而卡住）
 const pendFx = new Set(); let pendT = 0;
 function later(fn) { pendFx.add(fn); if (!pendT) pendT = setTimeout(() => { pendT = 0; const a = [...pendFx]; pendFx.clear(); for (const f of a) f(); }, 40); }
+// ===== 裝修天花板（只在 3D 導覽看得到）：客餐廳＝完整款、主臥／臥室＝簡化版，其他空間維持平頂 =====
+let ceilDeco = null, ceilGlowTex = null;
+const ceilKind = () => state.ceil || STYLES[state.style].ceil || 'B';
+function ceilGlow(op) {   // 間接燈打在天花板上的暖光（靠燈的一邊亮、往內淡出）
+  if (!ceilGlowTex) { const cv = document.createElement('canvas'); cv.width = 4; cv.height = 64; const x = cv.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, 'rgba(255,212,150,1)'); gr.addColorStop(0.3, 'rgba(255,212,150,0.35)'); gr.addColorStop(1, 'rgba(255,212,150,0)'); x.fillStyle = gr; x.fillRect(0, 0, 4, 64); ceilGlowTex = new THREE.CanvasTexture(cv); ceilGlowTex.colorSpace = THREE.SRGBColorSpace; }
+  return new THREE.MeshBasicMaterial({ map: ceilGlowTex, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+}
+function glowStrip(g, x1, y1, x2, y2, z, dir, op) {   // dir：亮的那一邊（0 上 1 右 2 下 3 左）
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), ceilGlow(op)), w = x2 - x1, d = y2 - y1; p.rotation.x = Math.PI / 2; p.rotation.z = [0, -Math.PI / 2, Math.PI, Math.PI / 2][dir];
+  p.scale.set((dir % 2 ? d : w) * cm, (dir % 2 ? w : d) * cm, 1); p.position.set((x1 + x2) / 2 * cm, z * cm, (y1 + y2) / 2 * cm); p.renderOrder = 2; g.add(p);
+}
+function buildCeil() {
+  if (!ceiling) return; if (ceilDeco) { ceiling.remove(ceilDeco); ceilDeco.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  ceilDeco = new THREE.Group(); ceiling.add(ceilDeco);
+  const K = ceilKind(), H = PLAN.H, white = new THREE.MeshStandardMaterial({ color: '#F7F5F1', roughness: 0.95 }), led = new THREE.MeshBasicMaterial({ color: new THREE.Color('#FFD9A0').multiplyScalar(0.8) });
+  const molding = new THREE.MeshStandardMaterial({ color: '#EEEAE2', roughness: 0.8 }), wood = M('wood', '#B48A5E'), dark = new THREE.MeshStandardMaterial({ color: '#2A2420', roughness: 0.9 });
+  const disc = (x, y, z) => { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.008, 20), M('emit', '#FFF4E0')); d.position.set(x * cm, z * cm - 0.004, y * cm); ceilDeco.add(d); };
+  for (const q of PLAN.rooms) {
+    const full = q.id === 'ld', lite = /^(master|bed)/.test(q.id); if (!full && !lite) continue;
+    for (const [x1, y1, x2, y2] of q.rs) {
+      const w = x2 - x1, d = y2 - y1, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2; if (w < 120 || d < 120) continue;
+      if (K === 'B' || K === 'E') {
+        const bw = Math.min(full ? (K === 'E' ? 70 : 60) : 42, w / 4, d / 4), drop = full ? 22 : 18, lo = H - drop;
+        if (K === 'B') { for (const b of [[x1, y1, x2, y1 + bw], [x1, y2 - bw, x2, y2], [x1, y1 + bw, x1 + bw, y2 - bw], [x2 - bw, y1 + bw, x2, y2 - bw]]) wbox(ceilDeco, ...b, lo, H, white, false);
+          for (const [a, b2, c2, d2] of [[x1 + bw, y1 + bw - 0.6, x2 - bw, y1 + bw + 0.4], [x1 + bw, y2 - bw - 0.4, x2 - bw, y2 - bw + 0.6], [x1 + bw - 0.6, y1 + bw, x1 + bw + 0.4, y2 - bw], [x2 - bw - 0.4, y1 + bw, x2 - bw + 0.6, y2 - bw]]) wbox(ceilDeco, a, b2, c2, d2, H - 4, H - 3, led, false);
+          const gl = Math.min(70, (w - 2 * bw) / 3, (d - 2 * bw) / 3), z = H - 0.3; glowStrip(ceilDeco, x1 + bw, y1 + bw, x2 - bw, y1 + bw + gl, z, 0, 0.32); glowStrip(ceilDeco, x1 + bw, y2 - bw - gl, x2 - bw, y2 - bw, z, 2, 0.32); glowStrip(ceilDeco, x1 + bw, y1 + bw, x1 + bw + gl, y2 - bw, z, 3, 0.32); glowStrip(ceilDeco, x2 - bw - gl, y1 + bw, x2 - bw, y2 - bw, z, 1, 0.32);
+        } else {   // E：中間圓角凹槽
+          const R = Math.min(full ? 70 : 45, (w - 2 * bw) / 2.5, (d - 2 * bw) / 2.5), iw = w - 2 * bw, id = d - 2 * bw;
+          const rr = (ww, dd, r) => { const p = new THREE.Path(), a = ww / 2, b = dd / 2; p.moveTo(-a + r, -b); p.lineTo(a - r, -b); p.absarc(a - r, -b + r, r, -Math.PI / 2, 0); p.lineTo(a, b - r); p.absarc(a - r, b - r, r, 0, Math.PI / 2); p.lineTo(-a + r, b); p.absarc(-a + r, b - r, r, Math.PI / 2, Math.PI); p.lineTo(-a, -b + r); p.absarc(-a + r, -b + r, r, Math.PI, Math.PI * 1.5); return p; };
+          const sh = new THREE.Shape(); sh.moveTo(-w / 2, -d / 2); sh.lineTo(w / 2, -d / 2); sh.lineTo(w / 2, d / 2); sh.lineTo(-w / 2, d / 2); sh.closePath(); sh.holes.push(rr(iw, id, R));
+          const geo = new THREE.ExtrudeGeometry(sh, { depth: drop, bevelEnabled: false, curveSegments: 20 }); geo.rotateX(Math.PI / 2); const m = new THREE.Mesh(geo, white); m.scale.setScalar(cm); m.position.set(cx * cm, H * cm, cy * cm); m.receiveShadow = true; ceilDeco.add(m);
+          const cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.max(64, Math.round(512 * id / iw)); const x2c = cv.getContext('2d'), k = 512 / iw; x2c.strokeStyle = 'rgba(255,214,160,0.35)'; x2c.lineWidth = 22; x2c.shadowColor = 'rgba(255,214,160,0.9)'; x2c.shadowBlur = 40; x2c.beginPath(); x2c.roundRect(8, 8, cv.width - 16, cv.height - 16, R * k); x2c.stroke();
+          const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; const gp = new THREE.Mesh(new THREE.PlaneGeometry(iw * cm, id * cm), new THREE.MeshBasicMaterial({ map: tx, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.38 })); gp.rotation.x = Math.PI / 2; gp.position.set(cx * cm, (H - 0.3) * cm, cy * cm); gp.renderOrder = 2; ceilDeco.add(gp);
+        }
+        if (full) { const n = Math.max(2, Math.round(w / 130)); for (let i = 0; i < n; i++) { const x = x1 + w * (i + 0.5) / n; disc(x, y1 + bw / 2, lo); disc(x, y2 - bw / 2, lo); } }
+      } else if (K === 'D') {   // 木格柵：中間一片原木格柵＋四周細燈縫
+        const iw = full ? w - 140 : Math.min(220, w - 120), id = full ? d - 140 : Math.min(170, d - 120); if (iw < 60 || id < 60) continue;
+        const along = iw >= id, gx1 = cx - iw / 2, gy1 = cy - id / 2; wbox(ceilDeco, gx1 - 4, gy1 - 4, gx1 + iw + 4, gy1 + id + 4, H - 0.8, H - 0.2, dark, false);
+        const n = Math.floor((along ? id : iw) / 8), geo = new THREE.BoxGeometry(along ? iw * cm : 4 * cm, 9 * cm, along ? 4 * cm : id * cm), im = new THREE.InstancedMesh(geo, wood, n), m4 = new THREE.Object3D();
+        for (let i = 0; i < n; i++) { const t2 = (i + 0.5) * 8; m4.position.set((along ? cx : gx1 + t2) * cm, (H - 5.3) * cm, (along ? gy1 + t2 : cy) * cm); m4.updateMatrix(); im.setMatrixAt(i, m4.matrix); } im.castShadow = true; im.receiveShadow = true; ceilDeco.add(im);
+        for (const [a, b2, c2, d2] of [[gx1 - 10, gy1 - 10.5, gx1 + iw + 10, gy1 - 9.5], [gx1 - 10, gy1 + id + 9.5, gx1 + iw + 10, gy1 + id + 10.5], [gx1 - 10.5, gy1 - 10, gx1 - 9.5, gy1 + id + 10], [gx1 + iw + 9.5, gy1 - 10, gx1 + iw + 10.5, gy1 + id + 10]]) wbox(ceilDeco, a, b2, c2, d2, H - 1, H - 0.3, led, false);
+      } else {   // F：法式線板（牆頂階梯線板＋天花框線＋中央花飾）
+        const ring = (a, b, c2, d2, wd, z0, z1) => { for (const r of [[a, b, c2, b + wd], [a, d2 - wd, c2, d2], [a, b + wd, a + wd, d2 - wd], [c2 - wd, b + wd, c2, d2 - wd]]) wbox(ceilDeco, ...r, z0, z1, molding, false); };
+        ring(x1, y1, x2, y2, 4, H - 12, H); ring(x1, y1, x2, y2, 7, H - 12, H - 9); ring(x1, y1, x2, y2, 10, H - 3, H);
+        const i1 = full ? 45 : 30; ring(x1 + i1, y1 + i1, x2 - i1, y2 - i1, 5, H - 3.4, H); if (full) ring(x1 + i1 + 13, y1 + i1 + 13, x2 - i1 - 13, y2 - i1 - 13, 3, H - 2.4, H);
+        if (full) { const md = new THREE.Mesh(new THREE.TorusGeometry(26 * cm, 2.2 * cm, 10, 48), molding); md.rotation.x = Math.PI / 2; md.position.set(cx * cm, (H - 1.5) * cm, cy * cm); ceilDeco.add(md); const md2 = new THREE.Mesh(new THREE.TorusGeometry(16 * cm, 1.4 * cm, 8, 40), molding); md2.rotation.x = Math.PI / 2; md2.position.set(cx * cm, (H - 1) * cm, cy * cm); ceilDeco.add(md2); }
+      }
+    }
+  }
+  invalidate();
+}
 function applyStyle() {   // 換風格只換牆面和主地板的材質，不重建房子
+  if (!state.ceil) buildCeil();
   liteClean();
   invalidate(6);
   const st = STYLES[state.style], wm = MT.wallPaint(st.wall), fm = mainFloorMat();
@@ -218,7 +270,7 @@ function buildShell() {
   for (const [x1, y1, x2, y2] of PLAN.slab) wbox(ceiling, x1, y1, x2, y2, PLAN.H, PLAN.H + 12, ceilMat);
   const dl = M('emit', '#FFF4E0');
   bulbs.children.forEach((p) => { if (!p.userData.on) return; const d = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 20), dl); d.position.set(p.position.x, PLAN.H * cm - 0.004, p.position.z); ceiling.add(d); });
-  applyRoomFloors(); applyWallFinishes(); applyMode();
+  buildCeil(); applyRoomFloors(); applyWallFinishes(); applyMode();
 }
 
 // ================= 家具 =================
@@ -729,7 +781,7 @@ function setNet(text, ok) { const e = $('net'); e.textContent = text; e.dataset.
 function makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
 function send(conn, msg) { try { if (conn.open) conn.send(msg); } catch (e) { /* 連線已關閉 */ } }
 let nextConn = 1;
-function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size, vrot: state.vrot }; }
+function snapshot(e) { return { t: 'state', unit: UNIT.id, unitName: UNIT.name, style: state.style, floor: state.floor, floors: state.floors, wall: state.wall, walls: state.walls, ceil: state.ceil, cut: state.cut, mode: state.mode, tourBy: state.tourBy, you: e.id, items: state.items, ready: screen === 'play', players: conns.size, vrot: state.vrot }; }
 let bTimer = null;
 function broadcast() { if (bTimer) return; bTimer = setTimeout(() => { bTimer = null; for (const e of conns) send(e.conn, snapshot(e)); updateHud(); }, 60); }
 
@@ -795,6 +847,7 @@ function onMsg(entry, m) {
     } else if (!m.on && state.tourBy === entry.id) endTour();
     return broadcast();
   }
+  if (m.t === 'ceil') { state.ceil = CEILS[m.k] ? m.k : null; buildCeil(); return broadcast(); }   // 裝修天花板：導覽中也能切換（抬頭就看到）
   if (state.mode === 'tour') return send(entry.conn, snapshot(entry));   // 有人在導覽時，暫停所有編輯
   switch (m.t) {
     case 'wallf': { const k = parseWall(m.k) ? m.k : null;   // 牆面材質（全戶或單一區域）
@@ -818,6 +871,7 @@ function onMsg(entry, m) {
       state.cut = state.cut.filter((k) => k !== i); if (m.on) state.cut.push(i); buildShell(); invalidate(); break; }
     case 'len': { const it = find(m.id), R = it && lenRange(getItem(it.key)); if (R) { const st = m.exact ? 1 : R.step; it.len = Math.round(num(m.len, R.min, R.max) / st) * st; syncItems(); } break; }   // exact：填滿整面時算到公分
     case 'sz': { const it = find(m.id), z = it && SIZES[it.key]; if (z && Number.isInteger(m.sz) && z.opts[m.sz]) { it.sz = m.sz; syncItems(); } break; }   // 同款換尺寸
+    case 'dp': { const it = find(m.id); if (it) { it.dp = num(m.dp, 8, 80); syncItems(); } break; }   // 牆中置物格的深度
     case 'elev': { const it = find(m.id), s = it && getItem(it.key, null, it), R = elevRange(s); if (R) { it.el = Math.round(num(m.el, R.min, R.max) / R.step) * R.step; syncItems(); } break; }
     case 'rot': { const it = find(m.id); if (it) { it.r = ((Math.round(num(m.r, 0, 360) / 90) * 90) % 360); syncItems(); } break; }
     case 'del': state.items = state.items.filter((i) => i.id !== m.id); syncItems(); break;

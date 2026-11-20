@@ -91,7 +91,8 @@ export const CATS = [
   { id: 'wshelf', n: '牆上置物架', g: '裝飾', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
     ['洞洞板置物牆', 100, 16, 120, '#CFC2B2', 'peg', 'matte', 90], ['懸吊玻璃展示櫃', 160, 35, 100, '#D9C2A3', 'glassc', 'veneer', 120],
-    ['廚房吊櫃（含層板燈）', 180, 35, 75, '#F3EFE7', 'kupper', 'matte', 150]] },
+    ['廚房吊櫃（含層板燈）', 180, 35, 75, '#F3EFE7', 'kupper', 'matte', 150],
+    ['牆中置物格（跟著牆凹）', 90, 30, 140, '#5A3E2B', 'niche', 'veneer', 70], ['掛勾置物架', 60, 12, 32, '#F2EFE8', 'hooks', 'matte', 150]] },
   // 配件與擺飾：掛在牆上、吊在天花板或放在檯面上；第 8 欄是預設離地高度
   { id: 'acc', n: '配件擺飾', g: '裝飾', t: 'wshelf', items: [
     ['電熱毛巾架', 50, 12, 90, '#A9A39A', 'towel', 'matte', 90], ['捲筒衛生紙架', 16, 13, 14, '#A9A39A', 'tp', 'matte', 62],
@@ -133,20 +134,22 @@ export const sizeOf = (key, it) => { const z = SIZES[key]; if (!z) return null; 
 const ADJ = {
   'tvcab:0': { min: 60 }, 'tvcab:1': { min: 60 }, 'shelf:0': { min: 30, fill: true }, 'shelf:1': { min: 30, fill: true },
   'chest:0': { min: 30 }, 'chest:1': { min: 30 }, 'chest:2': { min: 60 }, 'sink:0': { min: 60, max: 100 }, 'kcab:0': { min: 30 },
-  'tower:0': { min: 60 }, 'ksys:0': { min: 240 }, 'ksys:1': { min: 240 }, 'ksys:2': { min: 300 }, 'ksys:3': { min: 300 }, 'ksys:4': { min: 150, max: 260 }, 'ksys:5': { min: 150, max: 260 }, 'vanity:0': { min: 40, max: 80 }, 'tub:0': { min: 110 }, 'tub:1': { min: 110 }, 'shower:0': { min: 80 }, 'shower:1': { min: 80 },
+  'tower:0': { min: 60 }, 'wshelf:5': { min: 30, max: 400, fill: true }, 'wshelf:6': { min: 40, max: 120 }, 'ksys:0': { min: 240 }, 'ksys:1': { min: 240 }, 'ksys:2': { min: 300 }, 'ksys:3': { min: 300 }, 'ksys:4': { min: 150, max: 260 }, 'ksys:5': { min: 150, max: 260 }, 'vanity:0': { min: 40, max: 80 }, 'tub:0': { min: 110 }, 'tub:1': { min: 110 }, 'shower:0': { min: 80 }, 'shower:1': { min: 80 },
 };
 export const WOOD_NAMES = { oak: '橡木', walnut: '胡桃木', white: '白色', black: '黑色', ash: '梣木', gray: '灰色', teak: '柚木', marble: '大理石' };
 const FABRIC_T = { sofa: 1, chair: 1, ochair: 1, bed: 1, rug: 1 };
 
 // 四種風格：各有自己的木色與布料色，型錄會依風格換成對應款式
+// 裝修天花板四款：位置固定（客餐廳用完整款、臥室用簡化版，廚房、浴室、玄關、陽台不做）
+export const CEILS = { B: '回字型間接照明', E: '圓弧凹槽', D: '木格柵', F: '法式線板' };
 export const STYLES = {
-  nordic: { sk: 'nordic', n: '北歐', d: '白色彩色石紋地板、霧藍牆、芥末黃點綴', floor: 'terrazzo', floorK: 't0131', floorC: '#F4EFE4', wall: '#C9D3D6', wallf: 'paint|#C9D3D6|', accent: '#D4A84B', sw: ['#F4EFE4', '#C9D3D6', '#F2F0EC', '#D4A84B'],
+  nordic: { sk: 'nordic', ceil: 'E', n: '北歐', d: '白色彩色石紋地板、霧藍牆、芥末黃點綴', floor: 'terrazzo', floorK: 't0131', floorC: '#F4EFE4', wall: '#C9D3D6', wallf: 'paint|#C9D3D6|', accent: '#D4A84B', sw: ['#F4EFE4', '#C9D3D6', '#F2F0EC', '#D4A84B'],
     woods: ['white', 'ash', 'oak'], fabrics: ['#C9CCCD', '#8EA1AE', '#E3DED4', '#D4A84B', '#B8BCBF'] },
-  modern: { sk: 'modern', n: '現代', d: '水泥灰牆、黑灰家具、香檳金', floor: 'wood', floorC: '#9A8C7D', wall: '#A9A79F', wallf: 'stucco|#A9A79F|', accent: '#C9A86A', sw: ['#9A8C7D', '#A9A79F', '#2E2F31', '#C9A86A'],
+  modern: { sk: 'modern', ceil: 'B', n: '現代', d: '水泥灰牆、黑灰家具、香檳金', floor: 'wood', floorC: '#9A8C7D', wall: '#A9A79F', wallf: 'stucco|#A9A79F|', accent: '#C9A86A', sw: ['#9A8C7D', '#A9A79F', '#2E2F31', '#C9A86A'],
     woods: ['black', 'gray', 'walnut'], fabrics: ['#5A5E64', '#3C4047', '#8D8D8A', '#B59A6A', '#2E2F31'] },
-  japandi: { sk: 'japandi', n: '日式', d: '洗白橡木地板、珪藻土牆、墨黑與抹茶', floor: 'wood', floorK: 'w15', floorC: '#E7DAC8', wall: '#DDD0B8', wallf: 'diatom|#DDD0B8|', accent: '#7D8B5F', sw: ['#E7DAC8', '#DDD0B8', '#4A4744', '#7D8B5F'],
+  japandi: { sk: 'japandi', ceil: 'D', n: '日式', d: '洗白橡木地板、珪藻土牆、墨黑與抹茶', floor: 'wood', floorK: 'w15', floorC: '#E7DAC8', wall: '#DDD0B8', wallf: 'diatom|#DDD0B8|', accent: '#7D8B5F', sw: ['#E7DAC8', '#DDD0B8', '#4A4744', '#7D8B5F'],
     woods: ['teak', 'oak', 'black'], fabrics: ['#D8CCB8', '#4A4744', '#7D8B5F', '#B07A55', '#E6DDCD'] },
-  luxe: { sk: 'luxe', n: '輕奢', d: '石紋地坪、白橡木紋牆、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#E8E2D8', wallf: 'oak|#E8E2D8|', accent: '#C8A464', sw: ['#E9E5DE', '#E8E2D8', '#2F3E5C', '#C8A464'],
+  luxe: { sk: 'luxe', ceil: 'F', n: '輕奢', d: '石紋地坪、白橡木紋牆、深藍與黃銅', floor: 'marble', floorC: '#E9E5DE', wall: '#E8E2D8', wallf: 'oak|#E8E2D8|', accent: '#C8A464', sw: ['#E9E5DE', '#E8E2D8', '#2F3E5C', '#C8A464'],
     woods: ['walnut', 'white', 'marble'], fabrics: ['#2F3E5C', '#E7E1D7', '#6B5B73', '#3F5A54', '#8C7A5B'] },
 };
 
@@ -274,6 +277,7 @@ export function getItem(key, styleKey, it) {
   if (cat.t === 'wall' || cat.t === 'built' || cat.t === 'wshelf' || cat.id === 'ward') s.fin = r[6];
   if (cat.t === 'wshelf') s.elev = r[7];
   const lr = lenRange(s); if (it && it.len && lr) s.w = Math.max(lr.min, Math.min(lr.max, it.len));   // 伸縮後的寬度
+  if (s.v === 'niche' && it && it.dp) s.d = Math.max(8, Math.min(80, Math.round(it.dp)));   // 牆中置物格：深度跟著牆凹
   const er = elevRange(s); if (it && it.el != null && er) s.elev = Math.max(er.min, Math.min(er.max, it.el));   // 置物架離地高度
   if (it && it.m && it.c && finishOf(s)) { s.fin = it.m; s.color = it.c; if (it.c2) s.color2 = it.c2; }   // 個別指定的材質與顏色（c2：床單被套）
   return s;

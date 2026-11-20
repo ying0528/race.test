@@ -1,8 +1,8 @@
 // 以程式產生的 3D 家具模型。每件家具都依型錄的實際尺寸（cm）建模，再整體縮成公尺。
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { WOODS, FINISH, ksysLayout } from './catalog.js?v=20261120d';
-import * as MT from './mats.js?v=20261120d';
+import { WOODS, FINISH, ksysLayout } from './catalog.js?v=20261120e';
+import * as MT from './mats.js?v=20261120e';
 
 function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -454,7 +454,90 @@ B.built = (g, it, P, o) => {
     b(sw, H, 2, main, sx, 0, 0); for (const s of [-1, 1]) b(2.5, H, 35, main, sx + s * (sw / 2 - 1.25), 0, 0); for (let j = 0; j <= rows; j++) b(sw, 2.5, 35, main, sx, j * rh, 0);
     if (dec) for (let j = 1; j < rows; j++) (j % 3 === 0 ? pot(sx, j * rh + 2.5, 18) : books(sx, j * rh + 2.5, 8, sw - 8, 6, j)); }
 };
+// ===== 牆中置物格（嵌在牆壁凹陷裡）＋ 牆上置物勾架 =====
+function bookRow(g, x0, y, z, len, seed, cols, lean = 0) {   // 一排直立書：x0 起往右排 len 公分
+  let x = x0, k = seed; while (x < x0 + len - 2) { const bw = 2 + ((k * 7) % 4) * 0.6, bh = 19 + ((k * 5) % 5) * 1.6, bd = 14 + (k % 3); box(g, bw, bh, bd, MT.flat(cols[k % cols.length], 0.75), x + bw / 2, y + bh / 2, z).rotation.z = lean * (k === seed ? 1 : 0); x += bw + 0.25; k++; }
+}
+function bookPile(g, x, y, z, n, cols, rot = 0) { let yy = y; for (let k = 0; k < n; k++) { const t = 2.4 + (k % 2) * 0.8, bw = 22 - k * 1.5, m = box(g, bw, t, 15 - k, MT.flat(cols[k % cols.length], 0.7), x + (k % 2 ? 0.8 : -0.6), yy + t / 2, z); m.rotation.y = rot + (k % 2 ? 0.06 : -0.04); yy += t; } return yy; }
+function mokaPot(g, x, y, z, c = '#2A2A2C') {   // 八角摩卡壺：上壺、腰身、下壺＋把手、壺蓋鈕
+  const m = MT.metal(c, 0.35), oct = (r1, r2, h, yy) => { const o = cyl(g, r1, r2, h, m, x, yy, z, 8); o.rotation.y = Math.PI / 8; return o; };
+  oct(4.6, 3.4, 8, y + 4); oct(3.4, 4.2, 9, y + 12.5); cyl(g, 3.2, 3.2, 1, MT.flat('#1C1C1E', 0.5), x, y + 17.4, z, 16); cyl(g, 0.7, 0.7, 1.4, MT.flat('#1C1C1E', 0.5), x, y + 18.4, z, 8);
+  const hd = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.8, 6, 12, Math.PI * 1.1), MT.flat('#1C1C1E', 0.5)); hd.position.set(x + 4.6, y + 12, z); hd.rotation.z = -Math.PI / 2; g.add(hd);
+  const sp = cyl(g, 0.8, 1.2, 3, m, x - 4.2, y + 15.5, z, 8); sp.rotation.z = 0.7;
+}
+function woodHead(g, x, y, z) {   // 木雕頭像擺飾（抽象卵形＋細頸＋底座）
+  const w = MT.wood('#8A5A3A', { rings: 10, gloss: 0.35 }); cyl(g, 4, 4.4, 2, w, x, y + 1, z, 20); cyl(g, 1.6, 2, 7, w, x, y + 5.5, z, 12);
+  const hd = mesh(g, new THREE.SphereGeometry(7, 24, 18), w, x, y + 16, z); hd.scale.set(0.82, 1.25, 0.95); hd.rotation.z = -0.25;
+}
+function nicheShelf(g, it, P, dec) {
+  // 寬、高跟著牆壁凹陷；三片深色木層板，背牆淡色；擺飾照參考照片（左右對調、換色）
+  const { w: W, d: D, h: H } = it, c = it.color && it.color[0] === '#' ? it.color : '#5A3E2B', wd = MT.wood(c, { rings: 8, gloss: 0.25 }), back = MT.flat('#DCE0D2', 0.92), side = MT.flat('#F1EEE8', 0.92), Z0 = -D / 2;
+  box(g, W, H, 1, back, 0, H / 2, Z0 + 0.5); for (const sx of [-1, 1]) box(g, 1, H, D, side, sx * (W / 2 - 0.5), H / 2, 0); box(g, W, 1, D, side, 0, H - 0.5, 0); box(g, W, 1, D, side, 0, 0.5, 0);
+  const n = Math.max(2, Math.min(4, Math.round(H / 42))), gap = H / (n + 0.35), T = 4, ys = []; for (let i = 0; i < n; i++) { const y = gap * (i + 0.35); box(g, W - 2, T, D - 2, wd, 0, y + T / 2, 0); ys.push(y + T); }
+  if (!dec) return;
+  const zc = Z0 + 10, cols = ['#E9E3D6', '#2F3A44', '#C9B79A', '#7A3B27', '#F2EFE8', '#3F5A54'];
+  // 由下往上：① 白色書一排＋香氛蠟燭＋木雕頭像　② 疊書＋摩卡壺　③ 上層一排書
+  if (ys[0] != null) { bookRow(g, W / 2 - Math.min(26, W * 0.32) - 4, ys[0], zc, Math.min(26, W * 0.32), 3, ['#F2EFE8', '#E6E1D6', '#2F3A44', '#F2EFE8']); cyl(g, 3.6, 3.6, 7, MT.glass('#3A2A20'), W / 2 - Math.min(26, W * 0.32) - 10, ys[0] + 3.5, zc + 2, 16); if (W > 70) woodHead(g, -W / 2 + 16, ys[0], zc); }
+  if (ys[1] != null) { const top = bookPile(g, -W * 0.12, ys[1], zc + 1, 3, ['#C9B79A', '#3F5A54', '#E9E3D6'], 0.12); mokaPot(g, W * 0.18, ys[1], zc, '#B8442E'); }
+  if (ys[2] != null) bookRow(g, -W / 2 + 4, ys[2], zc, Math.min(W * 0.55, 46), 1, cols);
+  if (ys[3] != null) { cyl(g, 5, 4, 12, MT.ceramic('#E6E1D6'), W * 0.2, ys[3] + 6, zc, 18); }
+}
+const physM = new Map(), phys = (key, o) => { if (!physM.has(key)) physM.set(key, new THREE.MeshPhysicalMaterial(o)); return physM.get(key); };
+function lathe2(p, pts, m, x, y, z, seg = 40) { const o = mesh(p, new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), seg), m, x, y, z); o.castShadow = true; return o; }
+function hookRack(g, it, P, dec) {
+  // 掛勾置物架（精緻版）：烤漆層板＋L 型托架與螺絲、厚波浪板、車製原木掛勾；擺飾照參考照片（左右對調、換色）
+  const { w: W, d: D } = it, c = it.color && it.color[0] === '#' ? it.color : '#F2EFE8', Z0 = -D / 2, top = 30;
+  const lac = phys('lac' + c, { color: c, roughness: 0.38, clearcoat: 0.55, clearcoatRoughness: 0.35 }), screw = MT.metal('#C9CCCF', 0.3), knobM = MT.wood('#D2AE84', { rings: 7, gloss: 0.4 });
+  rbox(g, W, 2, D, lac, 0, top + 1, 0, 0.8, 4);
+  for (const sx of [-0.3, 0.3]) { const bx = sx * W; rbox(g, 2.4, 13, 1.6, lac, bx, top - 6.5, Z0 + 0.8, 0.5); rbox(g, 2.4, 1.6, D - 3, lac, bx, top - 0.8, Z0 + (D - 3) / 2, 0.5); const br = new THREE.Shape(); br.moveTo(0, 0); br.lineTo(6, 0); br.quadraticCurveTo(1.2, -1.2, 0, -6); br.closePath(); const bm = mesh(g, new THREE.ExtrudeGeometry(br, { depth: 1.2, bevelEnabled: false }), lac, bx - 0.6, top - 1.6, Z0 + 1.6); bm.rotation.y = -Math.PI / 2; for (const yy of [top - 3, top - 10]) cyl(g, 0.45, 0.45, 0.4, screw, bx, yy, Z0 + 1.8, 12).rotation.x = Math.PI / 2; }
+  const L = W * 0.94, A = 1.5, N = 6, sh = new THREE.Shape(); sh.moveTo(-L / 2, 9); for (let i = 0; i <= 120; i++) sh.lineTo(-L / 2 + L * i / 120, 9 + A * Math.sin(i / 120 * Math.PI * 2 * N)); for (let i = 120; i >= 0; i--) sh.lineTo(-L / 2 + L * i / 120, 1 + A * Math.sin(i / 120 * Math.PI * 2 * N));
+  mesh(g, new THREE.ExtrudeGeometry(sh, { depth: 1.6, bevelEnabled: true, bevelSize: 0.5, bevelThickness: 0.5, bevelSegments: 3 }), lac, 0, top - 22, Z0 + 0.6);
+  const nk = 5, hx = (k) => -L / 2 + L * (k + 0.5) / nk, hy = top - 17, hz = Z0 + 3;
+  for (let k = 0; k < nk; k++) { const kn = lathe2(g, [[0, 0], [1.2, 0], [1.05, 1.2], [0.9, 2.6], [1.5, 3.4], [2.3, 4.6], [2.35, 5.6], [1.8, 6.6], [0, 6.9]], knobM, hx(k), hy, hz, 28); kn.rotation.x = Math.PI / 2; }
+  if (!dec) return;
+  const yT = top + 2, zc = Z0 + D / 2 + 0.5;
+  // 翻頁鐘（鼠尾草綠烤漆）：圓角機身、兩塊翻頁卡上下分割線、側邊旋鈕、小腳
+  const cx = -W * 0.3, sage = phys('sage', { color: '#8E9A7E', roughness: 0.42, clearcoat: 0.4 }); rbox(g, 15, 8.4, 7, sage, cx, yT + 4.6, zc, 1.6, 5); for (const sx of [-5.5, 5.5]) cyl(g, 0.5, 0.5, 0.4, MT.flat('#2A2A2C', 0.6), cx + sx, yT + 0.2, zc, 8);
+  rbox(g, 13, 6.2, 0.6, MT.flat('#1A1A1B', 0.5), cx, yT + 4.8, zc + 3.4, 0.6); cyl(g, 0.9, 0.9, 1.2, sage, cx + 7.9, yT + 5.4, zc - 1, 14).rotation.z = Math.PI / 2;
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 112; const x2 = cv.getContext('2d'); x2.fillStyle = '#222224'; x2.fillRect(0, 0, 256, 112); for (const ox of [6, 132]) { x2.fillStyle = '#2E2E31'; x2.fillRect(ox, 6, 118, 100); } x2.fillStyle = '#F4F1EA'; x2.font = 'bold 76px Helvetica, Arial, sans-serif'; x2.textAlign = 'center'; x2.textBaseline = 'middle'; x2.fillText('10', 65, 58); x2.fillText('28', 191, 58); x2.fillStyle = '#111'; x2.fillRect(0, 54, 256, 3);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; mesh(g, new THREE.PlaneGeometry(12.4, 5.4), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.35 }), cx, yT + 4.8, zc + 3.75);
+  // 白瓷小貓（亮釉）
+  const fx = -W * 0.03, glaze = phys('glaze', { color: '#F6F4EF', roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }); const body = mesh(g, new THREE.SphereGeometry(4.2, 28, 20), glaze, fx, yT + 3.9, zc); body.scale.set(1.25, 0.95, 0.85); const head = mesh(g, new THREE.SphereGeometry(3.1, 28, 20), glaze, fx + 3.6, yT + 8.6, zc + 0.4); head.scale.set(1, 0.92, 0.9);
+  for (const ex of [-1.5, 1.5]) { const ear = mesh(g, new THREE.ConeGeometry(1.05, 2, 14), glaze, fx + 3.6 + ex, yT + 11.6, zc + 0.2); ear.rotation.z = -ex * 0.18; mesh(g, new THREE.SphereGeometry(0.28, 8, 6), MT.flat('#2A2A2C', 0.3), fx + 3.6 + ex * 0.6, yT + 8.9, zc + 3.1); }
+  const tail = mesh(g, new THREE.TorusGeometry(3.2, 0.75, 10, 20, Math.PI * 1.1), glaze, fx - 5.2, yT + 3, zc); tail.rotation.z = Math.PI * 0.5;
+  // 直紋陶瓶插小雛菊：每朵 14 片花瓣＋鼓起的黃花心＋細莖與葉
+  const vx = W * 0.19, vg = new THREE.CylinderGeometry(2.4, 2.9, 13, 40, 1), vp = vg.attributes.position; for (let q = 0; q < vp.count; q++) { const a = Math.atan2(vp.getZ(q), vp.getX(q)), k = 1 + 0.05 * Math.abs(Math.cos(a * 10)); vp.setX(q, vp.getX(q) * k); vp.setZ(q, vp.getZ(q) * k); } vg.computeVertexNormals(); mesh(g, vg, phys('vase', { color: '#E9DCC6', roughness: 0.55 }), vx, yT + 6.5, zc);
+  const stemM = MT.flat('#5E7A3E', 0.7), petM = twoSided(MT.flat('#FCFBF7', 0.6)), ctrM = MT.flat('#E3A92A', 0.7), pg = new THREE.PlaneGeometry(0.9, 2.6); pg.translate(0, 1.5, 0);
+  [[-0.5, 13], [-0.15, 17], [0.2, 15], [0.55, 12], [0.05, 10]].forEach(([a, len], n) => { const st = cyl(g, 0.16, 0.2, len, stemM, vx + Math.sin(a) * len / 2, yT + 12 + Math.cos(a) * len / 2, zc + (n % 2 ? 0.8 : -0.6), 5); st.rotation.z = -a;
+    const fx2 = vx + Math.sin(a) * len, fy = yT + 12 + Math.cos(a) * len, fz = zc + (n % 2 ? 0.8 : -0.6), fl = new THREE.Group(); fl.position.set(fx2, fy, fz); fl.rotation.set(0.9, 0, -a * 0.6); g.add(fl);
+    for (let p = 0; p < 14; p++) { const pt = new THREE.Mesh(pg, petM); pt.rotation.z = p * Math.PI * 2 / 14; pt.rotation.x = 0.12; fl.add(pt); } const ce = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 8), ctrM); ce.scale.z = 0.6; fl.add(ce);
+    if (n < 3) { const lf = mesh(g, new THREE.SphereGeometry(1, 8, 6), stemM, vx + Math.sin(a) * len * 0.45 + 0.8, yT + 12 + Math.cos(a) * len * 0.45, fz); lf.scale.set(0.5, 2, 0.15); lf.rotation.z = -a - 0.6; } });
+  // 圓形小喇叭：亮面外框＋布面喇叭網＋底座
+  const ox = W * 0.37; if (ox + 6 < W / 2) { const sp = cyl(g, 6, 6, 4.2, lac, ox, yT + 6.6, zc - 1, 40); sp.rotation.x = Math.PI / 2; const gr = cyl(g, 4.8, 4.8, 0.5, MT.fabric('#CBC4B8', 14, 'knit'), ox, yT + 6.6, zc + 1.2, 36); gr.rotation.x = Math.PI / 2; rbox(g, 6, 1.2, 4, lac, ox, yT + 0.6, zc - 1, 0.5); }
+  // 大衣（燕麥色羊毛）：領口掛環、肩線、袖子與袖口、翻領、口袋蓋、牛角釦，布面加細微起伏
+  const wool = MT.fabric('#CDBFA8', 12, 'flannel'), woolD = MT.fabric('#BBAB90', 12, 'flannel'), cg = new THREE.Group(); cg.position.set(hx(0), hy + 0.5, hz + 3); cg.rotation.z = 0.03; g.add(cg);
+  const cb = new THREE.Shape(); cb.moveTo(-2.6, 0); cb.quadraticCurveTo(-9, -1.5, -13, -8.5); cb.lineTo(-15.5, -74); cb.quadraticCurveTo(0, -76.5, 15.5, -74); cb.lineTo(13, -8.5); cb.quadraticCurveTo(9, -1.5, 2.6, 0); cb.closePath();
+  const cgeo = new THREE.ExtrudeGeometry(cb, { depth: 3, bevelEnabled: true, bevelSize: 1.8, bevelThickness: 2, bevelSegments: 4, curveSegments: 14, steps: 1 }); { const pp = cgeo.attributes.position; for (let q = 0; q < pp.count; q++) { const X = pp.getX(q), Y = pp.getY(q); pp.setZ(q, pp.getZ(q) + Math.sin(X * 0.45 + Y * 0.05) * 0.45 * Math.min(1, -Y / 30)); } cgeo.computeVertexNormals(); } mesh(cg, cgeo, wool, 0, 0, 0);
+  cyl(cg, 0.25, 0.25, 4, MT.fabric('#8F8068', 4), 0, 1.4, 0.8, 6).rotation.z = Math.PI / 2;
+  for (const sx of [-1, 1]) { const sl = rbox(cg, 7, 54, 6.2, wool, sx * 14.6, -37, 2.2, 3, 5); sl.rotation.z = sx * 0.05; rbox(cg, 7.6, 4, 6.8, woolD, sx * 15.8, -63.5, 2.2, 1.6, 4); }
+  for (const sx of [-1, 1]) { const lp = new THREE.Shape(); lp.moveTo(sx * 2.2, -0.5); lp.lineTo(sx * 9.5, -6); lp.lineTo(sx * 7.5, -14); lp.lineTo(sx * 9, -15.5); lp.lineTo(sx * 5.5, -25); lp.lineTo(sx * 0.6, -31); lp.closePath(); mesh(cg, new THREE.ExtrudeGeometry(lp, { depth: 0.9, bevelEnabled: true, bevelSize: 0.5, bevelThickness: 0.5, bevelSegments: 2 }), woolD, 0, 0, 5.1); }
+  box(cg, 0.4, 42, 0.3, MT.fabric('#A99A80', 4), 0.3, -53, 5.6); for (const yy of [-37, -49, -61]) { const bt = cyl(cg, 1.1, 1.1, 0.7, MT.flat('#4A3726', 0.35), 2.4, yy, 5.7, 16); bt.rotation.x = Math.PI / 2; }
+  for (const sx of [-1, 1]) rbox(cg, 9, 3, 0.8, woolD, sx * 8, -50, 5.3, 0.4);
+  // 菱格小羊皮包：柔亮皮革＋菱格絎縫、翻蓋、金扣、皮穿鏈帶
+  const bxp = hx(2), lamb = phys('lamb', { color: '#B07A4E', roughness: 0.42, clearcoat: 0.25, normalMap: MT.fabric('#ffffff', 3, 'quilt').normalMap, normalScale: new THREE.Vector2(1.4, 1.4) }), gold = MT.metal('#C9A35A', 0.22);
+  const bag = rbox(g, 20, 15, 7, lamb, bxp, hy - 30, hz + 2, 2.2, 5); const flap = rbox(g, 20.4, 7.5, 7.6, lamb, bxp, hy - 26.2, hz + 2.2, 2, 5); rbox(g, 4.2, 2.4, 0.8, gold, bxp, hy - 28.4, hz + 6.1, 0.5);
+  const NL = 64, links = []; for (let i = 0; i <= NL; i++) { const t = i / NL, x = bxp + (t - 0.5) * 18, y = hy - 22.5 + Math.sin(t * Math.PI) * 21.5; links.push([x, y, i]); }
+  const lg = new THREE.TorusGeometry(0.55, 0.16, 6, 12), im = new THREE.InstancedMesh(lg, gold, links.length), m4 = new THREE.Object3D(); links.forEach(([x, y, i], k) => { m4.position.set(x, y, hz + 2); m4.rotation.set(i % 2 ? Math.PI / 2 : 0, 0, Math.atan2(Math.cos((i / NL) * Math.PI) * 21.5 * Math.PI / 18, 1) + Math.PI / 2); m4.updateMatrix(); im.setMatrixAt(k, m4.matrix); }); im.castShadow = true; g.add(im);
+  // 寬簷羊毛氈帽（黑）：帽簷微波浪、帽頂中間凹、焦糖羅緞帽帶＋小蝴蝶結
+  const felt = MT.fabric('#2B2A2C', 10, 'flannel'), hg = new THREE.Group(); hg.position.set(hx(4), hy - 8, hz + 3); hg.rotation.x = Math.PI / 2 - 0.08; g.add(hg);
+  const brim = new THREE.LatheGeometry([[7.6, 1.2], [9, 1.25], [13.4, 0.5], [13.9, 0.2], [13.6, 0], [9, 0.4], [7.6, 0.6]].map(([r, h]) => new THREE.Vector2(r, h)), 64), bp = brim.attributes.position; for (let q = 0; q < bp.count; q++) { const a = Math.atan2(bp.getZ(q), bp.getX(q)), r = Math.hypot(bp.getX(q), bp.getZ(q)); bp.setY(q, bp.getY(q) + Math.sin(a * 2) * 0.9 * Math.max(0, r - 8) / 6); } brim.computeVertexNormals(); hg.add(new THREE.Mesh(brim, twoSided(felt)));
+  const crown = new THREE.LatheGeometry([[7.6, 0.6], [7.4, 4], [6.9, 8.4], [5.6, 10.2], [3, 10.6], [1.2, 9.6], [0, 9.4]].map(([r, h]) => new THREE.Vector2(r, h)), 48); hg.add(new THREE.Mesh(crown, felt));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(7.55, 7.62, 2.4, 48, 1, true), twoSided(MT.fabric('#B07A4E', 18, 'herring'))); band.position.y = 1.9; hg.add(band);
+  // （蝴蝶結拿掉，帽帶就好）
+}
 B.wshelf = (g, it, P, o) => {
+  if (it.v === 'niche') return nicheShelf(g, it, P, o.decor !== false);
+  if (it.v === 'hooks') return hookRack(g, it, P, o.decor !== false);
   const { w: W, h: H, v } = it, K = builtKit(g, it), { D, main, b, books, pot } = K, dec = o.decor !== false;
   if (extraWall(g, it, K, P, dec)) return;
   if (v === 'planks') { [0, 40, 80].forEach((y, j) => { b(W, 4, D, main, 0, y, 0); if (!dec) return; if (j === 0) { books(-W * 0.25, y + 4, 0, W * 0.4, 8, 1); pot(W * 0.33, y + 4, 11); } if (j === 1) { b(Math.min(30, W * 0.25), 16, 16, MT.flat('#B9B4A8', 0.6), -W * 0.3, y + 4, 3); books(W * 0.2, y + 4, 0, W * 0.4, 7, 4); } if (j === 2 && H > 90) { pot(-W * 0.33, y + 4, 11); } }); return; }
