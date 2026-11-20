@@ -4,7 +4,7 @@
 // 之後要換成合作品牌的實際商品，只要改這個檔案的名稱與尺寸即可。
 export const WOODS = { oak: '#C9A77C', walnut: '#7A5236', white: '#F1EEE8', black: '#2E2F31', ash: '#DCCBB0', gray: '#8D8D8A', teak: '#A9763F' };
 
-export const GROUPS = ['客廳', '餐廳', '臥室', '書房', '收納', '裝飾', '廚具', '衛浴', '隔間', '裝修櫃'];
+export const GROUPS = ['客廳', '餐廳', '臥室・書房', '收納', '裝飾', '廚具', '衛浴', '隔間', '裝修櫃'];
 
 export const CATS = [
   { id: 'sofa', n: '沙發', g: '客廳', t: 'sofa', items: [
@@ -19,20 +19,20 @@ export const CATS = [
     ['4 人餐桌', 120, 75, 75, 'oak'], ['2 人小圓桌', 70, 70, 75, 'white', 'round'], ['岩板餐桌', 150, 85, 75, '#EFEBE5', 'slab']] },
   { id: 'chair', n: '餐椅', g: '餐廳', t: 'chair', items: [
     ['實木餐椅', 45, 50, 82, 'walnut'], ['吧台椅', 42, 45, 100, 'black', 'bar'], ['皮革扶手餐椅', 54, 56, 84, '#B8714A', 'shell']] },
-  { id: 'bed', n: '床', g: '臥室', t: 'bed', items: [
+  { id: 'bed', n: '床', g: '臥室・書房', t: 'bed', items: [
     ['床', 160, 200, 100, '#E3DED4']] },
-  { id: 'nstand', n: '床頭櫃', g: '臥室', t: 'cab', items: [
+  { id: 'nstand', n: '床頭櫃', g: '臥室・書房', t: 'cab', items: [
     ['床頭櫃', 40, 40, 50, 'oak']] },
-  { id: 'ward', n: '衣櫃', g: '臥室', t: 'cab', items: [
+  { id: 'ward', n: '衣櫃', g: '臥室・書房', t: 'cab', items: [
     ['木紋開放衣櫃', 120, 58, 200, '#7A5236', 'combo', 'veneer'], ['滑門衣櫃', 120, 62, 201, '#CFC2B2', 'slide', 'frame'],
     ['三門鏡面衣櫃', 117, 58, 201, '#EFE9DD', 'mirror', 'frame'], ['雙門衣櫃', 80, 55, 190, '#EFE9DD', 'plain', 'matte']] },
-  { id: 'dresser', n: '梳妝台', g: '臥室', t: 'table', items: [
+  { id: 'dresser', n: '梳妝台', g: '臥室・書房', t: 'table', items: [
     ['梳妝台（含鏡）', 80, 40, 135, 'white', 'mirror'], ['化妝椅', 45, 35, 45, '#C8C2B6', 'stoolseat']] },
-  { id: 'desk', n: '書桌', g: '書房', t: 'table', items: [
+  { id: 'desk', n: '書桌', g: '臥室・書房', t: 'table', items: [
     ['書桌', 100, 60, 75, 'oak']] },
-  { id: 'dchair', n: '書桌椅', g: '書房', t: 'ochair', items: [
+  { id: 'dchair', n: '書桌椅', g: '臥室・書房', t: 'ochair', items: [
     ['辦公椅', 60, 60, 95, '#2E2F31'], ['高背辦公椅', 66, 66, 120, '#7A4E32'], ['小型書桌椅', 45, 45, 80, '#8D8D8A'], ['兒童椅', 38, 38, 62, '#E3B23C']] },
-  { id: 'shelf', n: '書櫃', g: '書房', t: 'shelf', items: [
+  { id: 'shelf', n: '書櫃', g: '臥室・書房', t: 'shelf', items: [
     ['書櫃', 60, 20, 180, 'oak'], ['矮書櫃', 60, 20, 90, 'black']] },
   { id: 'shoe', n: '鞋櫃', g: '收納', t: 'cab', items: [
     ['鞋櫃', 80, 35, 100, 'oak'], ['穿鞋椅', 90, 35, 45, 'oak']] },
@@ -88,12 +88,12 @@ export const CATS = [
     ['雙層落地窗簾', 260, 14, 265, '#8D8377', 'curtain', 'linen'],
     ['整面系統衣櫃（吊衣＋抽屜＋鞋櫃）', 360, 60, 260, '#D9C2A3', 'walkin', 'veneer'], ['鐵件開放衣櫃', 240, 55, 250, '#D9C2A3', 'iron', 'veneer']] },
   // 牆上置物架：第 8 欄是預設離地高度
-  { id: 'wshelf', n: '牆上置物架', g: '裝修櫃', t: 'wshelf', items: [
+  { id: 'wshelf', n: '牆上置物架', g: '裝飾', t: 'wshelf', items: [
     ['一字層板（三層）', 120, 22, 84, '#D9C2A3', 'planks', 'veneer', 110], ['方格＋層板組合', 160, 20, 130, '#F1EEE8', 'cubes', 'matte', 88],
     ['洞洞板置物牆', 100, 16, 120, '#CFC2B2', 'peg', 'matte', 90], ['懸吊玻璃展示櫃', 160, 35, 100, '#D9C2A3', 'glassc', 'veneer', 120],
     ['廚房吊櫃（含層板燈）', 180, 35, 75, '#F3EFE7', 'kupper', 'matte', 150]] },
   // 配件與擺飾：掛在牆上、吊在天花板或放在檯面上；第 8 欄是預設離地高度
-  { id: 'acc', n: '配件擺飾', g: '裝修櫃', t: 'wshelf', items: [
+  { id: 'acc', n: '配件擺飾', g: '裝飾', t: 'wshelf', items: [
     ['電熱毛巾架', 50, 12, 90, '#A9A39A', 'towel', 'matte', 90], ['捲筒衛生紙架', 16, 13, 14, '#A9A39A', 'tp', 'matte', 62],
     ['床邊玻璃吊燈', 22, 22, 120, '#FFF4E2', 'pendA', 'matte', 145], ['線型吊燈', 120, 6, 110, '#B8955A', 'pendL', 'matte', 155],
     ['玻璃花瓶花束', 30, 30, 50, '#DCEBEA', 'decoA', 'matte', 85], ['書本＋仙人掌盆', 30, 22, 32, '#2B2C2E', 'decoB', 'matte', 85],

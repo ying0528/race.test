@@ -1,10 +1,10 @@
 // 大螢幕（電腦）端：3D 場景、遊戲流程、手機連線
 import * as THREE from 'three';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
-import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120a';
-import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120a';
-import { buildItem, buildPerson, M } from './models.js?v=20261120a';
-import * as MT from './mats.js?v=20261120a';
+import { PLAN, UNIT, UNITS, setUnit, roomAt, setCuts, cutRects } from './plan.js?v=20261120b';
+import { getItem, STYLES, FLOORS, WALL_GROUPS, parseWall, FINISH, finishOf, lenRange, elevRange, SIZES, wallSegs, doorGap, resolvePeople, keepOffBeds } from './catalog.js?v=20261120b';
+import { buildItem, buildPerson, M } from './models.js?v=20261120b';
+import * as MT from './mats.js?v=20261120b';
 import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from '../vendor/jsm/postprocessing/GTAOPass.js';
@@ -826,6 +826,7 @@ function onMsg(entry, m) {
       if (spec.t === 'person') { const rm = roomAt(x, y); if (rm && state.items.filter((i) => i.key.startsWith('person:') && roomAt(i.x, i.y) === rm).length >= 3) break; }
       const it = { id: m.id.slice(0, 16), key: m.key, x, y, r: 0 };
       if (spec.t !== 'person') it.st = STYLES[m.st] ? m.st : state.style;
+      if (SIZES[m.key] && Number.isInteger(m.sz) && SIZES[m.key].opts[m.sz]) it.sz = m.sz;   // 從型錄直接選了尺寸
       if (finishOf(spec) === 'kitchen') { const k = state.items.find((i) => i.m && finishOf(getItem(i.key)) === 'kitchen'); if (k) { it.m = k.m; it.c = k.c; } }   // 新加的廚具跟著整個廚房的顏色
       state.items.push(it); syncItems(); break;
     }
